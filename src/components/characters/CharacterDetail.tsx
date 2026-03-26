@@ -1,0 +1,251 @@
+import { useState } from 'react';
+import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon } from 'lucide-react';
+import type { Character } from '@/types';
+import { useBookStore } from '@/store/useBookStore';
+import { RELATIONSHIP_TYPE_LABELS } from '@/lib/utils';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { RelationshipEditor } from './RelationshipEditor';
+import { useNavigate } from 'react-router-dom';
+
+interface CharacterDetailProps {
+  character: Character;
+  onBack: () => void;
+  onEdit: () => void;
+}
+
+export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailProps) {
+  const navigate = useNavigate();
+  const deleteCharacter = useBookStore((s) => s.deleteCharacter);
+  const characters = useBookStore((s) => s.characters);
+  const [showDelete, setShowDelete] = useState(false);
+  const [showRelEditor, setShowRelEditor] = useState(false);
+
+  const handleDelete = () => {
+    deleteCharacter(character.id);
+    navigate('/characters');
+  };
+
+  return (
+    <div className="page-container max-w-4xl">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={onBack} className="btn-ghost p-2">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="flex-1" />
+        <button onClick={onEdit} className="btn-secondary flex items-center gap-2">
+          <Edit className="w-4 h-4" /> Modifier
+        </button>
+        <button onClick={() => setShowDelete(true)} className="btn-ghost text-red-500 hover:bg-red-50">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Header */}
+      <div className="card-fantasy p-6 mb-6">
+        <div className="flex gap-6">
+          {character.imageUrl ? (
+            <img src={character.imageUrl} alt={character.name} className="w-32 h-32 rounded-xl object-cover border-2 border-parchment-300" />
+          ) : (
+            <div className="w-32 h-32 rounded-xl bg-parchment-200 flex items-center justify-center border-2 border-parchment-300">
+              <User className="w-16 h-16 text-ink-200" />
+            </div>
+          )}
+          <div className="flex-1">
+            <h2 className="font-display text-3xl font-bold text-ink-500">
+              {character.name} {character.surname}
+            </h2>
+            {character.nickname && (
+              <p className="text-lg text-ink-300 italic mt-1">"{character.nickname}"</p>
+            )}
+            {character.profession && (
+              <p className="text-bordeaux-500 font-medium mt-2">{character.profession}</p>
+            )}
+            {character.lifeGoal && (
+              <p className="text-sm text-ink-300 mt-1">
+                <span className="font-medium">But :</span> {character.lifeGoal}
+              </p>
+            )}
+            <div className="flex gap-2 mt-3 flex-wrap">
+              {character.qualities.map((q, i) => (
+                <span key={i} className="badge bg-green-50 text-green-700">{q}</span>
+              ))}
+              {character.flaws.map((f, i) => (
+                <span key={i} className="badge bg-red-50 text-red-700">{f}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Description & Personality */}
+      {(character.description || character.personality) && (
+        <div className="card-fantasy p-6 mb-6 space-y-4">
+          {character.description && (
+            <div>
+              <h4 className="font-display font-semibold text-ink-400 mb-2">Description</h4>
+              <p className="text-ink-300 font-serif whitespace-pre-wrap">{character.description}</p>
+            </div>
+          )}
+          {character.personality && (
+            <div>
+              <h4 className="font-display font-semibold text-ink-400 mb-2">Caractere</h4>
+              <p className="text-ink-300 font-serif whitespace-pre-wrap">{character.personality}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Skills, Likes, Dislikes */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {character.skills.length > 0 && (
+          <div className="card-fantasy p-4">
+            <h4 className="font-display font-semibold text-ink-400 mb-2">Competences</h4>
+            <div className="flex flex-wrap gap-1">
+              {character.skills.map((s, i) => (
+                <span key={i} className="badge bg-blue-50 text-blue-700">{s}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        {character.likes.length > 0 && (
+          <div className="card-fantasy p-4">
+            <h4 className="font-display font-semibold text-ink-400 mb-2 flex items-center gap-1">
+              <Heart className="w-4 h-4 text-bordeaux-500" /> Aime
+            </h4>
+            <ul className="text-sm text-ink-300 space-y-1">
+              {character.likes.map((l, i) => <li key={i}>{l}</li>)}
+            </ul>
+          </div>
+        )}
+        {character.dislikes.length > 0 && (
+          <div className="card-fantasy p-4">
+            <h4 className="font-display font-semibold text-ink-400 mb-2 flex items-center gap-1">
+              <Swords className="w-4 h-4 text-ink-300" /> N'aime pas
+            </h4>
+            <ul className="text-sm text-ink-300 space-y-1">
+              {character.dislikes.map((d, i) => <li key={i}>{d}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Evolution */}
+      {(character.evolution.beforeStory || character.evolution.duringStory || character.evolution.endOfStory) && (
+        <div className="card-fantasy p-6 mb-6">
+          <h4 className="font-display font-semibold text-ink-400 mb-4">Arc narratif</h4>
+          <div className="relative pl-6 border-l-2 border-gold-400 space-y-6">
+            {character.evolution.beforeStory && (
+              <div>
+                <div className="absolute -left-2 w-4 h-4 rounded-full bg-parchment-300 border-2 border-gold-400" />
+                <h5 className="text-sm font-medium text-gold-600">Avant l'histoire</h5>
+                <p className="text-sm text-ink-300 font-serif mt-1">{character.evolution.beforeStory}</p>
+              </div>
+            )}
+            {character.evolution.duringStory && (
+              <div>
+                <div className="absolute -left-2 w-4 h-4 rounded-full bg-gold-400 border-2 border-gold-400" />
+                <h5 className="text-sm font-medium text-gold-600">Pendant l'histoire</h5>
+                <p className="text-sm text-ink-300 font-serif mt-1">{character.evolution.duringStory}</p>
+              </div>
+            )}
+            {character.evolution.endOfStory && (
+              <div>
+                <div className="absolute -left-2 w-4 h-4 rounded-full bg-bordeaux-500 border-2 border-bordeaux-500" />
+                <h5 className="text-sm font-medium text-bordeaux-500">Fin de l'histoire</h5>
+                <p className="text-sm text-ink-300 font-serif mt-1">{character.evolution.endOfStory}</p>
+              </div>
+            )}
+          </div>
+          {character.evolution.initiationJourney && (
+            <div className="mt-4 pt-4 border-t border-parchment-200">
+              <h5 className="text-sm font-medium text-ink-400">Chemin initiatique</h5>
+              <p className="text-sm text-ink-300 font-serif mt-1">{character.evolution.initiationJourney}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Key Events */}
+      {character.keyEvents.length > 0 && (
+        <div className="card-fantasy p-6 mb-6">
+          <h4 className="font-display font-semibold text-ink-400 mb-3">Evenements marquants</h4>
+          <div className="space-y-3">
+            {character.keyEvents.map((ev) => (
+              <div key={ev.id} className="bg-parchment-100 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <h5 className="font-medium text-ink-500">{ev.title}</h5>
+                  {ev.date && <span className="text-xs text-ink-200">{ev.date}</span>}
+                </div>
+                {ev.description && <p className="text-sm text-ink-300 mt-1">{ev.description}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Relationships */}
+      <div className="card-fantasy p-6 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-display font-semibold text-ink-400 flex items-center gap-2">
+            <UsersIcon className="w-5 h-5" /> Relations
+          </h4>
+          <button onClick={() => setShowRelEditor(true)} className="btn-ghost text-sm flex items-center gap-1">
+            <Plus className="w-4 h-4" /> Ajouter
+          </button>
+        </div>
+        {character.relationships.length === 0 ? (
+          <p className="text-sm text-ink-200 italic">Aucune relation definie</p>
+        ) : (
+          <div className="space-y-2">
+            {character.relationships.map((rel) => {
+              const target = characters.find((c) => c.id === rel.targetCharacterId);
+              return (
+                <div
+                  key={rel.id}
+                  className="flex items-center gap-3 bg-parchment-100 rounded-lg p-3 cursor-pointer hover:bg-parchment-200 transition-colors"
+                  onClick={() => target && navigate(`/characters/${target.id}`)}
+                >
+                  <div className="w-8 h-8 rounded-full bg-parchment-300 flex items-center justify-center">
+                    <User className="w-4 h-4 text-ink-300" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-ink-500">{target?.name ?? 'Inconnu'}</span>
+                    <span className="text-xs text-bordeaux-500 ml-2">
+                      {rel.type === 'custom' ? rel.customType : RELATIONSHIP_TYPE_LABELS[rel.type]}
+                    </span>
+                  </div>
+                  {rel.description && (
+                    <p className="text-xs text-ink-300 max-w-xs truncate">{rel.description}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Notes */}
+      {character.notes && (
+        <div className="card-fantasy p-6 mb-6">
+          <h4 className="font-display font-semibold text-ink-400 mb-2">Notes</h4>
+          <p className="text-sm text-ink-300 font-serif whitespace-pre-wrap">{character.notes}</p>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={showDelete}
+        title="Supprimer le personnage"
+        description={`Etes-vous sur de vouloir supprimer ${character.name} ? Cette action est irreversible.`}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDelete(false)}
+      />
+
+      {showRelEditor && (
+        <RelationshipEditor
+          characterId={character.id}
+          onClose={() => setShowRelEditor(false)}
+        />
+      )}
+    </div>
+  );
+}

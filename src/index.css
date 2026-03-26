@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-parchment-100 text-ink-500 font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-parchment-200;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-200 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-300;
+  }
+}
+
+@layer components {
+  .card-fantasy {
+    @apply bg-white/80 backdrop-blur-sm border border-parchment-300 rounded-lg shadow-sm
+           hover:shadow-md hover:border-gold-400 transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-bordeaux-500 text-white px-4 py-2 rounded-lg font-medium
+           hover:bg-bordeaux-600 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-bordeaux-400 focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply bg-parchment-200 text-ink-500 px-4 py-2 rounded-lg font-medium
+           hover:bg-parchment-300 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-gold-400 focus:ring-offset-2;
+  }
+
+  .btn-ghost {
+    @apply text-ink-400 px-3 py-2 rounded-lg
+           hover:bg-parchment-200 transition-colors duration-200;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 bg-white border border-parchment-300 rounded-lg
+           text-ink-500 placeholder-ink-200
+           focus:outline-none focus:ring-2 focus:ring-gold-400 focus:border-gold-400
+           transition-colors duration-200;
+  }
+
+  .textarea-field {
+    @apply w-full px-3 py-2 bg-white border border-parchment-300 rounded-lg
+           text-ink-500 placeholder-ink-200
+           focus:outline-none focus:ring-2 focus:ring-gold-400 focus:border-gold-400
+           transition-colors duration-200 resize-y min-h-[80px] font-serif;
+  }
+
+  .label-field {
+    @apply block text-sm font-medium text-ink-400 mb-1;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-ink-300 font-medium
+           hover:bg-parchment-200 hover:text-ink-500 transition-all duration-200;
+  }
+
+  .sidebar-link-active {
+    @apply bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500;
+  }
+
+  .section-title {
+    @apply text-2xl font-display font-bold text-ink-500 tracking-tight;
+  }
+
+  .page-container {
+    @apply p-6 max-w-7xl mx-auto;
+  }
+}
