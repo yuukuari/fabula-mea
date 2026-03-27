@@ -175,6 +175,27 @@ export type WorldNoteCategory =
   | 'language'
   | 'custom';
 
+// ─── Maps ───
+export interface MapPin {
+  id: EntityId;
+  placeId?: EntityId;    // linked place (optional)
+  label?: string;        // custom label if no place linked
+  x: number;             // percentage 0-100 of image width
+  y: number;             // percentage 0-100 of image height
+  color?: string;        // optional custom color
+  linkedMapId?: EntityId; // drill-down: this pin opens another map
+}
+
+export interface MapItem {
+  id: EntityId;
+  name: string;
+  description?: string;
+  imageUrl: string;
+  pins: MapPin[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Library (multi-book) ───
 export interface BookMeta {
   id: EntityId;
@@ -203,6 +224,7 @@ export interface BookProject {
   goals: ProjectGoals;
   writingSessions: WritingSession[];
   worldNotes: WorldNote[];
+  maps: MapItem[];
   createdAt: string;
   updatedAt: string;
 }

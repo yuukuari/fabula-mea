@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -12,11 +13,13 @@ export function ChaptersPage() {
   const scenes = useBookStore((s) => s.scenes);
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
+  const maps = useBookStore((s) => s.maps ?? []);
   const addChapter = useBookStore((s) => s.addChapter);
   const deleteChapter = useBookStore((s) => s.deleteChapter);
   const addScene = useBookStore((s) => s.addScene);
   const updateScene = useBookStore((s) => s.updateScene);
   const deleteScene = useBookStore((s) => s.deleteScene);
+  const navigate = useNavigate();
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showChapterForm, setShowChapterForm] = useState(false);
@@ -95,6 +98,9 @@ export function ChaptersPage() {
                         .map((cid) => characters.find((c) => c.id === cid))
                         .filter(Boolean);
                       const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
+                      const sceneMaps = scenePlace
+                        ? maps.filter((m) => m.pins.some((p) => p.placeId === scenePlace.id))
+                        : [];
 
                       return (
                         <div key={scene.id} className="bg-parchment-100 rounded-lg p-3 group">
@@ -121,6 +127,16 @@ export function ChaptersPage() {
                                   <span className="flex items-center gap-1">
                                     <MapPin className="w-3 h-3" />
                                     {scenePlace.name}
+                                    {sceneMaps.map((m) => (
+                                      <button
+                                        key={m.id}
+                                        onClick={(e) => { e.stopPropagation(); navigate('/maps', { state: { mapId: m.id } }); }}
+                                        title={`Voir sur la carte : ${m.name}`}
+                                        className="ml-0.5 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                                      >
+                                        <Map className="w-3 h-3" />
+                                      </button>
+                                    ))}
                                   </span>
                                 )}
                                 {scene.startDateTime && (

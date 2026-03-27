@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, X } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, X, Map } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/timeline', icon: Clock, label: 'Chronologie' },
   { to: '/progress', icon: Target, label: 'Avancement' },
   { to: '/world', icon: Globe, label: 'Univers' },
+  { to: '/maps', icon: Map, label: 'Cartes' },
   { to: '/settings', icon: Settings, label: 'Parametres' },
 ];
 

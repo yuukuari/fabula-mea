@@ -51,6 +51,7 @@ export function migrateFromSingleBook() {
       goals: oldState.goals || { defaultWordsPerScene: 500, excludedPeriods: [] },
       writingSessions: oldState.writingSessions || [],
       worldNotes: oldState.worldNotes || [],
+      maps: oldState.maps || [],
       createdAt: oldState.createdAt || new Date().toISOString(),
       updatedAt: oldState.updatedAt || new Date().toISOString(),
     };

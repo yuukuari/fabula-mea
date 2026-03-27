@@ -1,21 +1,29 @@
 import { useState } from 'react';
-import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { PlaceMapLinker } from '@/components/maps/PlaceMapLinker';
 import { PLACE_TYPE_LABELS } from '@/lib/utils';
 import type { Place, PlaceType } from '@/types';
 
 export function PlacesPage() {
   const places = useBookStore((s) => s.places);
+  const maps = useBookStore((s) => s.maps ?? []);
   const addPlace = useBookStore((s) => s.addPlace);
   const updatePlace = useBookStore((s) => s.updatePlace);
   const deletePlace = useBookStore((s) => s.deletePlace);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showMapLinker, setShowMapLinker] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    (location.state as { placeId?: string } | null)?.placeId ?? null
+  );
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -83,6 +91,44 @@ export function PlacesPage() {
           )}
         </div>
 
+        {/* Maps section */}
+        {(() => {
+          const placeMaps = maps.filter((m) => m.pins.some((p) => p.placeId === selectedPlace.id));
+          return (
+            <div className="card-fantasy p-6 mt-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-display font-semibold text-ink-400 flex items-center gap-2">
+                  <Map className="w-5 h-5" /> Cartes
+                </h4>
+                <button
+                  onClick={() => setShowMapLinker(true)}
+                  className="btn-ghost text-sm flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  {placeMaps.length > 0 ? 'Gérer' : 'Positionner'}
+                </button>
+              </div>
+              {placeMaps.length === 0 ? (
+                <p className="text-sm text-ink-200 italic">Ce lieu n'est positionné sur aucune carte.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {placeMaps.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => navigate('/maps', { state: { mapId: m.id } })}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-parchment-100 hover:bg-parchment-200
+                                 rounded-lg text-sm text-ink-400 transition-colors border border-parchment-200"
+                    >
+                      <img src={m.imageUrl} alt={m.name} className="w-6 h-4 object-cover rounded" />
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <ConfirmDialog
           open={!!deleteId}
           title="Supprimer le lieu"
@@ -91,6 +137,13 @@ export function PlacesPage() {
           onCancel={() => setDeleteId(null)}
         />
         {showForm && <PlaceForm placeId={editingId} onClose={() => { setShowForm(false); setEditingId(null); }} />}
+        {showMapLinker && (
+          <PlaceMapLinker
+            placeId={selectedPlace.id}
+            placeName={selectedPlace.name}
+            onClose={() => setShowMapLinker(false)}
+          />
+        )}
       </div>
     );
   }

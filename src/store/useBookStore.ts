@@ -3,7 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
-  Relationship, KeyEvent,
+  Relationship, KeyEvent, MapItem, MapPin,
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
@@ -68,6 +68,14 @@ interface BookStore extends BookProject {
   updateWorldNote: (id: string, data: Partial<WorldNote>) => void;
   deleteWorldNote: (id: string) => void;
 
+  // Maps
+  addMap: (map: Partial<MapItem> & { name: string; imageUrl: string }) => string;
+  updateMap: (id: string, data: Partial<MapItem>) => void;
+  deleteMap: (id: string) => void;
+  addMapPin: (mapId: string, pin: Omit<MapPin, 'id'>) => string;
+  updateMapPin: (mapId: string, pinId: string, data: Partial<MapPin>) => void;
+  deleteMapPin: (mapId: string, pinId: string) => void;
+
   // Import/Export
   exportProject: () => string;
   importProject: (json: string) => void;
@@ -90,6 +98,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     },
     writingSessions: [],
     worldNotes: [],
+    maps: [],
   };
 }
 
@@ -108,6 +117,7 @@ function extractProjectData(state: BookStore): BookProject {
     goals: state.goals,
     writingSessions: state.writingSessions,
     worldNotes: state.worldNotes,
+    maps: state.maps,
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
   };
@@ -612,6 +622,72 @@ export const useBookStore = create<BookStore>()(
       deleteWorldNote: (id) =>
         set((s) => ({
           worldNotes: s.worldNotes.filter((n) => n.id !== id),
+          ...touchSave(),
+        })),
+
+      // ─── Maps ───
+      addMap: (map) => {
+        const id = generateId();
+        const timestamp = now();
+        set((s) => ({
+          maps: [...(s.maps ?? []), {
+            id,
+            name: map.name,
+            description: map.description ?? '',
+            imageUrl: map.imageUrl,
+            pins: map.pins ?? [],
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          }],
+          ...touchSave(),
+        }));
+        return id;
+      },
+
+      updateMap: (id, data) =>
+        set((s) => ({
+          maps: (s.maps ?? []).map((m) =>
+            m.id === id ? { ...m, ...data, updatedAt: now() } : m
+          ),
+          ...touchSave(),
+        })),
+
+      deleteMap: (id) =>
+        set((s) => ({
+          maps: (s.maps ?? []).filter((m) => m.id !== id),
+          ...touchSave(),
+        })),
+
+      addMapPin: (mapId, pin) => {
+        const id = generateId();
+        set((s) => ({
+          maps: (s.maps ?? []).map((m) =>
+            m.id === mapId
+              ? { ...m, pins: [...m.pins, { ...pin, id }], updatedAt: now() }
+              : m
+          ),
+          ...touchSave(),
+        }));
+        return id;
+      },
+
+      updateMapPin: (mapId, pinId, data) =>
+        set((s) => ({
+          maps: (s.maps ?? []).map((m) =>
+            m.id === mapId
+              ? { ...m, pins: m.pins.map((p) => p.id === pinId ? { ...p, ...data } : p), updatedAt: now() }
+              : m
+          ),
+          ...touchSave(),
+        })),
+
+      deleteMapPin: (mapId, pinId) =>
+        set((s) => ({
+          maps: (s.maps ?? []).map((m) =>
+            m.id === mapId
+              ? { ...m, pins: m.pins.filter((p) => p.id !== pinId), updatedAt: now() }
+              : m
+          ),
           ...touchSave(),
         })),
 

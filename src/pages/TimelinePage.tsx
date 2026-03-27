@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Clock, Edit, X, User, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Clock, Edit, X, User, MapPin, Map } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { Scene, SceneStatus } from '@/types';
@@ -10,6 +11,7 @@ export function TimelinePage() {
   const scenes = useBookStore((s) => s.scenes);
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
+  const maps = useBookStore((s) => s.maps ?? []);
   const updateScene = useBookStore((s) => s.updateScene);
 
   const [highlightChapterId, setHighlightChapterId] = useState<string | null>(null);
@@ -146,6 +148,9 @@ export function TimelinePage() {
                     const isHighlighted = !highlightChapterId || scene.chapterId === highlightChapterId;
                     const chapter = chapters.find((c) => c.id === scene.chapterId);
                     const place = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
+                    const sceneMaps = place
+                      ? maps.filter((m) => m.pins.some((p) => p.placeId === place.id))
+                      : [];
 
                     return (
                       <div
@@ -164,11 +169,26 @@ export function TimelinePage() {
                         <span className="text-[10px] text-white px-1 truncate block leading-8 font-medium">
                           {scene.title}
                         </span>
+                        {/* Small map indicator on block */}
+                        {sceneMaps.length > 0 && (
+                          <div className="absolute top-0.5 right-0.5 w-3 h-3 opacity-70">
+                            <Map className="w-3 h-3 text-white" />
+                          </div>
+                        )}
                         {/* Tooltip on hover */}
                         <div className="absolute bottom-full left-0 mb-1 bg-ink-500 text-white text-xs rounded-lg p-2 hidden group-hover:block z-10 whitespace-nowrap shadow-lg">
                           <div className="font-medium">{scene.title}</div>
                           {chapter && <div className="text-white/70">Ch. {chapter.number} - {chapter.title}</div>}
-                          {place && <div className="text-white/70 flex items-center gap-1"><MapPin className="w-3 h-3" />{place.name}</div>}
+                          {place && (
+                            <div className="text-white/70 flex items-center gap-1 flex-wrap">
+                              <MapPin className="w-3 h-3" />{place.name}
+                              {sceneMaps.map((m) => (
+                                <span key={m.id} className="flex items-center gap-0.5 text-gold-300">
+                                  <Map className="w-3 h-3" />{m.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <div className="text-white/70">{new Date(scene.startDateTime!).toLocaleString('fr-FR')}</div>
                         </div>
                       </div>
@@ -195,7 +215,9 @@ export function TimelinePage() {
 function TimelineSceneEditor({ scene, onClose }: { scene: Scene; onClose: () => void }) {
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
+  const maps = useBookStore((s) => s.maps ?? []);
   const updateScene = useBookStore((s) => s.updateScene);
+  const navigate = useNavigate();
 
   const [startDateTime, setStartDateTime] = useState(scene.startDateTime ?? '');
   const [endDateTime, setEndDateTime] = useState(scene.endDateTime ?? '');
@@ -255,6 +277,28 @@ function TimelineSceneEditor({ scene, onClose }: { scene: Scene; onClose: () => 
               <option value="">Aucun</option>
               {places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+            {/* Map links for selected place */}
+            {placeId && (() => {
+              const linkedMaps = maps.filter((m) => m.pins.some((p) => p.placeId === placeId));
+              if (linkedMaps.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {linkedMaps.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => { onClose(); navigate('/maps', { state: { mapId: m.id } }); }}
+                      className="flex items-center gap-1.5 px-2 py-1 bg-parchment-100 hover:bg-parchment-200
+                                 rounded text-xs text-ink-400 transition-colors border border-parchment-200"
+                    >
+                      <img src={m.imageUrl} alt={m.name} className="w-5 h-3.5 object-cover rounded" />
+                      <Map className="w-3 h-3 text-bordeaux-400" />
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

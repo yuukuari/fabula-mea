@@ -7,6 +7,7 @@ import { ChaptersPage } from '@/pages/ChaptersPage';
 import { TimelinePage } from '@/pages/TimelinePage';
 import { ProgressPage } from '@/pages/ProgressPage';
 import { WorldPage } from '@/pages/WorldPage';
+import { MapsPage } from '@/pages/MapsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 
 const router = createBrowserRouter([
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { path: 'timeline', element: <TimelinePage /> },
       { path: 'progress', element: <ProgressPage /> },
       { path: 'world', element: <WorldPage /> },
+      { path: 'maps', element: <MapsPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },
