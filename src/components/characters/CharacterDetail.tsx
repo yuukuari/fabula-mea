@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon } from 'lucide-react';
-import type { Character } from '@/types';
+import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil } from 'lucide-react';
+import type { Character, Relationship } from '@/types';
 import { useBookStore } from '@/store/useBookStore';
-import { RELATIONSHIP_TYPE_LABELS } from '@/lib/utils';
+import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { RelationshipEditor } from './RelationshipEditor';
 import { useNavigate } from 'react-router-dom';
@@ -13,16 +13,48 @@ interface CharacterDetailProps {
   onEdit: () => void;
 }
 
+const SEX_LABELS: Record<string, string> = {
+  male: 'Homme',
+  female: 'Femme',
+};
+
+function getRelLabel(rel: Relationship): string {
+  if (rel.type === 'custom') return rel.customType ?? 'Autre';
+  if (rel.type === 'family' && rel.familyRoleTarget) {
+    return `Famille (${FAMILY_ROLE_LABELS[rel.familyRoleTarget] ?? rel.familyRoleTarget})`;
+  }
+  return RELATIONSHIP_TYPE_LABELS[rel.type] ?? rel.type;
+}
+
 export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailProps) {
   const navigate = useNavigate();
   const deleteCharacter = useBookStore((s) => s.deleteCharacter);
+  const deleteRelationship = useBookStore((s) => s.deleteRelationship);
   const characters = useBookStore((s) => s.characters);
   const [showDelete, setShowDelete] = useState(false);
   const [showRelEditor, setShowRelEditor] = useState(false);
+  const [editingRel, setEditingRel] = useState<Relationship | undefined>(undefined);
+  const [deleteRelTarget, setDeleteRelTarget] = useState<{ relId: string; targetName: string } | null>(null);
 
   const handleDelete = () => {
     deleteCharacter(character.id);
     navigate('/characters');
+  };
+
+  const handleDeleteRelationship = () => {
+    if (!deleteRelTarget) return;
+    deleteRelationship(character.id, deleteRelTarget.relId);
+    setDeleteRelTarget(null);
+  };
+
+  const openEditRelation = (rel: Relationship) => {
+    setEditingRel(rel);
+    setShowRelEditor(true);
+  };
+
+  const openNewRelation = () => {
+    setEditingRel(undefined);
+    setShowRelEditor(true);
   };
 
   return (
@@ -57,11 +89,19 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
             {character.nickname && (
               <p className="text-lg text-ink-300 italic mt-1">"{character.nickname}"</p>
             )}
-            {character.profession && (
-              <p className="text-bordeaux-500 font-medium mt-2">{character.profession}</p>
-            )}
+            <div className="flex items-center gap-3 mt-2 text-sm text-ink-300">
+              {character.sex && (
+                <span className="badge bg-parchment-200 text-ink-400">{SEX_LABELS[character.sex]}</span>
+              )}
+              {character.age !== undefined && character.age !== null && (
+                <span className="badge bg-parchment-200 text-ink-400">{character.age} ans</span>
+              )}
+              {character.profession && (
+                <span className="text-bordeaux-500 font-medium">{character.profession}</span>
+              )}
+            </div>
             {character.lifeGoal && (
-              <p className="text-sm text-ink-300 mt-1">
+              <p className="text-sm text-ink-300 mt-2">
                 <span className="font-medium">But :</span> {character.lifeGoal}
               </p>
             )}
@@ -189,7 +229,7 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
           <h4 className="font-display font-semibold text-ink-400 flex items-center gap-2">
             <UsersIcon className="w-5 h-5" /> Relations
           </h4>
-          <button onClick={() => setShowRelEditor(true)} className="btn-ghost text-sm flex items-center gap-1">
+          <button onClick={openNewRelation} className="btn-ghost text-sm flex items-center gap-1">
             <Plus className="w-4 h-4" /> Ajouter
           </button>
         </div>
@@ -202,21 +242,45 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
               return (
                 <div
                   key={rel.id}
-                  className="flex items-center gap-3 bg-parchment-100 rounded-lg p-3 cursor-pointer hover:bg-parchment-200 transition-colors"
-                  onClick={() => target && navigate(`/characters/${target.id}`)}
+                  className="bg-parchment-100 rounded-lg p-3 group"
                 >
-                  <div className="w-8 h-8 rounded-full bg-parchment-300 flex items-center justify-center">
-                    <User className="w-4 h-4 text-ink-300" />
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="flex items-start gap-3 flex-1 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
+                      onClick={() => target && navigate(`/characters/${target.id}`)}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-parchment-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <User className="w-4 h-4 text-ink-300" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-ink-500">{target?.name ?? 'Inconnu'}</span>
+                          <span className="text-xs text-bordeaux-500">
+                            {getRelLabel(rel)}
+                          </span>
+                        </div>
+                        {rel.description && (
+                          <p className="text-xs text-ink-300 mt-1 whitespace-pre-wrap">{rel.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={() => openEditRelation(rel)}
+                        className="p-1.5 rounded-lg text-ink-200 hover:text-ink-500 hover:bg-parchment-200"
+                        title="Modifier la relation"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteRelTarget({ relId: rel.id, targetName: target?.name ?? 'Inconnu' })}
+                        className="p-1.5 rounded-lg text-ink-200 hover:text-red-500 hover:bg-red-50"
+                        title="Supprimer la relation"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <span className="font-medium text-ink-500">{target?.name ?? 'Inconnu'}</span>
-                    <span className="text-xs text-bordeaux-500 ml-2">
-                      {rel.type === 'custom' ? rel.customType : RELATIONSHIP_TYPE_LABELS[rel.type]}
-                    </span>
-                  </div>
-                  {rel.description && (
-                    <p className="text-xs text-ink-300 max-w-xs truncate">{rel.description}</p>
-                  )}
                 </div>
               );
             })}
@@ -240,10 +304,19 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
         onCancel={() => setShowDelete(false)}
       />
 
+      <ConfirmDialog
+        open={deleteRelTarget !== null}
+        title="Supprimer la relation"
+        description={`Supprimer la relation avec ${deleteRelTarget?.targetName ?? ''} ?`}
+        onConfirm={handleDeleteRelationship}
+        onCancel={() => setDeleteRelTarget(null)}
+      />
+
       {showRelEditor && (
         <RelationshipEditor
           characterId={character.id}
-          onClose={() => setShowRelEditor(false)}
+          existingRelationship={editingRel}
+          onClose={() => { setShowRelEditor(false); setEditingRel(undefined); }}
         />
       )}
     </div>

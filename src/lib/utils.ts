@@ -27,6 +27,50 @@ export const RELATIONSHIP_TYPE_LABELS: Record<string, string> = {
   custom: 'Autre',
 };
 
+export const FAMILY_ROLE_LABELS: Record<string, string> = {
+  pere: 'Pere',
+  mere: 'Mere',
+  fils: 'Fils',
+  fille: 'Fille',
+  frere: 'Frere',
+  soeur: 'Soeur',
+  oncle: 'Oncle',
+  tante: 'Tante',
+  cousin: 'Cousin',
+  cousine: 'Cousine',
+  grand_pere: 'Grand-pere',
+  grand_mere: 'Grand-mere',
+  petit_fils: 'Petit-fils',
+  petite_fille: 'Petite-fille',
+  epoux: 'Epoux',
+  epouse: 'Epouse',
+  autre: 'Autre',
+};
+
+// Always-reciprocal relationship types (added on both characters automatically)
+export const ALWAYS_RECIPROCAL_TYPES: string[] = ['friend', 'enemy', 'colleague', 'family'];
+
+// For family: mapping of reverse roles
+export const FAMILY_ROLE_REVERSE: Record<string, string> = {
+  pere: 'fils',
+  mere: 'fils', // will be adjusted to fille based on target sex
+  fils: 'pere',
+  fille: 'pere',
+  frere: 'frere',
+  soeur: 'soeur',
+  oncle: 'neveu',
+  tante: 'neveu',
+  cousin: 'cousin',
+  cousine: 'cousine',
+  grand_pere: 'petit_fils',
+  grand_mere: 'petit_fils',
+  petit_fils: 'grand_pere',
+  petite_fille: 'grand_pere',
+  epoux: 'epouse',
+  epouse: 'epoux',
+  autre: 'autre',
+};
+
 export const PLACE_TYPE_LABELS: Record<string, string> = {
   city: 'Ville',
   village: 'Village',

@@ -8,11 +8,15 @@ export interface Tag {
 }
 
 // ─── Characters ───
+export type CharacterSex = 'male' | 'female';
+
 export interface Character {
   id: EntityId;
   name: string;
   surname?: string;
   nickname?: string;
+  sex?: CharacterSex;
+  age?: number;
   imageUrl?: string;
   description: string;
   personality: string;
@@ -44,6 +48,8 @@ export interface Relationship {
   targetCharacterId: EntityId;
   type: RelationshipType;
   customType?: string;
+  familyRoleSource?: string; // e.g. "Pere" (role of the source character)
+  familyRoleTarget?: string; // e.g. "Fils" (role of the target character)
   description: string;
   evolution?: string;
 }
@@ -168,6 +174,19 @@ export type WorldNoteCategory =
   | 'flora_fauna'
   | 'language'
   | 'custom';
+
+// ─── Library (multi-book) ───
+export interface BookMeta {
+  id: EntityId;
+  title: string;
+  author: string;
+  genre?: string;
+  chaptersCount: number;
+  scenesCount: number;
+  charactersCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // ─── Root Store ───
 export interface BookProject {

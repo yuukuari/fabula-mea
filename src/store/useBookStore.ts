@@ -1,14 +1,22 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { subscribeWithSelector } from 'zustand/middleware';
 import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
   Relationship, KeyEvent,
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS } from '@/lib/utils';
+import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
 
 interface BookStore extends BookProject {
   lastSavedAt: string | null;
+  _loaded: boolean;
+
+  // Lifecycle
+  loadBook: (bookId: string) => void;
+  saveBook: () => void;
+  unloadBook: () => void;
+  initNewBook: (bookId: string, title: string, author?: string, genre?: string) => void;
 
   // Project
   updateProject: (data: Partial<Pick<BookProject, 'title' | 'author' | 'genre' | 'synopsis'>>) => void;
@@ -65,35 +73,146 @@ interface BookStore extends BookProject {
   importProject: (json: string) => void;
 }
 
-const initialState: Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> = {
-  title: 'Mon Livre',
-  author: '',
-  genre: '',
-  synopsis: '',
-  characters: [],
-  places: [],
-  chapters: [],
-  scenes: [],
-  tags: [],
-  goals: {
-    defaultWordsPerScene: 500,
-    excludedPeriods: [],
-  },
-  writingSessions: [],
-  worldNotes: [],
-};
+function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    title: '',
+    author: '',
+    genre: '',
+    synopsis: '',
+    characters: [],
+    places: [],
+    chapters: [],
+    scenes: [],
+    tags: [],
+    goals: {
+      defaultWordsPerScene: 500,
+      excludedPeriods: [],
+    },
+    writingSessions: [],
+    worldNotes: [],
+  };
+}
+
+function extractProjectData(state: BookStore): BookProject {
+  return {
+    id: state.id,
+    title: state.title,
+    author: state.author,
+    genre: state.genre,
+    synopsis: state.synopsis,
+    characters: state.characters,
+    places: state.places,
+    chapters: state.chapters,
+    scenes: state.scenes,
+    tags: state.tags,
+    goals: state.goals,
+    writingSessions: state.writingSessions,
+    worldNotes: state.worldNotes,
+    createdAt: state.createdAt,
+    updatedAt: state.updatedAt,
+  };
+}
+
+function touchSave(extra: Record<string, unknown> = {}) {
+  const timestamp = now();
+  return { ...extra, updatedAt: timestamp, lastSavedAt: timestamp };
+}
 
 export const useBookStore = create<BookStore>()(
-  persist(
+  subscribeWithSelector(
     (set, get) => ({
-      ...initialState,
-      id: generateId(),
-      createdAt: now(),
-      updatedAt: now(),
+      ...emptyState(),
+      id: '',
+      createdAt: '',
+      updatedAt: '',
       lastSavedAt: null,
+      _loaded: false,
+
+      // ─── Lifecycle ───
+      initNewBook: (bookId, title, author = '', genre = '') => {
+        const timestamp = now();
+        const newState = {
+          ...emptyState(),
+          id: bookId,
+          title,
+          author,
+          genre,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          lastSavedAt: timestamp,
+          _loaded: true,
+        };
+        set(newState);
+        localStorage.setItem(
+          getBookStorageKey(bookId),
+          JSON.stringify(extractProjectData({ ...newState } as unknown as BookStore))
+        );
+      },
+
+      loadBook: (bookId) => {
+        // Save current book first if loaded
+        const current = get();
+        if (current._loaded && current.id && current.id !== bookId) {
+          localStorage.setItem(
+            getBookStorageKey(current.id),
+            JSON.stringify(extractProjectData(current))
+          );
+        }
+
+        const raw = localStorage.getItem(getBookStorageKey(bookId));
+        if (raw) {
+          const project = JSON.parse(raw) as BookProject;
+          set({
+            ...project,
+            lastSavedAt: now(),
+            _loaded: true,
+          });
+        }
+      },
+
+      saveBook: () => {
+        const state = get();
+        if (!state._loaded || !state.id) return;
+        const data = extractProjectData(state);
+        localStorage.setItem(getBookStorageKey(state.id), JSON.stringify(data));
+        // Also update library meta
+        useLibraryStore.getState().updateBookMeta(state.id, {
+          title: state.title,
+          author: state.author,
+          genre: state.genre,
+          chaptersCount: state.chapters.length,
+          scenesCount: state.scenes.length,
+          charactersCount: state.characters.length,
+        });
+        set({ lastSavedAt: now() });
+      },
+
+      unloadBook: () => {
+        // Save before unloading
+        const state = get();
+        if (state._loaded && state.id) {
+          localStorage.setItem(getBookStorageKey(state.id), JSON.stringify(extractProjectData(state)));
+          useLibraryStore.getState().updateBookMeta(state.id, {
+            title: state.title,
+            author: state.author,
+            genre: state.genre,
+            chaptersCount: state.chapters.length,
+            scenesCount: state.scenes.length,
+            charactersCount: state.characters.length,
+          });
+        }
+        set({
+          ...emptyState(),
+          id: '',
+          createdAt: '',
+          updatedAt: '',
+          lastSavedAt: null,
+          _loaded: false,
+        });
+      },
 
       updateProject: (data) =>
-        set((s) => ({ ...data, updatedAt: now(), lastSavedAt: now() })),
+        set((s) => ({ ...data, ...touchSave() })),
 
       // ─── Characters ───
       addCharacter: (char) => {
@@ -105,6 +224,8 @@ export const useBookStore = create<BookStore>()(
             name: char.name,
             surname: char.surname ?? '',
             nickname: char.nickname ?? '',
+            sex: char.sex,
+            age: char.age,
             imageUrl: char.imageUrl ?? '',
             description: char.description ?? '',
             personality: char.personality ?? '',
@@ -134,8 +255,7 @@ export const useBookStore = create<BookStore>()(
           characters: s.characters.map((c) =>
             c.id === id ? { ...c, ...data, updatedAt: now() } : c
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteCharacter: (id) =>
@@ -145,8 +265,7 @@ export const useBookStore = create<BookStore>()(
             ...sc,
             characterIds: sc.characterIds.filter((cid) => cid !== id),
           })),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       addRelationship: (characterId, rel) =>
@@ -156,8 +275,7 @@ export const useBookStore = create<BookStore>()(
               ? { ...c, relationships: [...c.relationships, { ...rel, id: generateId() }], updatedAt: now() }
               : c
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       updateRelationship: (characterId, relId, data) =>
@@ -173,8 +291,7 @@ export const useBookStore = create<BookStore>()(
                 }
               : c
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteRelationship: (characterId, relId) =>
@@ -184,8 +301,7 @@ export const useBookStore = create<BookStore>()(
               ? { ...c, relationships: c.relationships.filter((r) => r.id !== relId), updatedAt: now() }
               : c
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       addKeyEvent: (characterId, event) =>
@@ -195,8 +311,7 @@ export const useBookStore = create<BookStore>()(
               ? { ...c, keyEvents: [...c.keyEvents, { ...event, id: generateId() }], updatedAt: now() }
               : c
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteKeyEvent: (characterId, eventId) =>
@@ -206,8 +321,7 @@ export const useBookStore = create<BookStore>()(
               ? { ...c, keyEvents: c.keyEvents.filter((e) => e.id !== eventId), updatedAt: now() }
               : c
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── Places ───
@@ -239,8 +353,7 @@ export const useBookStore = create<BookStore>()(
           places: s.places.map((p) =>
             p.id === id ? { ...p, ...data, updatedAt: now() } : p
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deletePlace: (id) =>
@@ -249,8 +362,7 @@ export const useBookStore = create<BookStore>()(
           scenes: s.scenes.map((sc) =>
             sc.placeId === id ? { ...sc, placeId: undefined } : sc
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── Chapters ───
@@ -280,16 +392,14 @@ export const useBookStore = create<BookStore>()(
           chapters: s.chapters.map((c) =>
             c.id === id ? { ...c, ...data, updatedAt: now() } : c
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteChapter: (id) =>
         set((s) => ({
           chapters: s.chapters.filter((c) => c.id !== id),
           scenes: s.scenes.filter((sc) => sc.chapterId !== id),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       reorderChapters: (chapterIds) =>
@@ -298,8 +408,7 @@ export const useBookStore = create<BookStore>()(
             const ch = s.chapters.find((c) => c.id === id)!;
             return { ...ch, number: i + 1 };
           }),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── Scenes ───
@@ -345,8 +454,7 @@ export const useBookStore = create<BookStore>()(
           scenes: s.scenes.map((sc) =>
             sc.id === id ? { ...sc, ...data, updatedAt: now() } : sc
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteScene: (id) =>
@@ -357,8 +465,7 @@ export const useBookStore = create<BookStore>()(
             sceneIds: c.sceneIds.filter((sid) => sid !== id),
           })),
           writingSessions: s.writingSessions.filter((ws) => ws.sceneId !== id),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       moveScene: (sceneId, toChapterId, newIndex) =>
@@ -402,8 +509,7 @@ export const useBookStore = create<BookStore>()(
             if (idx >= 0) return { ...sc, orderInChapter: idx };
             return sc;
           }),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── Tags ───
@@ -411,8 +517,7 @@ export const useBookStore = create<BookStore>()(
         const id = generateId();
         set((s) => ({
           tags: [...s.tags, { ...tag, id }],
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         }));
         return id;
       },
@@ -420,8 +525,7 @@ export const useBookStore = create<BookStore>()(
       updateTag: (id, data) =>
         set((s) => ({
           tags: s.tags.map((t) => (t.id === id ? { ...t, ...data } : t)),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteTag: (id) =>
@@ -435,16 +539,14 @@ export const useBookStore = create<BookStore>()(
             ...p,
             tags: p.tags.filter((tid) => tid !== id),
           })),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── Goals ───
       updateGoals: (data) =>
         set((s) => ({
           goals: { ...s.goals, ...data },
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       addExcludedPeriod: (period) =>
@@ -453,8 +555,7 @@ export const useBookStore = create<BookStore>()(
             ...s.goals,
             excludedPeriods: [...s.goals.excludedPeriods, { ...period, id: generateId() }],
           },
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteExcludedPeriod: (id) =>
@@ -463,23 +564,20 @@ export const useBookStore = create<BookStore>()(
             ...s.goals,
             excludedPeriods: s.goals.excludedPeriods.filter((p) => p.id !== id),
           },
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── Writing Sessions ───
       addWritingSession: (session) =>
         set((s) => ({
           writingSessions: [...s.writingSessions, { ...session, id: generateId() }],
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteWritingSession: (id) =>
         set((s) => ({
           writingSessions: s.writingSessions.filter((ws) => ws.id !== id),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── World Notes ───
@@ -508,38 +606,19 @@ export const useBookStore = create<BookStore>()(
           worldNotes: s.worldNotes.map((n) =>
             n.id === id ? { ...n, ...data, updatedAt: now() } : n
           ),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       deleteWorldNote: (id) =>
         set((s) => ({
           worldNotes: s.worldNotes.filter((n) => n.id !== id),
-          updatedAt: now(),
-          lastSavedAt: now(),
+          ...touchSave(),
         })),
 
       // ─── Import/Export ───
       exportProject: () => {
         const state = get();
-        const project: BookProject = {
-          id: state.id,
-          title: state.title,
-          author: state.author,
-          genre: state.genre,
-          synopsis: state.synopsis,
-          characters: state.characters,
-          places: state.places,
-          chapters: state.chapters,
-          scenes: state.scenes,
-          tags: state.tags,
-          goals: state.goals,
-          writingSessions: state.writingSessions,
-          worldNotes: state.worldNotes,
-          createdAt: state.createdAt,
-          updatedAt: state.updatedAt,
-        };
-        return JSON.stringify(project, null, 2);
+        return JSON.stringify(extractProjectData(state), null, 2);
       },
 
       importProject: (json) => {
@@ -547,12 +626,21 @@ export const useBookStore = create<BookStore>()(
         set({
           ...project,
           lastSavedAt: now(),
+          _loaded: true,
         });
       },
-    }),
-    {
-      name: 'ecrire-mon-livre-storage',
-      version: 1,
-    }
+    })
   )
+);
+
+// Auto-save: whenever state changes (debounced), save to localStorage
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+useBookStore.subscribe(
+  (state) => state.updatedAt,
+  () => {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      useBookStore.getState().saveBook();
+    }, 500);
+  }
 );

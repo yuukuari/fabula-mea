@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { HomePage } from '@/pages/HomePage';
 import { CharactersPage } from '@/pages/CharactersPage';
 import { PlacesPage } from '@/pages/PlacesPage';
 import { ChaptersPage } from '@/pages/ChaptersPage';
@@ -9,11 +10,10 @@ import { WorldPage } from '@/pages/WorldPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 
 const router = createBrowserRouter([
+  { path: '/', element: <HomePage /> },
   {
-    path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/characters" replace /> },
       { path: 'characters', element: <CharactersPage /> },
       { path: 'characters/:id', element: <CharactersPage /> },
       { path: 'places', element: <PlacesPage /> },

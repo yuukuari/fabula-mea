@@ -24,13 +24,24 @@ export function CharactersPage() {
 
   const selectedChar = id ? characters.find((c) => c.id === id) : null;
 
+  // Form modal — always rendered on top regardless of list/detail view
+  const formModal = showForm && (
+    <CharacterForm
+      characterId={editingId}
+      onClose={() => { setShowForm(false); setEditingId(null); }}
+    />
+  );
+
   if (selectedChar) {
     return (
-      <CharacterDetail
-        character={selectedChar}
-        onBack={() => navigate('/characters')}
-        onEdit={() => { setEditingId(selectedChar.id); setShowForm(true); }}
-      />
+      <>
+        <CharacterDetail
+          character={selectedChar}
+          onBack={() => navigate('/characters')}
+          onEdit={() => { setEditingId(selectedChar.id); setShowForm(true); }}
+        />
+        {formModal}
+      </>
     );
   }
 
@@ -87,12 +98,7 @@ export function CharactersPage() {
         </>
       )}
 
-      {showForm && (
-        <CharacterForm
-          characterId={editingId}
-          onClose={() => { setShowForm(false); setEditingId(null); }}
-        />
-      )}
+      {formModal}
     </div>
   );
 }

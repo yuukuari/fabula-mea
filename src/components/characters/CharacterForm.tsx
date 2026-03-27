@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { X } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { ImageUpload } from '@/components/shared/ImageUpload';
-import { RELATIONSHIP_TYPE_LABELS } from '@/lib/utils';
-import type { Character, CharacterEvolution, RelationshipType } from '@/types';
+import type { CharacterEvolution, CharacterSex } from '@/types';
 
 interface CharacterFormProps {
   characterId: string | null;
@@ -20,6 +19,8 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
   const [name, setName] = useState(existing?.name ?? '');
   const [surname, setSurname] = useState(existing?.surname ?? '');
   const [nickname, setNickname] = useState(existing?.nickname ?? '');
+  const [sex, setSex] = useState<CharacterSex | ''>(existing?.sex ?? '');
+  const [age, setAge] = useState<string>(existing?.age !== undefined && existing?.age !== null ? String(existing.age) : '');
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl);
   const [description, setDescription] = useState(existing?.description ?? '');
   const [personality, setPersonality] = useState(existing?.personality ?? '');
@@ -45,6 +46,8 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
       name: name.trim(),
       surname: surname.trim(),
       nickname: nickname.trim(),
+      sex: sex || undefined,
+      age: age ? parseInt(age, 10) : undefined,
       imageUrl,
       description,
       personality,
@@ -75,7 +78,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
           <h3 className="font-display text-xl font-bold text-ink-500">
             {existing ? 'Modifier le personnage' : 'Nouveau personnage'}
           </h3>
-          <button onClick={onClose} className="btn-ghost p-1">
+          <button type="button" onClick={onClose} className="btn-ghost p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -94,9 +97,35 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
             </div>
           </div>
 
-          <div>
-            <label className="label-field">Surnom</label>
-            <input value={nickname} onChange={(e) => setNickname(e.target.value)} className="input-field" />
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="label-field">Sexe</label>
+              <select
+                value={sex}
+                onChange={(e) => setSex(e.target.value as CharacterSex | '')}
+                className="input-field"
+              >
+                <option value="">Non precise</option>
+                <option value="male">Homme</option>
+                <option value="female">Femme</option>
+              </select>
+            </div>
+            <div>
+              <label className="label-field">Age</label>
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                className="input-field"
+                placeholder="Ex: 25"
+              />
+            </div>
+            <div>
+              <label className="label-field">Surnom</label>
+              <input value={nickname} onChange={(e) => setNickname(e.target.value)} className="input-field" />
+            </div>
           </div>
 
           <div>
