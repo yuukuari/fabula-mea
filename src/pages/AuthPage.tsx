@@ -6,7 +6,12 @@ import type { BookMeta } from '@/types';
 
 // ─── Detect existing anonymous local data ───────────────────────────────────
 
+// Flag set after first successful sync — avoids showing the banner after logout/re-login
+const LOCAL_SYNCED_KEY = 'emlb-local-synced';
+
 function getLocalLibrary(): BookMeta[] | null {
+  // Already synced once → no need to migrate again
+  if (localStorage.getItem(LOCAL_SYNCED_KEY)) return null;
   try {
     const raw = localStorage.getItem('ecrire-mon-livre-library');
     if (!raw) return null;
@@ -66,10 +71,12 @@ export function AuthPage() {
       } else {
         await signup(email, password, name.trim() || undefined);
       }
-      // After successful auth, migrate existing local data
+      // After successful auth, migrate existing local data (only first time)
       if (hasLocalData && localBooks) {
         await migrateLocalData(localBooks);
       }
+      // Mark local data as synced — won't show migration banner on next logout/login
+      localStorage.setItem(LOCAL_SYNCED_KEY, '1');
     } catch {
       // Error already set in store
     }
