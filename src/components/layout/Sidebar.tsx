@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -15,7 +15,13 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Parametres' },
 ];
 
-export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
+interface SidebarProps {
+  onSearchClick?: () => void;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
+export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
   const bookTitle = useBookStore((s) => s.title);
   const books = useLibraryStore((s) => s.books);
@@ -27,7 +33,6 @@ export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
   const [showSwitcher, setShowSwitcher] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
 
-  // Close switcher on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
@@ -42,25 +47,24 @@ export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
     unloadBook();
     selectBook(null);
     navigate('/');
+    onMobileClose();
   };
 
   const handleSwitchBook = (bookId: string) => {
-    if (bookId === currentBookId) {
-      setShowSwitcher(false);
-      return;
-    }
+    if (bookId === currentBookId) { setShowSwitcher(false); return; }
     selectBook(bookId);
     loadBook(bookId);
     setShowSwitcher(false);
     navigate('/characters');
+    onMobileClose();
   };
 
   const otherBooks = books.filter((b) => b.id !== currentBookId);
 
-  return (
-    <aside className="w-64 min-h-screen bg-parchment-50 border-r border-parchment-300 flex flex-col">
-      {/* Logo — click to go home */}
-      <div className="p-6 border-b border-parchment-300">
+  const sidebarContent = (
+    <aside className="w-64 min-h-screen bg-parchment-50 border-r border-parchment-300 flex flex-col h-full">
+      {/* Logo */}
+      <div className="p-6 border-b border-parchment-300 flex items-center justify-between">
         <button
           onClick={handleGoHome}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
@@ -70,11 +74,16 @@ export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
             <Feather className="w-5 h-5 text-white" />
           </div>
           <div className="text-left">
-            <h1 className="font-display text-lg font-bold text-ink-500 leading-tight">
-              Ecrire
-            </h1>
+            <h1 className="font-display text-lg font-bold text-ink-500 leading-tight">Ecrire</h1>
             <p className="text-xs text-ink-300">Mon Livre</p>
           </div>
+        </button>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onMobileClose}
+          className="md:hidden p-1.5 rounded-lg text-ink-300 hover:bg-parchment-200"
+        >
+          <X className="w-5 h-5" />
         </button>
       </div>
 
@@ -92,7 +101,6 @@ export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
           <ChevronDown className={cn('w-4 h-4 flex-shrink-0 transition-transform', showSwitcher && 'rotate-180')} />
         </button>
 
-        {/* Dropdown */}
         {showSwitcher && (
           <div className="absolute left-4 right-4 top-full mt-1 z-50 bg-white rounded-lg border border-parchment-300 shadow-lg overflow-hidden">
             {otherBooks.length > 0 ? (
@@ -123,10 +131,10 @@ export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
         )}
       </div>
 
-      {/* Search button */}
+      {/* Search */}
       <div className="px-4 pt-3">
         <button
-          onClick={onSearchClick}
+          onClick={() => { onSearchClick?.(); onMobileClose(); }}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-200 bg-parchment-100 rounded-lg
                      border border-parchment-200 hover:border-gold-400 hover:text-ink-300 transition-colors"
         >
@@ -141,11 +149,9 @@ export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
           <NavLink
             key={to}
             to={to}
+            onClick={onMobileClose}
             className={({ isActive }) =>
-              cn(
-                'sidebar-link',
-                isActive && 'sidebar-link-active'
-              )
+              cn('sidebar-link', isActive && 'sidebar-link-active')
             }
           >
             <Icon className="w-5 h-5" />
@@ -159,19 +165,38 @@ export function Sidebar({ onSearchClick }: { onSearchClick?: () => void }) {
       </div>
     </aside>
   );
+
+  return (
+    <>
+      {/* Desktop: static sidebar */}
+      <div className="hidden md:flex">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile: slide-in overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={onMobileClose}
+          />
+          {/* Panel */}
+          <div className="relative flex h-full">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 function AutoSaveIndicator() {
   const lastSaved = useBookStore((s) => s.lastSavedAt);
-
   return (
     <div className="flex items-center gap-2 text-xs text-ink-200">
       <div className="w-2 h-2 rounded-full bg-green-400" />
-      <span>
-        {lastSaved
-          ? `Sauvegarde auto`
-          : 'Non sauvegarde'}
-      </span>
+      <span>{lastSaved ? 'Sauvegarde auto' : 'Non sauvegarde'}</span>
     </div>
   );
 }

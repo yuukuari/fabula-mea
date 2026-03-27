@@ -34,7 +34,7 @@ export function ChaptersPage() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="section-title">Chapitres & Scenes</h2>
         <button onClick={() => { setEditingChapterId(null); setShowChapterForm(true); }} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouveau chapitre
+          <Plus className="w-4 h-4" /><span className="hidden sm:inline">Nouveau chapitre</span>
         </button>
       </div>
 

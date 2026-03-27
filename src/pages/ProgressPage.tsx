@@ -10,7 +10,6 @@ import {
   getDaysUntilDeadline, countExcludedDays
 } from '@/lib/calculations';
 import { cn } from '@/lib/utils';
-import { PomodoroTimer } from '@/components/progress/PomodoroTimer';
 
 export function ProgressPage() {
   const scenes = useBookStore((s) => s.scenes);
@@ -37,14 +36,11 @@ export function ProgressPage() {
       <h2 className="section-title mb-6">Objectif & Avancement</h2>
 
       {scenes.length === 0 ? (
-        <div className="space-y-6">
-          <EmptyState
-            icon={Target}
-            title="Pas de scenes"
-            description="Creez des chapitres et des scenes dans l'onglet Chapitres pour commencer a suivre votre avancement."
-          />
-          <PomodoroTimer />
-        </div>
+        <EmptyState
+          icon={Target}
+          title="Pas de scenes"
+          description="Creez des chapitres et des scenes dans l'onglet Chapitres pour commencer a suivre votre avancement."
+        />
       ) : (
         <div className="space-y-6">
           {/* Overall Progress */}
@@ -200,8 +196,6 @@ export function ProgressPage() {
             <WritingCalendar />
           </div>
 
-          {/* Pomodoro Timer */}
-          <PomodoroTimer />
         </div>
       )}
 

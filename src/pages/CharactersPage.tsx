@@ -51,7 +51,7 @@ export function CharactersPage() {
         <h2 className="section-title">Personnages</h2>
         <button onClick={() => { setEditingId(null); setShowForm(true); }} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" />
-          Nouveau personnage
+          <span className="hidden sm:inline">Nouveau personnage</span>
         </button>
       </div>
 

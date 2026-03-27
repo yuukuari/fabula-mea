@@ -100,7 +100,7 @@ export function PlacesPage() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="section-title">Lieux</h2>
         <button onClick={() => { setEditingId(null); setShowForm(true); }} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouveau lieu
+          <Plus className="w-4 h-4" /><span className="hidden sm:inline">Nouveau lieu</span>
         </button>
       </div>
 
