@@ -22,7 +22,7 @@ export function ChaptersPage() {
   const updateScene = useBookStore((s) => s.updateScene);
   const deleteScene = useBookStore((s) => s.deleteScene);
   const navigate = useNavigate();
-  const openScene = useEditorStore((s) => s.openScene);
+  const openEditorAt = useEditorStore((s) => s.open);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showChapterForm, setShowChapterForm] = useState(false);
@@ -165,7 +165,7 @@ export function ChaptersPage() {
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                               {writingMode === 'write' && (
                                 <button
-                                  onClick={() => openScene(scene.id)}
+                                  onClick={() => openEditorAt(scene.id)}
                                   className="btn-ghost p-1 text-bordeaux-500 hover:text-bordeaux-700"
                                   title="Écrire cette scène"
                                 >
