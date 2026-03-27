@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
-import { Download, Upload, Hash, PenLine, AlertTriangle, X } from 'lucide-react';
+import { Download, Upload, Hash, PenLine, AlertTriangle, X, BookOpen, FileText } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { exportEpub } from '@/lib/export-epub';
+import { exportPdf } from '@/lib/export-pdf';
 import type { WritingMode } from '@/types';
 
 /** Modale de confirmation de changement de mode */
@@ -124,6 +126,41 @@ export function SettingsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const chapters = useBookStore((s) => s.chapters);
+  const scenes = useBookStore((s) => s.scenes);
+
+  const buildExportBook = () => ({
+    title,
+    author,
+    genre: genre ?? '',
+    synopsis: synopsis ?? '',
+    chapters: [...chapters]
+      .sort((a, b) => a.number - b.number)
+      .map((ch) => ({
+        id: ch.id,
+        number: ch.number,
+        title: ch.title,
+        scenes: ch.sceneIds
+          .map((sid) => scenes.find((s) => s.id === sid))
+          .filter(Boolean)
+          .sort((a, b) => a!.orderInChapter - b!.orderInChapter)
+          .map((s) => ({ title: s!.title, content: s!.content ?? '' })),
+      })),
+  });
+
+  const handleExportEpub = async () => {
+    try {
+      await exportEpub(buildExportBook());
+    } catch (err) {
+      console.error('[Export EPUB]', err);
+      alert('Erreur lors de l\'export EPUB. Vérifiez la console.');
+    }
+  };
+
+  const handleExportPdf = () => {
+    exportPdf(buildExportBook());
+  };
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -230,6 +267,47 @@ export function SettingsPage() {
             </div>
           </button>
         </div>
+      </div>
+
+      {/* Export livre */}
+      <div className="card-fantasy p-6 mb-6">
+        <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Exporter le livre</h3>
+        <p className="text-sm text-ink-300 mb-4">
+          Téléchargez votre livre dans un format standard, prêt à être lu sur une liseuse ou imprimé.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={handleExportEpub}
+            className="flex items-center gap-3 p-4 rounded-xl border-2 border-parchment-200
+                       hover:border-bordeaux-300 hover:bg-bordeaux-50/30 transition-all text-left"
+          >
+            <div className="w-10 h-10 bg-bordeaux-100 rounded-lg flex items-center justify-center shrink-0">
+              <BookOpen className="w-5 h-5 text-bordeaux-500" />
+            </div>
+            <div>
+              <p className="font-display font-semibold text-ink-500 text-sm">EPUB</p>
+              <p className="text-xs text-ink-300 mt-0.5">Liseuses, Kindle, Apple Books</p>
+            </div>
+          </button>
+          <button
+            onClick={handleExportPdf}
+            className="flex items-center gap-3 p-4 rounded-xl border-2 border-parchment-200
+                       hover:border-bordeaux-300 hover:bg-bordeaux-50/30 transition-all text-left"
+          >
+            <div className="w-10 h-10 bg-bordeaux-100 rounded-lg flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 text-bordeaux-500" />
+            </div>
+            <div>
+              <p className="font-display font-semibold text-ink-500 text-sm">PDF</p>
+              <p className="text-xs text-ink-300 mt-0.5">Impression, relecture, partage</p>
+            </div>
+          </button>
+        </div>
+        {chapters.length === 0 && (
+          <p className="text-xs text-ink-200 mt-3 italic">
+            Ajoutez des chapitres et des scènes pour pouvoir exporter votre livre.
+          </p>
+        )}
       </div>
 
       <div className="card-fantasy p-6">
