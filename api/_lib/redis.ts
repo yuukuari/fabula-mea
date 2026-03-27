@@ -10,13 +10,14 @@ type RedisResult<T> = { result: T; error?: undefined } | { result?: undefined; e
 
 async function cmd<T>(command: string, args: (string | number)[]): Promise<T> {
   if (!BASE_URL || !TOKEN) throw new Error('Redis non configuré (UPSTASH_REDIS_REST_URL / TOKEN manquants)');
-  const res = await fetch(`${BASE_URL}/${command.toLowerCase()}`, {
+  // Upstash REST API: POST to root with [COMMAND, ...args] as body
+  const res = await fetch(BASE_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(args),
+    body: JSON.stringify([command.toUpperCase(), ...args]),
   });
   if (!res.ok) throw new Error(`Redis HTTP ${res.status}`);
   const data = (await res.json()) as RedisResult<T>;
