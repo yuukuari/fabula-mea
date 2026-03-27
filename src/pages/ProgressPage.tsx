@@ -70,6 +70,15 @@ export function ProgressPage() {
             <h3 className="font-display text-lg font-semibold text-ink-500 mb-4">Parametres</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
+                <label className="label-field">Date de debut</label>
+                <input
+                  type="date"
+                  value={goals.startDate ?? ''}
+                  onChange={(e) => updateGoals({ startDate: e.target.value || undefined })}
+                  className="input-field"
+                />
+              </div>
+              <div>
                 <label className="label-field">Date de fin cible</label>
                 <input
                   type="date"
@@ -92,15 +101,6 @@ export function ProgressPage() {
                   onChange={(e) => updateGoals({ defaultWordsPerScene: Number(e.target.value) })}
                   className="input-field"
                   min={100}
-                />
-              </div>
-              <div>
-                <label className="label-field">Date de debut</label>
-                <input
-                  type="date"
-                  value={goals.startDate ?? ''}
-                  onChange={(e) => updateGoals({ startDate: e.target.value || undefined })}
-                  className="input-field"
                 />
               </div>
             </div>

@@ -78,6 +78,9 @@ interface BookStore extends BookProject {
   updateMapPin: (mapId: string, pinId: string, data: Partial<MapPin>) => void;
   deleteMapPin: (mapId: string, pinId: string) => void;
 
+  // Graph node positions
+  saveGraphNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
+
   // Import/Export
   exportProject: () => string;
   importProject: (json: string) => void;
@@ -102,6 +105,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     writingSessions: [],
     worldNotes: [],
     maps: [],
+    graphNodePositions: {},
   };
 }
 
@@ -122,6 +126,7 @@ function extractProjectData(state: BookStore): BookProject {
     writingSessions: state.writingSessions,
     worldNotes: state.worldNotes,
     maps: state.maps,
+    graphNodePositions: state.graphNodePositions,
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
   };
@@ -714,6 +719,13 @@ export const useBookStore = create<BookStore>()(
               ? { ...m, pins: m.pins.filter((p) => p.id !== pinId), updatedAt: now() }
               : m
           ),
+          ...touchSave(),
+        })),
+
+      // ─── Graph node positions ───
+      saveGraphNodePositions: (positions) =>
+        set((s) => ({
+          graphNodePositions: { ...(s.graphNodePositions ?? {}), ...positions },
           ...touchSave(),
         })),
 

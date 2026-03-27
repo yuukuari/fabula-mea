@@ -231,6 +231,7 @@ export interface BookProject {
   writingSessions: WritingSession[];
   worldNotes: WorldNote[];
   maps: MapItem[];
+  graphNodePositions?: Record<string, { x: number; y: number }>;
   createdAt: string;
   updatedAt: string;
 }

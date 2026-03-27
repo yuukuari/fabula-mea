@@ -76,6 +76,8 @@ interface TooltipData {
 export function RelationshipGraph() {
   const navigate = useNavigate();
   const characters = useBookStore((s) => s.characters);
+  const graphNodePositions = useBookStore((s) => s.graphNodePositions ?? {});
+  const saveGraphNodePositions = useBookStore((s) => s.saveGraphNodePositions);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
@@ -161,6 +163,21 @@ export function RelationshipGraph() {
     nodesRef.current = characters.map((c, i) => {
       const ex = existing.get(c.id);
       if (ex) return { ...ex, name: c.name, surname: c.surname, sex: c.sex, imageUrl: c.imageUrl };
+      // Use saved position if available
+      const saved = graphNodePositions[c.id];
+      if (saved) {
+        return {
+          id: c.id,
+          name: c.name,
+          surname: c.surname,
+          sex: c.sex,
+          imageUrl: c.imageUrl,
+          x: saved.x,
+          y: saved.y,
+          vx: 0,
+          vy: 0,
+        };
+      }
       const angle = (2 * Math.PI * i) / characters.length;
       const r = Math.min(w, h) * 0.3;
       return {
@@ -175,7 +192,7 @@ export function RelationshipGraph() {
         vy: 0,
       };
     });
-  }, [characters]);
+  }, [characters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const simulate = useCallback(() => {
     const nodes = nodesRef.current;
@@ -437,6 +454,14 @@ export function RelationshipGraph() {
   };
 
   const handleMouseUp = () => {
+    if (dragNode) {
+      // Persist all node positions to the store when drag ends
+      const positions: Record<string, { x: number; y: number }> = {};
+      for (const node of nodesRef.current) {
+        positions[node.id] = { x: node.x, y: node.y };
+      }
+      saveGraphNodePositions(positions);
+    }
     setDragNode(null);
   };
 

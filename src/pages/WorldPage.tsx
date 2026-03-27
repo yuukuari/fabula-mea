@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Plus, Globe, Edit, Trash2, X, ArrowLeft } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { WORLD_NOTE_CATEGORY_LABELS } from '@/lib/utils';
 import type { WorldNoteCategory } from '@/types';
 
 export function WorldPage() {
+  const location = useLocation();
   const worldNotes = useBookStore((s) => s.worldNotes);
   const addWorldNote = useBookStore((s) => s.addWorldNote);
   const updateWorldNote = useBookStore((s) => s.updateWorldNote);
@@ -13,7 +15,9 @@ export function WorldPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    (location.state as { noteId?: string } | null)?.noteId ?? null
+  );
   const [filterCategory, setFilterCategory] = useState<string>('');
 
   const filtered = filterCategory

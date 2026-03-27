@@ -1,32 +1,48 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, User, MapPin, BookOpen, FileText, Globe, X } from 'lucide-react';
+import { Search, User, MapPin, BookOpen, FileText, Globe, Map, Settings, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBookStore } from '@/store/useBookStore';
 import { useEditorStore } from '@/store/useEditorStore';
+import { PLACE_TYPE_LABELS, WORLD_NOTE_CATEGORY_LABELS } from '@/lib/utils';
+
+type ResultType = 'character' | 'place' | 'chapter' | 'scene' | 'worldNote' | 'map' | 'settings';
 
 interface SearchResult {
-  type: 'character' | 'place' | 'chapter' | 'scene' | 'worldNote';
+  type: ResultType;
   id: string;
   title: string;
   subtitle?: string;
   navigateTo: string;
+  state?: Record<string, string>;
 }
 
-const TYPE_ICONS = {
+const TYPE_ICONS: Record<ResultType, React.ElementType> = {
   character: User,
   place: MapPin,
   chapter: BookOpen,
   scene: FileText,
   worldNote: Globe,
+  map: Map,
+  settings: Settings,
 };
 
-const TYPE_LABELS = {
+const TYPE_LABELS: Record<ResultType, string> = {
   character: 'Personnage',
   place: 'Lieu',
   chapter: 'Chapitre',
-  scene: 'Scene',
-  worldNote: 'Note',
+  scene: 'Scène',
+  worldNote: 'Univers',
+  map: 'Carte',
+  settings: 'Paramètres',
 };
+
+// Static shortcuts that always appear when matched
+const STATIC_RESULTS: SearchResult[] = [
+  { type: 'settings', id: 'settings', title: 'Paramètres', subtitle: 'Configuration du projet', navigateTo: '/settings' },
+  { type: 'settings', id: 'export', title: 'Exporter', subtitle: 'Export JSON / EPUB / PDF', navigateTo: '/settings' },
+  { type: 'settings', id: 'import', title: 'Importer', subtitle: 'Importer un JSON', navigateTo: '/settings' },
+  { type: 'settings', id: 'save', title: 'Sauvegarder', subtitle: 'Sauvegarde du projet', navigateTo: '/settings' },
+];
 
 export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
@@ -37,6 +53,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const worldNotes = useBookStore((s) => s.worldNotes);
+  const maps = useBookStore((s) => s.maps);
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -44,41 +61,62 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
   const results = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
-    const results: SearchResult[] = [];
+    const out: SearchResult[] = [];
 
+    // Characters
     for (const c of characters) {
       if (c.name.toLowerCase().includes(q) || c.surname?.toLowerCase().includes(q) || c.profession?.toLowerCase().includes(q)) {
-        results.push({ type: 'character', id: c.id, title: `${c.name} ${c.surname ?? ''}`.trim(), subtitle: c.profession, navigateTo: `/characters/${c.id}` });
+        out.push({ type: 'character', id: c.id, title: `${c.name} ${c.surname ?? ''}`.trim(), subtitle: c.profession, navigateTo: `/characters/${c.id}` });
       }
     }
+
+    // Places → navigate with state so PlacesPage opens the detail view
     for (const p of places) {
       if (p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) {
-        results.push({ type: 'place', id: p.id, title: p.name, subtitle: p.type, navigateTo: '/places' });
+        out.push({ type: 'place', id: p.id, title: p.name, subtitle: PLACE_TYPE_LABELS[p.type] ?? p.type, navigateTo: '/places', state: { placeId: p.id } });
       }
     }
+
+    // Chapters
     for (const ch of chapters) {
       if (ch.title.toLowerCase().includes(q)) {
-        results.push({ type: 'chapter', id: ch.id, title: `Ch. ${ch.number} - ${ch.title}`, navigateTo: '/chapters' });
+        out.push({ type: 'chapter', id: ch.id, title: `Ch. ${ch.number} — ${ch.title}`, navigateTo: '/chapters' });
       }
     }
+
+    // Scenes
     for (const sc of scenes) {
       if (sc.title.toLowerCase().includes(q) || sc.description.toLowerCase().includes(q)) {
         const ch = chapters.find((c) => c.id === sc.chapterId);
-        results.push({ type: 'scene', id: sc.id, title: sc.title, subtitle: ch ? `Ch. ${ch.number}` : undefined, navigateTo: '/chapters' });
+        out.push({ type: 'scene', id: sc.id, title: sc.title, subtitle: ch ? `Ch. ${ch.number}` : undefined, navigateTo: '/chapters' });
       }
     }
+
+    // World notes → navigate with state so WorldPage opens the detail view
     for (const n of worldNotes) {
       if (n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)) {
-        results.push({ type: 'worldNote', id: n.id, title: n.title, subtitle: n.category, navigateTo: '/world' });
+        out.push({ type: 'worldNote', id: n.id, title: n.title, subtitle: WORLD_NOTE_CATEGORY_LABELS[n.category] ?? n.category, navigateTo: '/world', state: { noteId: n.id } });
       }
     }
 
-    return results.slice(0, 15);
-  }, [query, characters, places, chapters, scenes, worldNotes]);
+    // Maps → navigate with state so MapsPage selects the map
+    for (const m of maps) {
+      if (m.name.toLowerCase().includes(q) || m.description?.toLowerCase().includes(q)) {
+        out.push({ type: 'map', id: m.id, title: m.name, subtitle: `${m.pins.length} marqueur${m.pins.length !== 1 ? 's' : ''}`, navigateTo: '/maps', state: { mapId: m.id } });
+      }
+    }
 
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [results]);
+    // Static shortcuts (Paramètres, Exporter, Importer, Sauvegarder)
+    for (const s of STATIC_RESULTS) {
+      if (s.title.toLowerCase().includes(q) || s.subtitle?.toLowerCase().includes(q)) {
+        out.push(s);
+      }
+    }
+
+    return out.slice(0, 15);
+  }, [query, characters, places, chapters, scenes, worldNotes, maps]);
+
+  useEffect(() => { setSelectedIndex(0); }, [results]);
 
   useEffect(() => {
     if (open) {
@@ -89,7 +127,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
 
   const handleSelect = useCallback((result: SearchResult) => {
     if (editorIsOpen) minimizeEditor();
-    navigate(result.navigateTo);
+    navigate(result.navigateTo, result.state ? { state: result.state } : undefined);
     onClose();
   }, [navigate, onClose, editorIsOpen, minimizeEditor]);
 
@@ -120,7 +158,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
           <input
             autoFocus
             type="text"
-            placeholder="Rechercher un personnage, lieu, scene..."
+            placeholder="Rechercher personnage, lieu, carte, paramètres..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -135,7 +173,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
         <div className="max-h-80 overflow-y-auto">
           {query.trim() && results.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-ink-200">
-              Aucun resultat pour "{query}"
+              Aucun résultat pour "{query}"
             </div>
           )}
           {results.map((result, i) => {

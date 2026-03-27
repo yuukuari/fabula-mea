@@ -91,6 +91,9 @@
   }
 }
 
+/* ── BubbleMenu z-index (au-dessus de la toolbar sticky z-10) ── */
+[data-tippy-root] { z-index: 20 !important; }
+
 /* ── TipTap editor styles ── */
 .tiptap p { margin-bottom: 0.75em; }
 .tiptap p:last-child { margin-bottom: 0; }

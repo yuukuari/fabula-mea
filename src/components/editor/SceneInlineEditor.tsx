@@ -13,7 +13,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Heading1, Heading2, Heading3, Quote, List, ListOrdered,
-  ImagePlus, Link as LinkIcon, Unlink, Minus, Undo2, Redo2,
+  ImagePlus, Link as LinkIcon, Unlink, Undo2, Redo2,
   RemoveFormatting,
 } from 'lucide-react';
 
@@ -94,7 +94,7 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
       }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
-        defaultAlignment: 'left',
+        defaultAlignment: 'justify',
       }),
       Image.configure({
         inline: false,
@@ -110,7 +110,7 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
     onFocus: () => onFocus(scene.id),
     editorProps: {
       attributes: {
-        class: 'outline-none font-serif text-ink-500 text-lg leading-relaxed min-h-[8rem]',
+        class: 'outline-none font-serif text-ink-500 text-lg leading-relaxed min-h-[8rem] text-justify',
         spellcheck: 'false',
       },
     },
@@ -220,10 +220,6 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
         <TBtn active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Citation">
           <Quote size={s} />
         </TBtn>
-        <TBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Séparateur de scène">
-          <Minus size={s} />
-        </TBtn>
-
         <Sep />
 
         {/* Image & Link */}
@@ -243,7 +239,7 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
       </div>
 
       {/* ── Bubble menu (sélection) ── */}
-      <BubbleMenu editor={editor} className="flex items-center gap-0.5 px-1.5 py-1 bg-white border border-parchment-300 rounded-lg shadow-lg">
+      <BubbleMenu editor={editor} className="flex items-center gap-0.5 px-1.5 py-1 bg-white border border-parchment-300 rounded-lg shadow-lg z-20 relative">
         <TBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Gras">
           <Bold size={14} />
         </TBtn>
