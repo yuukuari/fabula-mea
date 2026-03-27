@@ -99,7 +99,7 @@ export type PlaceType =
 // ─── Chapters & Scenes ───
 export interface Chapter {
   id: EntityId;
-  title: string;
+  title?: string;
   number: number;
   synopsis?: string;
   sceneIds: EntityId[];
@@ -111,7 +111,7 @@ export interface Chapter {
 
 export interface Scene {
   id: EntityId;
-  title: string;
+  title?: string;
   description: string;
   chapterId: EntityId;
   orderInChapter: number;

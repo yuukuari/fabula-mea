@@ -43,13 +43,13 @@ interface BookStore extends BookProject {
   deletePlace: (id: string) => void;
 
   // Chapters
-  addChapter: (chapter: Partial<Chapter> & { title: string }) => string;
+  addChapter: (chapter: Partial<Chapter>) => string;
   updateChapter: (id: string, data: Partial<Chapter>) => void;
   deleteChapter: (id: string) => void;
   reorderChapters: (chapterIds: string[]) => void;
 
   // Scenes
-  addScene: (scene: Partial<Scene> & { title: string; chapterId: string }) => string;
+  addScene: (scene: Partial<Scene> & { chapterId: string }) => string;
   updateScene: (id: string, data: Partial<Scene>) => void;
   deleteScene: (id: string) => void;
   moveScene: (sceneId: string, toChapterId: string, newIndex: number) => void;
@@ -435,7 +435,7 @@ export const useBookStore = create<BookStore>()(
         set((s) => ({
           chapters: [...s.chapters, {
             id,
-            title: chapter.title,
+            title: chapter.title ?? '',
             number: chapter.number ?? s.chapters.length + 1,
             synopsis: chapter.synopsis ?? '',
             sceneIds: [],
@@ -484,7 +484,7 @@ export const useBookStore = create<BookStore>()(
           return {
             scenes: [...s.scenes, {
               id,
-              title: scene.title,
+              title: scene.title ?? '',
               description: scene.description ?? '',
               chapterId: scene.chapterId,
               orderInChapter,

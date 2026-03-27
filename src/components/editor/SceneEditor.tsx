@@ -19,7 +19,7 @@ function DetailModal({
   characters,
   places,
 }: {
-  item: { type: 'scene'; data: Scene } | { type: 'chapter'; data: Chapter; scenes: Scene[] };
+  item: { type: 'scene'; data: Scene; sceneIndex: number } | { type: 'chapter'; data: Chapter; scenes: Scene[] };
   onClose: () => void;
   characters: ReturnType<typeof useBookStore.getState>['characters'];
   places: ReturnType<typeof useBookStore.getState>['places'];
@@ -36,7 +36,7 @@ function DetailModal({
           <>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: item.data.color }} />
-              <h3 className="font-display font-bold text-ink-500">Ch. {item.data.number} — {item.data.title}</h3>
+              <h3 className="font-display font-bold text-ink-500">Ch. {item.data.number}{item.data.title ? ` — ${item.data.title}` : ''}</h3>
             </div>
             {item.data.synopsis
               ? <p className="text-sm text-ink-300 italic leading-relaxed mb-3">{item.data.synopsis}</p>
@@ -48,7 +48,7 @@ function DetailModal({
           <>
             <div className="flex items-center gap-2 mb-3">
               <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', STATUS_DOT[item.data.status])} />
-              <h3 className="font-display font-bold text-ink-500">{item.data.title}</h3>
+              <h3 className="font-display font-bold text-ink-500">{item.data.title || `Scène ${item.sceneIndex + 1}`}</h3>
             </div>
             <div className="space-y-2.5 text-sm">
               <span className={cn(
@@ -98,7 +98,7 @@ export function SceneEditor() {
 
   const [visibleSceneId, setVisibleSceneId] = useState<string | null>(entrySceneId);
   const [detailModal, setDetailModal] = useState<
-    | { type: 'scene'; data: Scene }
+    | { type: 'scene'; data: Scene; sceneIndex: number }
     | { type: 'chapter'; data: Chapter; scenes: Scene[] }
     | null
   >(null);
@@ -224,7 +224,7 @@ export function SceneEditor() {
               >
                 <div className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
                 <span className="text-xs font-semibold text-ink-400 truncate flex-1">
-                  Ch. {chapter.number} — {chapter.title}
+                  Ch. {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
                 </span>
                 <span
                   role="button"
@@ -238,9 +238,10 @@ export function SceneEditor() {
               </button>
 
               {/* Scenes */}
-              {chScenes.map((scene) => {
+              {chScenes.map((scene, sceneIdx) => {
                 const isVisible = visibleSceneId === scene.id;
                 const wc = countWords(scene.content ?? '');
+                const sceneLabel = scene.title || `Scène ${sceneIdx + 1}`;
                 return (
                   <button
                     key={scene.id}
@@ -255,7 +256,7 @@ export function SceneEditor() {
                     <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', STATUS_DOT[scene.status])} />
                     <div className="flex-1 min-w-0">
                       <p className={cn('text-xs truncate', isVisible ? 'text-bordeaux-600 font-medium' : 'text-ink-400')}>
-                        {scene.title}
+                        {sceneLabel}
                       </p>
                       <p className="text-[10px] text-ink-200 mt-0.5">
                         {wc} / {scene.targetWordCount} mots
@@ -263,7 +264,7 @@ export function SceneEditor() {
                     </div>
                     <span
                       role="button"
-                      onClick={(e) => { e.stopPropagation(); setDetailModal({ type: 'scene', data: scene }); }}
+                      onClick={(e) => { e.stopPropagation(); setDetailModal({ type: 'scene', data: scene, sceneIndex: sceneIdx }); }}
                       className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-ink-200
                                  hover:text-ink-400 hover:bg-parchment-300 transition-all shrink-0"
                       title="Détail de la scène"
@@ -309,13 +310,19 @@ export function SceneEditor() {
           {visibleChapter && (
             <>
               <BookOpen className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{visibleChapter.title}</span>
+              <span className="truncate">Ch. {visibleChapter.number}{visibleChapter.title ? ` — ${visibleChapter.title}` : ''}</span>
               <ChevronRight className="w-3 h-3 shrink-0" />
             </>
           )}
-          {visibleScene && (
-            <span className="font-medium text-ink-400 truncate">{visibleScene.title}</span>
-          )}
+          {visibleScene && (() => {
+            const chScenes = visibleChapter ? getChapterScenes(visibleChapter.id) : [];
+            const idx = chScenes.findIndex((s) => s.id === visibleScene.id);
+            return (
+              <span className="font-medium text-ink-400 truncate">
+                {visibleScene.title || `Scène ${idx + 1}`}
+              </span>
+            );
+          })()}
         </div>
 
         {/* Stats globales */}
@@ -388,7 +395,7 @@ export function SceneEditor() {
                   <div className="flex items-center gap-3 mb-8">
                     <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
                     <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">
-                      Chapitre {chapter.number} — {chapter.title}
+                      Chapitre {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
                     </h2>
                   </div>
 
@@ -399,16 +406,20 @@ export function SceneEditor() {
                       id={`scene-${scene.id}`}
                       className={cn('mb-16', idx > 0 && 'border-t border-parchment-200 pt-12')}
                     >
-                      <div className="mb-4">
-                        <h3 className="font-display text-lg sm:text-xl font-semibold text-ink-500 mb-1">
-                          {scene.title}
-                        </h3>
-                        {scene.description && (
-                          <p className="text-sm text-ink-200 italic font-serif border-l-2 border-parchment-300 pl-3">
-                            {scene.description}
-                          </p>
-                        )}
-                      </div>
+                      {(scene.title || scene.description) && (
+                        <div className="mb-4">
+                          {scene.title && (
+                            <h3 className="font-display text-lg sm:text-xl font-semibold text-ink-500 mb-1">
+                              {scene.title}
+                            </h3>
+                          )}
+                          {scene.description && (
+                            <p className="text-sm text-ink-200 italic font-serif border-l-2 border-parchment-300 pl-3">
+                              {scene.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       <SceneInlineEditor scene={scene} onFocus={() => {}} />
 

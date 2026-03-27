@@ -23,27 +23,27 @@ export const RELATIONSHIP_TYPE_LABELS: Record<string, string> = {
   lover: 'Amour',
   mentor: 'Mentor',
   rival: 'Rival(e)',
-  colleague: 'Collegue',
+  colleague: 'Collègue',
   custom: 'Autre',
 };
 
 export const FAMILY_ROLE_LABELS: Record<string, string> = {
-  pere: 'Pere',
-  mere: 'Mere',
+  pere: 'Père',
+  mere: 'Mère',
   fils: 'Fils',
   fille: 'Fille',
-  frere: 'Frere',
-  soeur: 'Soeur',
+  frere: 'Frère',
+  soeur: 'Sœur',
   oncle: 'Oncle',
   tante: 'Tante',
   cousin: 'Cousin',
   cousine: 'Cousine',
-  grand_pere: 'Grand-pere',
-  grand_mere: 'Grand-mere',
+  grand_pere: 'Grand-père',
+  grand_mere: 'Grand-mère',
   petit_fils: 'Petit-fils',
   petite_fille: 'Petite-fille',
-  epoux: 'Epoux',
-  epouse: 'Epouse',
+  epoux: 'Époux',
+  epouse: 'Épouse',
   autre: 'Autre',
 };
 
@@ -74,19 +74,19 @@ export const FAMILY_ROLE_REVERSE: Record<string, string> = {
 export const PLACE_TYPE_LABELS: Record<string, string> = {
   city: 'Ville',
   village: 'Village',
-  building: 'Batiment',
-  room: 'Piece',
+  building: 'Bâtiment',
+  room: 'Pièce',
   landscape: 'Paysage',
   country: 'Pays',
-  region: 'Region',
+  region: 'Région',
   other: 'Autre',
 };
 
 export const SCENE_STATUS_LABELS: Record<string, string> = {
   outline: 'Plan',
   draft: 'Brouillon',
-  revision: 'Revision',
-  complete: 'Termine',
+  revision: 'Révision',
+  complete: 'Terminé',
 };
 
 export const SCENE_STATUS_COLORS: Record<string, string> = {
@@ -99,7 +99,7 @@ export const SCENE_STATUS_COLORS: Record<string, string> = {
 export const WORLD_NOTE_CATEGORY_LABELS: Record<string, string> = {
   history: 'Histoire',
   culture: 'Culture',
-  magic_system: 'Systeme de magie',
+  magic_system: 'Système de magie',
   politics: 'Politique',
   religion: 'Religion',
   technology: 'Technologie',

@@ -71,7 +71,9 @@ export function ChaptersPage() {
                   {isExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
                   <div className="flex-1">
                     <span className="text-xs text-ink-200 font-medium">Chapitre {chapter.number}</span>
-                    <h3 className="font-display font-bold text-ink-500">{chapter.title}</h3>
+                    {chapter.title && (
+                      <h3 className="font-display font-bold text-ink-500">{chapter.title}</h3>
+                    )}
                   </div>
                   <span className="text-xs text-ink-200">{completedScenes}/{chapterScenes.length} scenes</span>
                   <button
@@ -95,7 +97,7 @@ export function ChaptersPage() {
                 {/* Scenes */}
                 {isExpanded && (
                   <div className="px-4 pb-4 space-y-2">
-                    {chapterScenes.map((scene) => {
+                    {chapterScenes.map((scene, sceneIdx) => {
                       const progress = getSceneProgress(scene);
                       const sceneChars = scene.characterIds
                         .map((cid) => characters.find((c) => c.id === cid))
@@ -111,7 +113,7 @@ export function ChaptersPage() {
                             <GripVertical className="w-4 h-4 text-ink-100 mt-1 opacity-0 group-hover:opacity-100 cursor-grab" />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <h4 className="font-medium text-ink-500 text-sm">{scene.title}</h4>
+                                <h4 className="font-medium text-ink-500 text-sm">{scene.title || `Scène ${sceneIdx + 1}`}</h4>
                                 <span className={cn('badge text-xs', SCENE_STATUS_COLORS[scene.status])}>
                                   {SCENE_STATUS_LABELS[scene.status]}
                                 </span>
@@ -242,7 +244,6 @@ function ChapterFormDialog({ chapterId, onClose }: { chapterId: string | null; o
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
     if (existing) {
       updateChapter(existing.id, { title, synopsis });
     } else {
@@ -263,8 +264,8 @@ function ChapterFormDialog({ chapterId, onClose }: { chapterId: string | null; o
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="label-field">Titre *</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" required />
+            <label className="label-field">Titre <span className="text-ink-200 font-normal">(facultatif)</span></label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" placeholder="Laisser vide pour afficher uniquement le numéro" />
           </div>
           <div>
             <label className="label-field">Synopsis</label>
@@ -300,8 +301,6 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-
     const data = {
       title: title.trim(),
       description,
@@ -341,8 +340,8 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
-            <label className="label-field">Titre *</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" required />
+            <label className="label-field">Titre <span className="text-ink-200 font-normal">(facultatif)</span></label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" placeholder="Laisser vide pour afficher Scène N" />
           </div>
 
           <div>

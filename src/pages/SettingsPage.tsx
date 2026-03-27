@@ -139,12 +139,12 @@ export function SettingsPage() {
       .map((ch) => ({
         id: ch.id,
         number: ch.number,
-        title: ch.title,
+        title: ch.title ?? '',
         scenes: ch.sceneIds
           .map((sid) => scenes.find((s) => s.id === sid))
           .filter(Boolean)
           .sort((a, b) => a!.orderInChapter - b!.orderInChapter)
-          .map((s) => ({ title: s!.title, content: s!.content ?? '' })),
+          .map((s, idx) => ({ title: s!.title || `Scène ${idx + 1}`, content: s!.content ?? '' })),
       })),
   });
 

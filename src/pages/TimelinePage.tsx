@@ -164,10 +164,10 @@ export function TimelinePage() {
                           opacity: isHighlighted ? 1 : 0.2,
                         }}
                         onClick={() => setEditingScene(scene)}
-                        title={scene.title}
+                        title={scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}
                       >
                         <span className="text-[10px] text-white px-1 truncate block leading-8 font-medium">
-                          {scene.title}
+                          {scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}
                         </span>
                         {/* Small map indicator on block */}
                         {sceneMaps.length > 0 && (
@@ -177,8 +177,8 @@ export function TimelinePage() {
                         )}
                         {/* Tooltip on hover */}
                         <div className="absolute bottom-full left-0 mb-1 bg-ink-500 text-white text-xs rounded-lg p-2 hidden group-hover:block z-10 whitespace-nowrap shadow-lg">
-                          <div className="font-medium">{scene.title}</div>
-                          {chapter && <div className="text-white/70">Ch. {chapter.number} - {chapter.title}</div>}
+                          <div className="font-medium">{scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}</div>
+                          {chapter && <div className="text-white/70">Ch. {chapter.number}{chapter.title ? ` - ${chapter.title}` : ''}</div>}
                           {place && (
                             <div className="text-white/70 flex items-center gap-1 flex-wrap">
                               <MapPin className="w-3 h-3" />{place.name}

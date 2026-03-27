@@ -78,16 +78,19 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
 
     // Chapters
     for (const ch of chapters) {
-      if (ch.title.toLowerCase().includes(q)) {
-        out.push({ type: 'chapter', id: ch.id, title: `Ch. ${ch.number} — ${ch.title}`, navigateTo: '/chapters' });
+      if ((ch.title ?? '').toLowerCase().includes(q) || `chapitre ${ch.number}`.includes(q)) {
+        const chTitle = ch.title ? `Ch. ${ch.number} — ${ch.title}` : `Chapitre ${ch.number}`;
+        out.push({ type: 'chapter', id: ch.id, title: chTitle, navigateTo: '/chapters' });
       }
     }
 
     // Scenes
     for (const sc of scenes) {
-      if (sc.title.toLowerCase().includes(q) || sc.description.toLowerCase().includes(q)) {
-        const ch = chapters.find((c) => c.id === sc.chapterId);
-        out.push({ type: 'scene', id: sc.id, title: sc.title, subtitle: ch ? `Ch. ${ch.number}` : undefined, navigateTo: '/chapters' });
+      const ch = chapters.find((c) => c.id === sc.chapterId);
+      const scIdx = ch ? ch.sceneIds.indexOf(sc.id) : -1;
+      const scLabel = sc.title || `Scène ${scIdx + 1}`;
+      if (scLabel.toLowerCase().includes(q) || sc.description.toLowerCase().includes(q)) {
+        out.push({ type: 'scene', id: sc.id, title: scLabel, subtitle: ch ? `Ch. ${ch.number}` : undefined, navigateTo: '/chapters' });
       }
     }
 
