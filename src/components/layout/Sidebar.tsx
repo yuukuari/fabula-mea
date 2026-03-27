@@ -1,9 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, X, Map } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
+import { useSyncStore } from '@/store/useSyncStore';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const navItems = [
   { to: '/characters', icon: Users, label: 'Personnages' },
@@ -161,8 +163,9 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
         ))}
       </nav>
 
-      <div className="p-4 border-t border-parchment-300">
+      <div className="p-4 border-t border-parchment-300 space-y-3">
         <AutoSaveIndicator />
+        <UserSection />
       </div>
     </aside>
   );
@@ -194,10 +197,57 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
 
 function AutoSaveIndicator() {
   const lastSaved = useBookStore((s) => s.lastSavedAt);
+  const { status, errorMessage } = useSyncStore();
+
+  const cloudIcon = () => {
+    if (status === 'disabled') return null;
+    if (status === 'syncing') return <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />;
+    if (status === 'synced')  return <Cloud className="w-3.5 h-3.5 text-green-400" />;
+    if (status === 'error')   return <CloudAlert className="w-3.5 h-3.5 text-amber-400" />;
+    return <CloudOff className="w-3.5 h-3.5 text-ink-200" />;
+  };
+
+  const cloudLabel = () => {
+    if (status === 'disabled') return null;
+    if (status === 'syncing') return <span className="text-blue-400">Synchro...</span>;
+    if (status === 'synced')  return <span className="text-green-400">Cloud OK</span>;
+    if (status === 'error')   return <span className="text-amber-400">Erreur sync</span>;
+    return <span>Cloud</span>;
+  };
+
   return (
-    <div className="flex items-center gap-2 text-xs text-ink-200">
-      <div className="w-2 h-2 rounded-full bg-green-400" />
-      <span>{lastSaved ? 'Sauvegarde auto' : 'Non sauvegarde'}</span>
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 text-xs text-ink-200">
+        <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+        <span>{lastSaved ? 'Sauvegarde auto' : 'Non sauvegardé'}</span>
+      </div>
+      {status !== 'disabled' && (
+        <div className="flex items-center gap-2 text-xs text-ink-200">
+          {cloudIcon()}
+          {cloudLabel()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserSection() {
+  const { user, logout } = useAuthStore();
+  if (!user) return null;
+
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <UserCircle className="w-4 h-4 text-ink-200 flex-shrink-0" />
+      <span className="text-xs text-ink-300 truncate flex-1" title={user.email}>
+        {user.name}
+      </span>
+      <button
+        onClick={logout}
+        title="Se déconnecter"
+        className="p-1 rounded text-ink-200 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+      >
+        <LogOut className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }

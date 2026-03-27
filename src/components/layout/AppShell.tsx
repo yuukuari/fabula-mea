@@ -13,9 +13,15 @@ export function AppShell() {
   const { open, setOpen } = useSearchShortcut();
   const navigate = useNavigate();
   const currentBookId = useLibraryStore((s) => s.currentBookId);
+  const loadFromCloud = useLibraryStore((s) => s.loadFromCloud);
   const loaded = useBookStore((s) => s._loaded);
   const loadBook = useBookStore((s) => s.loadBook);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Restaure la bibliothèque depuis Redis au démarrage (nouveau device ou nouvelle session)
+  useEffect(() => {
+    loadFromCloud();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (currentBookId && !loaded) loadBook(currentBookId);

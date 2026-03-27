@@ -1,0 +1,34 @@
+/**
+ * Server-side Redis client — Upstash REST API.
+ * Uses process.env (no VITE_ prefix) — safe, never exposed to the browser.
+ */
+
+const BASE_URL = (process.env.UPSTASH_REDIS_REST_URL ?? '').replace(/\/$/, '');
+const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
+
+type RedisResult<T> = { result: T; error?: undefined } | { result?: undefined; error: string };
+
+async function cmd<T>(command: string, args: (string | number)[]): Promise<T> {
+  if (!BASE_URL || !TOKEN) throw new Error('Redis non configuré (UPSTASH_REDIS_REST_URL / TOKEN manquants)');
+  const res = await fetch(`${BASE_URL}/${command.toLowerCase()}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) throw new Error(`Redis HTTP ${res.status}`);
+  const data = (await res.json()) as RedisResult<T>;
+  if (data.error) throw new Error(`Redis: ${data.error}`);
+  return data.result as T;
+}
+
+export const redis = {
+  get: (key: string): Promise<string | null> =>
+    cmd<string | null>('GET', [key]).catch(() => null),
+  set: (key: string, value: string): Promise<void> =>
+    cmd<string>('SET', [key, value]).then(() => undefined),
+  del: (key: string): Promise<void> =>
+    cmd<number>('DEL', [key]).then(() => undefined),
+};

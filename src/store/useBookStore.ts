@@ -7,6 +7,10 @@ import type {
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
+import { api } from '@/lib/api';
+import { useSyncStore } from './useSyncStore';
+
+const shouldSync = () => !import.meta.env.DEV && !!localStorage.getItem('emlb-token');
 
 interface BookStore extends BookProject {
   lastSavedAt: string | null;
@@ -182,10 +186,22 @@ export const useBookStore = create<BookStore>()(
         const raw = localStorage.getItem(getBookStorageKey(bookId));
         if (raw) {
           const project = JSON.parse(raw) as BookProject;
-          set({
-            ...project,
-            lastSavedAt: now(),
-            _loaded: true,
+          set({ ...project, lastSavedAt: now(), _loaded: true });
+        }
+
+        // Vérifie l'API de façon asynchrone (priorité si plus récent ou si localStorage vide)
+        if (shouldSync()) {
+          api.books.get(bookId).then((remoteData) => {
+            const remote = remoteData as BookProject;
+            const cur = get();
+            if (!raw || remote.updatedAt > (cur.updatedAt ?? '')) {
+              set({ ...remote, lastSavedAt: now(), _loaded: true });
+              localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(remote));
+            }
+            useSyncStore.getState().setSynced();
+          }).catch(() => {
+            // Remote not found yet (new book) — that's OK
+            if (raw) useSyncStore.getState().setSynced();
           });
         }
       },
@@ -194,8 +210,10 @@ export const useBookStore = create<BookStore>()(
         const state = get();
         if (!state._loaded || !state.id) return;
         const data = extractProjectData(state);
-        localStorage.setItem(getBookStorageKey(state.id), JSON.stringify(data));
-        // Also update library meta
+        const json = JSON.stringify(data);
+
+        // Sauvegarde locale (immédiate)
+        localStorage.setItem(getBookStorageKey(state.id), json);
         useLibraryStore.getState().updateBookMeta(state.id, {
           title: state.title,
           author: state.author,
@@ -205,13 +223,27 @@ export const useBookStore = create<BookStore>()(
           charactersCount: state.characters.length,
         });
         set({ lastSavedAt: now() });
+
+        // Sauvegarde cloud (asynchrone)
+        if (shouldSync()) {
+          const sync = useSyncStore.getState();
+          sync.setSyncing();
+          api.books.save(state.id, data)
+            .then(() => useSyncStore.getState().setSynced())
+            .catch(() => useSyncStore.getState().setError('Échec sync cloud'));
+        }
       },
 
       unloadBook: () => {
         // Save before unloading
         const state = get();
         if (state._loaded && state.id) {
-          localStorage.setItem(getBookStorageKey(state.id), JSON.stringify(extractProjectData(state)));
+          const projectData = extractProjectData(state);
+          const json = JSON.stringify(projectData);
+          localStorage.setItem(getBookStorageKey(state.id), json);
+          if (shouldSync()) {
+            api.books.save(state.id, projectData).catch(console.error);
+          }
           useLibraryStore.getState().updateBookMeta(state.id, {
             title: state.title,
             author: state.author,

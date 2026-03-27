@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -15,15 +15,21 @@ export function PlacesPage() {
   const addPlace = useBookStore((s) => s.addPlace);
   const updatePlace = useBookStore((s) => s.updatePlace);
   const deletePlace = useBookStore((s) => s.deletePlace);
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showMapLinker, setShowMapLinker] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
-    (location.state as { placeId?: string } | null)?.placeId ?? null
+    searchParams.get('placeId')
   );
+
+  // Sync selected place when URL param changes (e.g. from search dialog while already on this page)
+  useEffect(() => {
+    const id = searchParams.get('placeId');
+    if (id) setSelectedId(id);
+  }, [searchParams]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 

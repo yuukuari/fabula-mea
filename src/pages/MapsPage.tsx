@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Map, Trash2, Upload, X, Edit2, ArrowLeft } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -37,22 +37,22 @@ export function MapsPage() {
   const updateMap = useBookStore((s) => s.updateMap);
   const deleteMap = useBookStore((s) => s.deleteMap);
 
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [selectedMapId, setSelectedMapId] = useState<string | null>(
-    (location.state as { mapId?: string } | null)?.mapId ?? maps[0]?.id ?? null
+    searchParams.get('mapId') ?? maps[0]?.id ?? null
   );
   // Historique de navigation entre cartes (drill-down / retour)
   const [mapHistory, setMapHistory] = useState<string[]>([]);
 
-  // Quand on navigue vers /maps avec un mapId (ex: depuis un pin drill-down), on bascule sur cette carte
+  // Quand les URL params changent (ex: depuis la recherche ou un pin drill-down)
   useEffect(() => {
-    const mapId = (location.state as { mapId?: string } | null)?.mapId;
+    const mapId = searchParams.get('mapId');
     if (mapId && mapId !== selectedMapId) {
       if (selectedMapId) setMapHistory((h) => [...h, selectedMapId]);
       setSelectedMapId(mapId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
+  }, [searchParams]);
 
   const handleSelectMap = (id: string) => {
     setSelectedMapId(id);

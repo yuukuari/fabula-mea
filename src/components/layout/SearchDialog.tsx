@@ -13,7 +13,6 @@ interface SearchResult {
   title: string;
   subtitle?: string;
   navigateTo: string;
-  state?: Record<string, string>;
 }
 
 const TYPE_ICONS: Record<ResultType, React.ElementType> = {
@@ -70,10 +69,10 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
       }
     }
 
-    // Places → navigate with state so PlacesPage opens the detail view
+    // Places → URL param so PlacesPage opens the detail view (works even when already on /places)
     for (const p of places) {
       if (p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) {
-        out.push({ type: 'place', id: p.id, title: p.name, subtitle: PLACE_TYPE_LABELS[p.type] ?? p.type, navigateTo: '/places', state: { placeId: p.id } });
+        out.push({ type: 'place', id: p.id, title: p.name, subtitle: PLACE_TYPE_LABELS[p.type] ?? p.type, navigateTo: `/places?placeId=${p.id}` });
       }
     }
 
@@ -92,17 +91,18 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
       }
     }
 
-    // World notes → navigate with state so WorldPage opens the detail view
+    // World notes → URL param so WorldPage opens the detail view
     for (const n of worldNotes) {
       if (n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)) {
-        out.push({ type: 'worldNote', id: n.id, title: n.title, subtitle: WORLD_NOTE_CATEGORY_LABELS[n.category] ?? n.category, navigateTo: '/world', state: { noteId: n.id } });
+        const label = WORLD_NOTE_CATEGORY_LABELS[n.category as string] ?? n.category;
+        out.push({ type: 'worldNote', id: n.id, title: n.title, subtitle: label, navigateTo: `/world?noteId=${n.id}` });
       }
     }
 
-    // Maps → navigate with state so MapsPage selects the map
+    // Maps → URL param so MapsPage selects the map
     for (const m of maps) {
       if (m.name.toLowerCase().includes(q) || m.description?.toLowerCase().includes(q)) {
-        out.push({ type: 'map', id: m.id, title: m.name, subtitle: `${m.pins.length} marqueur${m.pins.length !== 1 ? 's' : ''}`, navigateTo: '/maps', state: { mapId: m.id } });
+        out.push({ type: 'map', id: m.id, title: m.name, subtitle: `${m.pins.length} marqueur${m.pins.length !== 1 ? 's' : ''}`, navigateTo: `/maps?mapId=${m.id}` });
       }
     }
 
@@ -127,7 +127,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
 
   const handleSelect = useCallback((result: SearchResult) => {
     if (editorIsOpen) minimizeEditor();
-    navigate(result.navigateTo, result.state ? { state: result.state } : undefined);
+    navigate(result.navigateTo);
     onClose();
   }, [navigate, onClose, editorIsOpen, minimizeEditor]);
 
