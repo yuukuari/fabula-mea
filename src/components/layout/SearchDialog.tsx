@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, User, MapPin, BookOpen, FileText, Globe, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBookStore } from '@/store/useBookStore';
+import { useEditorStore } from '@/store/useEditorStore';
 
 interface SearchResult {
   type: 'character' | 'place' | 'chapter' | 'scene' | 'worldNote';
@@ -29,6 +30,8 @@ const TYPE_LABELS = {
 
 export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
+  const minimizeEditor = useEditorStore((s) => s.minimize);
+  const editorIsOpen = useEditorStore((s) => s.isOpen);
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
   const chapters = useBookStore((s) => s.chapters);
@@ -85,9 +88,10 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
   }, [open]);
 
   const handleSelect = useCallback((result: SearchResult) => {
+    if (editorIsOpen) minimizeEditor();
     navigate(result.navigateTo);
     onClose();
-  }, [navigate, onClose]);
+  }, [navigate, onClose, editorIsOpen, minimizeEditor]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {

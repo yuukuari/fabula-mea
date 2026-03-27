@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, Feather, Trash2, Users, MapPin, Film } from 'lucide-react';
+import { Plus, BookOpen, Feather, Trash2, Users, MapPin, Film, Hash, PenLine } from 'lucide-react';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import type { WritingMode } from '@/types';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -15,18 +16,25 @@ export function HomePage() {
   const [newTitle, setNewTitle] = useState('');
   const [newAuthor, setNewAuthor] = useState('');
   const [newGenre, setNewGenre] = useState('');
+  const [writingMode, setWritingMode] = useState<WritingMode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const handleCreate = () => {
-    if (!newTitle.trim()) return;
-    const bookId = createBook(newTitle.trim(), newAuthor.trim(), newGenre.trim());
-    initNewBook(bookId, newTitle.trim(), newAuthor.trim(), newGenre.trim());
+    if (!newTitle.trim() || !writingMode) return;
+    const bookId = createBook(newTitle.trim(), newAuthor.trim(), newGenre.trim(), writingMode);
+    initNewBook(bookId, newTitle.trim(), newAuthor.trim(), newGenre.trim(), writingMode);
     selectBook(bookId);
     setNewTitle('');
     setNewAuthor('');
     setNewGenre('');
+    setWritingMode(null);
     setShowCreate(false);
     navigate('/characters');
+  };
+
+  const handleCancelCreate = () => {
+    setShowCreate(false);
+    setWritingMode(null);
   };
 
   const handleSelect = (bookId: string) => {
@@ -80,10 +88,12 @@ export function HomePage() {
           </button>
         ) : (
           <div className="mb-8 card-fantasy p-6">
-            <h2 className="font-display text-xl font-semibold text-ink-500 mb-4">
+            <h2 className="font-display text-xl font-semibold text-ink-500 mb-5">
               Nouveau livre
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+
+            {/* Basic info */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div>
                 <label className="label-field">Titre *</label>
                 <input
@@ -114,11 +124,71 @@ export function HomePage() {
                 />
               </div>
             </div>
+
+            {/* Writing mode – mandatory choice */}
+            <div className="mb-6">
+              <label className="label-field mb-3 flex items-center gap-1.5">
+                Mode d'écriture <span className="text-red-400">*</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setWritingMode('count')}
+                  className={cn(
+                    'flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all',
+                    writingMode === 'count'
+                      ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
+                      : 'border-parchment-200 hover:border-parchment-400'
+                  )}
+                >
+                  <div className={cn(
+                    'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                    writingMode === 'count' ? 'bg-bordeaux-100' : 'bg-parchment-200'
+                  )}>
+                    <Hash className={cn('w-5 h-5', writingMode === 'count' ? 'text-bordeaux-500' : 'text-ink-300')} />
+                  </div>
+                  <div>
+                    <p className="font-display font-semibold text-ink-500 text-sm">Comptage de mots</p>
+                    <p className="text-xs text-ink-300 mt-1 leading-relaxed">
+                      Vous écrivez sur papier ou dans un autre logiciel. Vous renseignez manuellement le nombre de mots par scène.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWritingMode('write')}
+                  className={cn(
+                    'flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all',
+                    writingMode === 'write'
+                      ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
+                      : 'border-parchment-200 hover:border-parchment-400'
+                  )}
+                >
+                  <div className={cn(
+                    'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                    writingMode === 'write' ? 'bg-bordeaux-100' : 'bg-parchment-200'
+                  )}>
+                    <PenLine className={cn('w-5 h-5', writingMode === 'write' ? 'text-bordeaux-500' : 'text-ink-300')} />
+                  </div>
+                  <div>
+                    <p className="font-display font-semibold text-ink-500 text-sm">Écriture intégrée</p>
+                    <p className="text-xs text-ink-300 mt-1 leading-relaxed">
+                      Vous rédigez directement dans l'application. Le nombre de mots est calculé automatiquement à partir de votre texte.
+                    </p>
+                  </div>
+                </button>
+              </div>
+              {!writingMode && newTitle.trim() && (
+                <p className="text-xs text-red-400 mt-2">Veuillez choisir un mode d'écriture pour continuer.</p>
+              )}
+            </div>
+
             <div className="flex gap-3">
-              <button onClick={handleCreate} className="btn-primary" disabled={!newTitle.trim()}>
-                Creer
+              <button onClick={handleCreate} className="btn-primary" disabled={!newTitle.trim() || !writingMode}>
+                Créer
               </button>
-              <button onClick={() => setShowCreate(false)} className="btn-ghost">
+              <button onClick={handleCancelCreate} className="btn-ghost">
                 Annuler
               </button>
             </div>
@@ -171,11 +241,23 @@ export function HomePage() {
                 {book.author && (
                   <p className="text-sm text-ink-300 mb-1">par {book.author}</p>
                 )}
-                {book.genre && (
-                  <span className="inline-block text-xs bg-gold-100 text-gold-600 px-2 py-0.5 rounded-full mb-3">
-                    {book.genre}
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {book.genre && (
+                    <span className="text-xs bg-gold-100 text-gold-600 px-2 py-0.5 rounded-full">
+                      {book.genre}
+                    </span>
+                  )}
+                  <span className={cn(
+                    'text-xs px-2 py-0.5 rounded-full flex items-center gap-1',
+                    book.writingMode === 'write'
+                      ? 'bg-bordeaux-100 text-bordeaux-600'
+                      : 'bg-parchment-200 text-ink-300'
+                  )}>
+                    {book.writingMode === 'write'
+                      ? <><PenLine className="w-2.5 h-2.5" /> Écriture</>
+                      : <><Hash className="w-2.5 h-2.5" /> Comptage</>}
                   </span>
-                )}
+                </div>
 
                 {/* Stats */}
                 <div className="flex gap-4 mt-3 pt-3 border-t border-parchment-200 text-xs text-ink-200">

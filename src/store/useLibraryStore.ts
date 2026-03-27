@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { BookMeta } from '@/types';
+import type { BookMeta, WritingMode } from '@/types';
 import { generateId, now } from '@/lib/utils';
 
 interface LibraryStore {
   books: BookMeta[];
   currentBookId: string | null;
 
-  createBook: (title: string, author?: string, genre?: string) => string;
+  createBook: (title: string, author?: string, genre?: string, writingMode?: WritingMode) => string;
   deleteBook: (id: string) => void;
   selectBook: (id: string | null) => void;
   updateBookMeta: (id: string, data: Partial<BookMeta>) => void;
@@ -25,7 +25,7 @@ export const useLibraryStore = create<LibraryStore>()(
       books: [],
       currentBookId: null,
 
-      createBook: (title, author = '', genre = '') => {
+      createBook: (title, author = '', genre = '', writingMode = 'count') => {
         const id = generateId();
         const timestamp = now();
         const meta: BookMeta = {
@@ -33,6 +33,7 @@ export const useLibraryStore = create<LibraryStore>()(
           title,
           author,
           genre,
+          writingMode,
           chaptersCount: 0,
           scenesCount: 0,
           charactersCount: 0,

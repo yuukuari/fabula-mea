@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map } from 'lucide-react';
+import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS } from '@/lib/utils';
@@ -14,12 +15,14 @@ export function ChaptersPage() {
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
   const maps = useBookStore((s) => s.maps ?? []);
+  const writingMode = useBookStore((s) => s.writingMode);
   const addChapter = useBookStore((s) => s.addChapter);
   const deleteChapter = useBookStore((s) => s.deleteChapter);
   const addScene = useBookStore((s) => s.addScene);
   const updateScene = useBookStore((s) => s.updateScene);
   const deleteScene = useBookStore((s) => s.deleteScene);
   const navigate = useNavigate();
+  const openScene = useEditorStore((s) => s.openScene);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showChapterForm, setShowChapterForm] = useState(false);
@@ -160,6 +163,15 @@ export function ChaptersPage() {
                               </div>
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                              {writingMode === 'write' && (
+                                <button
+                                  onClick={() => openScene(scene.id)}
+                                  className="btn-ghost p-1 text-bordeaux-500 hover:text-bordeaux-700"
+                                  title="Écrire cette scène"
+                                >
+                                  <PenLine className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button onClick={() => setEditingScene(scene)} className="btn-ghost p-1">
                                 <Edit className="w-3.5 h-3.5" />
                               </button>
@@ -272,6 +284,7 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
   const goals = useBookStore((s) => s.goals);
+  const writingMode = useBookStore((s) => s.writingMode);
   const addScene = useBookStore((s) => s.addScene);
   const updateScene = useBookStore((s) => s.updateScene);
 
@@ -387,10 +400,20 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
               <label className="label-field">Objectif mots</label>
               <input type="number" value={targetWordCount} onChange={(e) => setTargetWordCount(Number(e.target.value))} className="input-field" min={0} />
             </div>
-            <div>
-              <label className="label-field">Mots actuels</label>
-              <input type="number" value={currentWordCount} onChange={(e) => setCurrentWordCount(Number(e.target.value))} className="input-field" min={0} />
-            </div>
+            {writingMode === 'count' && (
+              <div>
+                <label className="label-field">Mots écrits</label>
+                <input type="number" value={currentWordCount} onChange={(e) => setCurrentWordCount(Number(e.target.value))} className="input-field" min={0} />
+              </div>
+            )}
+            {writingMode === 'write' && (
+              <div>
+                <label className="label-field">Mots écrits</label>
+                <p className="input-field bg-parchment-100 text-ink-300 cursor-not-allowed select-none">
+                  {currentWordCount} <span className="text-xs">(calculé automatiquement)</span>
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">

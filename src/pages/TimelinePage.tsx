@@ -40,6 +40,23 @@ export function TimelinePage() {
     return characters.filter((c) => charIds.has(c.id));
   }, [datedScenes, characters]);
 
+  const totalDuration = timeRange ? timeRange.max - timeRange.min || 1 : 1;
+
+  // Build time axis labels – must be before any early return
+  const timeLabels = useMemo(() => {
+    if (!timeRange) return [];
+    const labels: { position: number; label: string }[] = [];
+    const steps = 6;
+    for (let i = 0; i <= steps; i++) {
+      const t = timeRange.min + (totalDuration * i) / steps;
+      labels.push({
+        position: (i / steps) * 100,
+        label: new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
+      });
+    }
+    return labels;
+  }, [timeRange, totalDuration]);
+
   if (datedScenes.length === 0) {
     return (
       <div className="page-container">
@@ -52,8 +69,6 @@ export function TimelinePage() {
       </div>
     );
   }
-
-  const totalDuration = timeRange!.max - timeRange!.min || 1;
 
   const getPosition = (dateStr: string) => {
     return ((new Date(dateStr).getTime() - timeRange!.min) / totalDuration) * 100;
@@ -69,21 +84,6 @@ export function TimelinePage() {
     const ch = chapters.find((c) => c.id === chapterId);
     return ch?.color ?? '#999';
   };
-
-  const formatTimeLabel = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-  };
-
-  // Build time axis labels
-  const timeLabels = useMemo(() => {
-    const labels: { position: number; label: string }[] = [];
-    const steps = 6;
-    for (let i = 0; i <= steps; i++) {
-      const t = timeRange!.min + (totalDuration * i) / steps;
-      labels.push({ position: (i / steps) * 100, label: formatTimeLabel(t) });
-    }
-    return labels;
-  }, [timeRange, totalDuration]);
 
   return (
     <div className="page-container">

@@ -16,10 +16,12 @@ interface BookStore extends BookProject {
   loadBook: (bookId: string) => void;
   saveBook: () => void;
   unloadBook: () => void;
-  initNewBook: (bookId: string, title: string, author?: string, genre?: string) => void;
+  initNewBook: (bookId: string, title: string, author?: string, genre?: string, writingMode?: import('@/types').WritingMode) => void;
+  updateSceneContent: (sceneId: string, content: string, wordCount: number) => void;
 
   // Project
   updateProject: (data: Partial<Pick<BookProject, 'title' | 'author' | 'genre' | 'synopsis'>>) => void;
+  updateWritingMode: (mode: import('@/types').WritingMode, deleteContent: boolean) => void;
 
   // Characters
   addCharacter: (char: Partial<Character> & { name: string }) => string;
@@ -87,6 +89,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     author: '',
     genre: '',
     synopsis: '',
+    writingMode: 'count',
     characters: [],
     places: [],
     chapters: [],
@@ -109,6 +112,7 @@ function extractProjectData(state: BookStore): BookProject {
     author: state.author,
     genre: state.genre,
     synopsis: state.synopsis,
+    writingMode: state.writingMode,
     characters: state.characters,
     places: state.places,
     chapters: state.chapters,
@@ -139,7 +143,7 @@ export const useBookStore = create<BookStore>()(
       _loaded: false,
 
       // ─── Lifecycle ───
-      initNewBook: (bookId, title, author = '', genre = '') => {
+      initNewBook: (bookId, title, author = '', genre = '', writingMode = 'count') => {
         const timestamp = now();
         const newState = {
           ...emptyState(),
@@ -147,6 +151,7 @@ export const useBookStore = create<BookStore>()(
           title,
           author,
           genre,
+          writingMode,
           createdAt: timestamp,
           updatedAt: timestamp,
           lastSavedAt: timestamp,
@@ -223,6 +228,17 @@ export const useBookStore = create<BookStore>()(
 
       updateProject: (data) =>
         set((s) => ({ ...data, ...touchSave() })),
+
+      updateWritingMode: (mode, deleteContent) =>
+        set((s) => ({
+          writingMode: mode,
+          scenes: s.scenes.map((sc) =>
+            deleteContent
+              ? { ...sc, content: undefined, currentWordCount: 0, updatedAt: now() }
+              : { ...sc, updatedAt: now() }
+          ),
+          ...touchSave(),
+        })),
 
       // ─── Characters ───
       addCharacter: (char) => {
@@ -463,6 +479,16 @@ export const useBookStore = create<BookStore>()(
         set((s) => ({
           scenes: s.scenes.map((sc) =>
             sc.id === id ? { ...sc, ...data, updatedAt: now() } : sc
+          ),
+          ...touchSave(),
+        })),
+
+      updateSceneContent: (sceneId, content, wordCount) =>
+        set((s) => ({
+          scenes: s.scenes.map((sc) =>
+            sc.id === sceneId
+              ? { ...sc, content, currentWordCount: wordCount, updatedAt: now() }
+              : sc
           ),
           ...touchSave(),
         })),

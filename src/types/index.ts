@@ -120,7 +120,8 @@ export interface Scene {
   startDateTime?: string;
   endDateTime?: string;
   targetWordCount: number;
-  currentWordCount: number;
+  currentWordCount: number; // manual in count mode, auto-computed in write mode
+  content?: string;         // HTML (TipTap) – write mode only
   status: SceneStatus;
   tags: EntityId[];
   notes?: string;
@@ -196,12 +197,16 @@ export interface MapItem {
   updatedAt: string;
 }
 
+// ─── Writing Mode ───
+export type WritingMode = 'count' | 'write';
+
 // ─── Library (multi-book) ───
 export interface BookMeta {
   id: EntityId;
   title: string;
   author: string;
   genre?: string;
+  writingMode: WritingMode;
   chaptersCount: number;
   scenesCount: number;
   charactersCount: number;
@@ -216,6 +221,7 @@ export interface BookProject {
   author: string;
   genre?: string;
   synopsis?: string;
+  writingMode: WritingMode;
   characters: Character[];
   places: Place[];
   chapters: Chapter[];
