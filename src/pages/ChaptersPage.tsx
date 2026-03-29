@@ -49,7 +49,7 @@ export function ChaptersPage() {
           icon={BookOpen}
           title="Aucun chapitre"
           description="Structurez votre histoire en chapitres, puis ajoutez des scenes a chacun."
-          action={<button onClick={() => setShowChapterForm(true)} className="btn-primary">Creer un chapitre</button>}
+          action={<button onClick={() => setShowChapterForm(true)} className="btn-primary">Créer un chapitre</button>}
         />
       ) : (
         <div className="space-y-3">
@@ -273,7 +273,7 @@ function ChapterFormDialog({ chapterId, onClose }: { chapterId: string | null; o
           </div>
           <div className="flex justify-end gap-3">
             <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
-            <button type="submit" className="btn-primary">{existing ? 'Enregistrer' : 'Creer'}</button>
+            <button type="submit" className="btn-primary">{existing ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>
@@ -417,7 +417,7 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
 
           <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
             <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
-            <button type="submit" className="btn-primary">{scene ? 'Enregistrer' : 'Creer'}</button>
+            <button type="submit" className="btn-primary">{scene ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>

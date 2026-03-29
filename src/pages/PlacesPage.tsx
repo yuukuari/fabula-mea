@@ -74,21 +74,31 @@ export function PlacesPage() {
               </ul>
             </div>
           )}
-          {selectedPlace.connectedPlaceIds.length > 0 && (
-            <div>
-              <h4 className="font-display font-semibold text-ink-400 mb-2">Lieux connectes</h4>
-              <div className="flex flex-wrap gap-2">
-                {selectedPlace.connectedPlaceIds.map((id) => {
-                  const p = places.find((pl) => pl.id === id);
-                  return p ? (
-                    <button key={id} onClick={() => setSelectedId(id)} className="badge bg-parchment-200 text-ink-400 cursor-pointer hover:bg-parchment-300">
-                      {p.name}
-                    </button>
-                  ) : null;
-                })}
+          {(() => {
+            // Bidirectional: show places this place is connected to + places that connect to this place
+            const directIds = selectedPlace.connectedPlaceIds ?? [];
+            const reverseIds = places
+              .filter((p) => p.id !== selectedPlace.id && (p.connectedPlaceIds ?? []).includes(selectedPlace.id))
+              .map((p) => p.id);
+            const allAssociatedIds = [...new Set([...directIds, ...reverseIds])];
+
+            return allAssociatedIds.length > 0 ? (
+              <div>
+                <h4 className="font-display font-semibold text-ink-400 mb-1">Lieux associés</h4>
+                <p className="text-xs text-ink-200 mb-2">Lieux en relation avec celui-ci dans votre univers.</p>
+                <div className="flex flex-wrap gap-2">
+                  {allAssociatedIds.map((id) => {
+                    const p = places.find((pl) => pl.id === id);
+                    return p ? (
+                      <button key={id} onClick={() => setSelectedId(id)} className="badge bg-parchment-200 text-ink-400 cursor-pointer hover:bg-parchment-300">
+                        {p.name}
+                      </button>
+                    ) : null;
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            ) : null;
+          })()}
           {selectedPlace.notes && (
             <div className="mt-4 pt-4 border-t border-parchment-200">
               <h4 className="font-display font-semibold text-ink-400 mb-2">Notes</h4>
@@ -121,7 +131,7 @@ export function PlacesPage() {
                   {placeMaps.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => navigate('/maps', { state: { mapId: m.id } })}
+                      onClick={() => navigate(`/maps?mapId=${m.id}`)}
                       className="flex items-center gap-2 px-3 py-1.5 bg-parchment-100 hover:bg-parchment-200
                                  rounded-lg text-sm text-ink-400 transition-colors border border-parchment-200"
                     >
@@ -175,7 +185,7 @@ export function PlacesPage() {
           icon={MapPin}
           title="Aucun lieu"
           description="Ajoutez les lieux, villes et villages qui composent votre univers."
-          action={<button onClick={() => setShowForm(true)} className="btn-primary">Creer un lieu</button>}
+          action={<button onClick={() => setShowForm(true)} className="btn-primary">Créer un lieu</button>}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -285,7 +295,8 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
           </div>
 
           <div>
-            <label className="label-field">Lieux connectes</label>
+            <label className="label-field">Lieux associés</label>
+            <p className="text-xs text-ink-200 mb-1">Lieux en relation avec celui-ci dans votre univers.</p>
             <div className="space-y-1">
               {otherPlaces.map((p) => (
                 <label key={p.id} className="flex items-center gap-2 text-sm text-ink-300">
@@ -311,7 +322,7 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
 
           <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
             <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
-            <button type="submit" className="btn-primary">{existing ? 'Enregistrer' : 'Creer'}</button>
+            <button type="submit" className="btn-primary">{existing ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>

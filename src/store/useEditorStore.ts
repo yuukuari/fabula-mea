@@ -9,6 +9,8 @@ interface EditorStore {
   open: (sceneId: string) => void;
   close: () => void;
   minimize: () => void;
+  /** Set the entry scene (show tab) without opening the editor */
+  setEntryScene: (sceneId: string) => void;
 }
 
 export const useEditorStore = create<EditorStore>((set) => ({
@@ -18,4 +20,5 @@ export const useEditorStore = create<EditorStore>((set) => ({
   open: (sceneId) => set({ entrySceneId: sceneId, isOpen: true }),
   close: () => set({ entrySceneId: null, isOpen: false }),
   minimize: () => set({ isOpen: false }),
+  setEntryScene: (sceneId) => set({ entrySceneId: sceneId, isOpen: false }),
 }));

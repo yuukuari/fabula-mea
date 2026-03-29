@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Coffee, Timer, X, ChevronDown } from 'lucide-react';
+import { Play, Pause, RotateCcw, Coffee, Timer, ChevronDown, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type TimerMode = 'work' | 'break';
@@ -65,7 +65,7 @@ export function FloatingPomodoro() {
   const accentColor = mode === 'work' ? '#8b2252' : '#16a34a';
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
       {/* Expanded panel */}
       {expanded && (
         <div className="bg-parchment-50 rounded-2xl shadow-xl border border-parchment-200 w-64 overflow-hidden">
@@ -89,11 +89,11 @@ export function FloatingPomodoro() {
               <button
                 onClick={() => switchMode('work')}
                 className={cn(
-                  'flex-1 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  'flex-1 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1',
                   mode === 'work' ? 'bg-bordeaux-500 text-white' : 'text-ink-300 hover:text-ink-500'
                 )}
               >
-                Travail
+                <PenLine className="w-3 h-3" /> Travail
               </button>
               <button
                 onClick={() => switchMode('break')}
@@ -152,9 +152,11 @@ export function FloatingPomodoro() {
         className={cn(
           'flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg transition-all',
           'border border-parchment-300 hover:shadow-xl active:scale-95',
-          isRunning
+          isRunning && mode === 'work'
             ? 'bg-bordeaux-500 text-white border-bordeaux-500'
-            : 'bg-parchment-50 text-ink-500'
+            : isRunning && mode === 'break'
+              ? 'bg-green-600 text-white border-green-600'
+              : 'bg-parchment-50 text-ink-500'
         )}
       >
         <Timer className="w-4 h-4 flex-shrink-0" />

@@ -72,10 +72,10 @@ export function CharactersPage() {
         <EmptyState
           icon={Users}
           title="Aucun personnage"
-          description="Commencez par creer les personnages de votre histoire. Donnez-leur vie avec une description riche, des qualites, des defauts et des relations."
+          description="Commencez par créer les personnages de votre histoire. Donnez-leur vie avec une description riche, des qualités, des défauts et des relations."
           action={
             <button onClick={() => setShowForm(true)} className="btn-primary">
-              Creer un personnage
+              Créer un personnage
             </button>
           }
         />

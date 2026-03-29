@@ -160,6 +160,7 @@ export interface WorldNote {
   category: WorldNoteCategory;
   content: string;
   imageUrl?: string;
+  linkedNoteIds: EntityId[];
   tags: EntityId[];
   createdAt: string;
   updatedAt: string;

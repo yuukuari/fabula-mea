@@ -144,7 +144,7 @@ export function SettingsPage() {
           .map((sid) => scenes.find((s) => s.id === sid))
           .filter(Boolean)
           .sort((a, b) => a!.orderInChapter - b!.orderInChapter)
-          .map((s, idx) => ({ title: s!.title || `Scène ${idx + 1}`, content: s!.content ?? '' })),
+          .map((s, idx) => ({ title: s!.title ?? '', content: s!.content ?? '' })),
       })),
   });
 

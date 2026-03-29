@@ -99,7 +99,7 @@ export function TimelinePage() {
             <option value="">Tous</option>
             {chapters.map((c) => (
               <option key={c.id} value={c.id}>
-                Ch. {c.number} - {c.title}
+                Chapitre {c.number}{c.title ? ` - ${c.title}` : ''}
               </option>
             ))}
           </select>
@@ -111,7 +111,7 @@ export function TimelinePage() {
         {chapters.map((ch) => (
           <div key={ch.id} className="flex items-center gap-1.5 text-xs text-ink-300">
             <div className="w-3 h-3 rounded" style={{ backgroundColor: ch.color }} />
-            Ch. {ch.number}
+            Chapitre {ch.number}{ch.title ? ` - ${ch.title}` : ''}
           </div>
         ))}
       </div>
@@ -216,8 +216,10 @@ function TimelineSceneEditor({ scene, onClose }: { scene: Scene; onClose: () => 
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
   const maps = useBookStore((s) => s.maps ?? []);
+  const chapters = useBookStore((s) => s.chapters);
   const updateScene = useBookStore((s) => s.updateScene);
   const navigate = useNavigate();
+  const chapter = chapters.find((c) => c.sceneIds.includes(scene.id));
 
   const [startDateTime, setStartDateTime] = useState(scene.startDateTime ?? '');
   const [endDateTime, setEndDateTime] = useState(scene.endDateTime ?? '');
@@ -243,7 +245,7 @@ function TimelineSceneEditor({ scene, onClose }: { scene: Scene; onClose: () => 
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display text-lg font-bold text-ink-500">{scene.title}</h3>
+          <h3 className="font-display text-lg font-bold text-ink-500">{scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}</h3>
           <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
 

@@ -203,10 +203,14 @@ export async function exportEpub(book: ExportBook): Promise<void> {
     const filename = `chapter-${chapter.number}.xhtml`;
     const chId = `ch-${chapter.number}`;
 
-    let body = `<h1>Chapitre ${chapter.number} — ${escapeXml(chapter.title)}</h1>\n`;
+    let body = `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${escapeXml(chapter.title)}` : ''}</h1>\n`;
 
-    for (const scene of chapter.scenes) {
-      if (chapter.scenes.length > 1) {
+    for (let i = 0; i < chapter.scenes.length; i++) {
+      const scene = chapter.scenes[i];
+      if (i > 0) {
+        body += `<hr />\n`;
+      }
+      if (scene.title && chapter.scenes.length > 1) {
         body += `<p class="scene-title">${escapeXml(scene.title)}</p>\n`;
       }
       body += cleanHtml(scene.content || '<p></p>') + '\n';
@@ -224,7 +228,7 @@ ${body}
 </html>`
     );
 
-    chapterFiles.push({ id: chId, filename, title: `Chapitre ${chapter.number} — ${chapter.title}` });
+    chapterFiles.push({ id: chId, filename, title: `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}` });
   }
 
   // 6. Table of Contents (XHTML - EPUB 3)

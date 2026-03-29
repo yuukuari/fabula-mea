@@ -30,7 +30,7 @@ function cleanHtml(html: string): string {
 const PDF_STYLES = `
   @page {
     size: A5;
-    margin: 2cm 1.5cm;
+    margin: 1.2cm 1cm;
   }
   @media print {
     .no-print { display: none !important; }
@@ -44,7 +44,7 @@ const PDF_STYLES = `
     line-height: 1.6;
     color: #1a1a1a;
     margin: 0;
-    padding: 2cm;
+    padding: 1.2cm;
   }
   .title-page {
     text-align: center;
@@ -167,9 +167,13 @@ export function exportPdf(book: ExportBook): void {
   let chaptersHtml = '';
 
   for (const chapter of book.chapters) {
-    chaptersHtml += `<h1>Chapitre ${chapter.number} — ${chapter.title}</h1>\n`;
-    for (const scene of chapter.scenes) {
-      if (chapter.scenes.length > 1) {
+    chaptersHtml += `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}</h1>\n`;
+    for (let i = 0; i < chapter.scenes.length; i++) {
+      const scene = chapter.scenes[i];
+      if (i > 0) {
+        chaptersHtml += `<hr />\n`;
+      }
+      if (scene.title && chapter.scenes.length > 1) {
         chaptersHtml += `<p class="scene-title">${scene.title}</p>\n`;
       }
       chaptersHtml += cleanHtml(scene.content || '<p></p>') + '\n';
@@ -177,7 +181,7 @@ export function exportPdf(book: ExportBook): void {
   }
 
   const tocHtml = book.chapters
-    .map((ch) => `<li><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title}</li>`)
+    .map((ch) => `<li><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title || ''}</li>`)
     .join('\n');
 
   const html = `<!DOCTYPE html>

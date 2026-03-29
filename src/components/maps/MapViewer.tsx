@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { Plus, X, MapPin as PinIcon, Trash2, Move, ExternalLink, ZoomIn } from 'lucide-react';
+import { Plus, X, MapPin as PinIcon, Trash2, Edit, ExternalLink, ZoomIn } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useNavigate } from 'react-router-dom';
 import type { MapItem, MapPin } from '@/types';
@@ -21,6 +21,7 @@ export function MapViewer({ map }: MapViewerProps) {
   const addMapPin = useBookStore((s) => s.addMapPin);
   const updateMapPin = useBookStore((s) => s.updateMapPin);
   const deleteMapPin = useBookStore((s) => s.deleteMapPin);
+  const addPlace = useBookStore((s) => s.addPlace);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -259,7 +260,7 @@ export function MapViewer({ map }: MapViewerProps) {
                   className="p-1 text-ink-200 hover:text-ink-500 hover:bg-parchment-100 rounded"
                   title="Modifier"
                 >
-                  <Move className="w-3.5 h-3.5" />
+                  <Edit className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => { deleteMapPin(map.id, selectedPin.id); setSelectedPinId(null); }}
@@ -286,14 +287,26 @@ export function MapViewer({ map }: MapViewerProps) {
                   <p className="text-xs text-ink-300 line-clamp-3">{selectedPinPlace.description}</p>
                 )}
                 <button
-                  onClick={() => navigate('/places', { state: { placeId: selectedPinPlace.id } })}
+                  onClick={() => navigate(`/places?placeId=${selectedPinPlace.id}`)}
                   className="text-xs text-bordeaux-500 hover:underline mt-1 block"
                 >
                   Voir la fiche lieu →
                 </button>
               </div>
             ) : selectedPin.label ? (
-              <p className="text-xs text-ink-300 italic">Marqueur libre (sans lieu associé)</p>
+              <div className="space-y-1">
+                <p className="text-xs text-ink-300 italic">Marqueur libre (sans lieu associé)</p>
+                <button
+                  onClick={() => {
+                    const newPlaceId = addPlace({ name: selectedPin.label || 'Nouveau lieu' });
+                    updateMapPin(map.id, selectedPin.id, { placeId: newPlaceId });
+                    setSelectedPinId(null);
+                  }}
+                  className="text-xs text-bordeaux-500 hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Créer un lieu « {selectedPin.label} »
+                </button>
+              </div>
             ) : null}
 
             {/* Drill-down to linked map */}
@@ -302,7 +315,7 @@ export function MapViewer({ map }: MapViewerProps) {
                 <button
                   onClick={() => {
                     setSelectedPinId(null);
-                    navigate('/maps', { state: { mapId: selectedPinLinkedMap.id } });
+                    navigate(`/maps?mapId=${selectedPinLinkedMap.id}`);
                   }}
                   className="w-full flex items-center gap-2 px-2 py-1.5 bg-parchment-100 hover:bg-parchment-200
                              rounded-lg text-xs font-medium text-ink-500 transition-colors group"

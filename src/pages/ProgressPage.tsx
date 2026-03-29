@@ -18,6 +18,7 @@ export function ProgressPage() {
   const writingSessions = useBookStore((s) => s.writingSessions);
   const updateGoals = useBookStore((s) => s.updateGoals);
   const updateScene = useBookStore((s) => s.updateScene);
+  const writingMode = useBookStore((s) => s.writingMode);
   const addExcludedPeriod = useBookStore((s) => s.addExcludedPeriod);
   const deleteExcludedPeriod = useBookStore((s) => s.deleteExcludedPeriod);
 
@@ -154,13 +155,16 @@ export function ProgressPage() {
                   <div key={chapter.id}>
                     <div className="flex items-center gap-2 mb-2 mt-4">
                       <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: chapter.color }} />
-                      <h4 className="text-sm font-medium text-ink-400">Ch. {chapter.number} - {chapter.title}</h4>
+                      <h4 className="text-sm font-medium text-ink-400">
+                        Chapitre {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
+                      </h4>
                     </div>
-                    {chapterScenes.map((scene) => {
+                    {chapterScenes.map((scene, sceneIdx) => {
                       const progress = getSceneProgress(scene);
+                      const sceneLabel = scene.title || `Scène ${sceneIdx + 1}`;
                       return (
                         <div key={scene.id} className="flex items-center gap-3 py-1.5">
-                          <span className="text-sm text-ink-400 w-40 truncate">{scene.title}</span>
+                          <span className="text-sm text-ink-400 w-40 truncate">{sceneLabel}</span>
                           <div className="flex-1 h-2 bg-parchment-200 rounded-full overflow-hidden">
                             <div
                               className={cn(
@@ -171,13 +175,17 @@ export function ProgressPage() {
                             />
                           </div>
                           <div className="flex items-center gap-2 w-32">
-                            <input
-                              type="number"
-                              value={scene.currentWordCount}
-                              onChange={(e) => updateScene(scene.id, { currentWordCount: Number(e.target.value) })}
-                              className="input-field text-xs py-1 px-2 w-20 text-center"
-                              min={0}
-                            />
+                            {writingMode === 'write' ? (
+                              <span className="text-xs text-ink-400 w-20 text-center">{scene.currentWordCount}</span>
+                            ) : (
+                              <input
+                                type="number"
+                                value={scene.currentWordCount}
+                                onChange={(e) => updateScene(scene.id, { currentWordCount: Number(e.target.value) })}
+                                className="input-field text-xs py-1 px-2 w-20 text-center"
+                                min={0}
+                              />
+                            )}
                             <span className="text-xs text-ink-200">/ {scene.targetWordCount}</span>
                           </div>
                           {progress >= 1 && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}

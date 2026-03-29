@@ -1,12 +1,23 @@
-import { X, PenLine, ChevronUp } from 'lucide-react';
+import { useEffect } from 'react';
+import { PenLine, ChevronUp, ChevronDown } from 'lucide-react';
 import { useEditorStore } from '@/store/useEditorStore';
 import { useBookStore } from '@/store/useBookStore';
 import { cn } from '@/lib/utils';
 
 export function EditorTabs() {
-  const { entrySceneId, isOpen, open, close, minimize } = useEditorStore();
+  const { entrySceneId, isOpen, open, minimize, setEntryScene } = useEditorStore();
   const scenes = useBookStore((s) => s.scenes);
+  const writingMode = useBookStore((s) => s.writingMode);
 
+  // Show the tab (without opening the editor) when in write mode and there are scenes
+  useEffect(() => {
+    if (writingMode === 'write' && scenes.length > 0 && !entrySceneId) {
+      const firstScene = scenes[0];
+      if (firstScene) setEntryScene(firstScene.id);
+    }
+  }, [writingMode, scenes, entrySceneId, setEntryScene]);
+
+  if (writingMode !== 'write' || scenes.length === 0) return null;
   if (!entrySceneId) return null;
 
   const scene = scenes.find((s) => s.id === entrySceneId);
@@ -20,7 +31,7 @@ export function EditorTabs() {
       <div
         className={cn(
           'flex items-center gap-1.5 px-3 h-7 rounded-full cursor-pointer text-xs font-medium',
-          'transition-all group shrink-0 max-w-[240px]',
+          'transition-all shrink-0 max-w-[240px]',
           isOpen
             ? 'bg-bordeaux-500 text-white'
             : 'text-parchment-200 hover:bg-white/10 hover:text-white'
@@ -33,15 +44,10 @@ export function EditorTabs() {
       >
         <PenLine className="w-3 h-3 shrink-0" />
         <span className="truncate">Mode écriture</span>
-        {isOpen && <ChevronUp className="w-3 h-3 shrink-0 opacity-70" />}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); close(); }}
-          className="ml-0.5 p-0.5 rounded-full shrink-0 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity"
-          title="Fermer le mode écriture"
-        >
-          <X className="w-3 h-3" />
-        </button>
+        {isOpen
+          ? <ChevronDown className="w-3 h-3 shrink-0 opacity-70" />
+          : <ChevronUp className="w-3 h-3 shrink-0 opacity-70" />
+        }
       </div>
     </div>
   );

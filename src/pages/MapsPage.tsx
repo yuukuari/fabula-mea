@@ -37,33 +37,43 @@ export function MapsPage() {
   const updateMap = useBookStore((s) => s.updateMap);
   const deleteMap = useBookStore((s) => s.deleteMap);
 
-  const [searchParams] = useSearchParams();
-  const [selectedMapId, setSelectedMapId] = useState<string | null>(
-    searchParams.get('mapId') ?? maps[0]?.id ?? null
+  const [searchParams, setSearchParams] = useSearchParams();
+  const mapIdParam = searchParams.get('mapId');
+  const [selectedMapId, setSelectedMapIdRaw] = useState<string | null>(
+    mapIdParam ?? maps[0]?.id ?? null
   );
   // Historique de navigation entre cartes (drill-down / retour)
   const [mapHistory, setMapHistory] = useState<string[]>([]);
 
   // Quand les URL params changent (ex: depuis la recherche ou un pin drill-down)
   useEffect(() => {
-    const mapId = searchParams.get('mapId');
-    if (mapId && mapId !== selectedMapId) {
+    if (mapIdParam && mapIdParam !== selectedMapId) {
       if (selectedMapId) setMapHistory((h) => [...h, selectedMapId]);
-      setSelectedMapId(mapId);
+      setSelectedMapIdRaw(mapIdParam);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [mapIdParam]);
+
+  const setSelectedMapId = (id: string | null) => {
+    setSelectedMapIdRaw(id);
+    // Keep URL in sync
+    if (id) {
+      setSearchParams({ mapId: id }, { replace: true });
+    }
+  };
 
   const handleSelectMap = (id: string) => {
-    setSelectedMapId(id);
+    setSelectedMapIdRaw(id);
     setMapHistory([]); // reset history when user picks manually from the list
+    setSearchParams({ mapId: id }, { replace: true });
   };
 
   const handleBack = () => {
     const prev = mapHistory[mapHistory.length - 1];
     if (!prev) return;
     setMapHistory((h) => h.slice(0, -1));
-    setSelectedMapId(prev);
+    setSelectedMapIdRaw(prev);
+    setSearchParams({ mapId: prev }, { replace: true });
   };
   const [showNewMapDialog, setShowNewMapDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);

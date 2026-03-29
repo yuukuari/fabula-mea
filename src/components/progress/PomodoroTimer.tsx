@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Coffee, Timer } from 'lucide-react';
+import { Play, Pause, RotateCcw, Coffee, Timer, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type TimerMode = 'work' | 'break';
@@ -78,11 +78,11 @@ export function PomodoroTimer() {
           <button
             onClick={() => switchMode('work')}
             className={cn(
-              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1',
               mode === 'work' ? 'bg-bordeaux-500 text-white' : 'text-ink-300 hover:text-ink-500'
             )}
           >
-            Travail
+            <PenLine className="w-3.5 h-3.5" /> Travail
           </button>
           <button
             onClick={() => switchMode('break')}

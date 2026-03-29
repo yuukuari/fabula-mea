@@ -664,6 +664,7 @@ export const useBookStore = create<BookStore>()(
             category: note.category ?? 'custom',
             content: note.content ?? '',
             imageUrl: note.imageUrl ?? '',
+            linkedNoteIds: note.linkedNoteIds ?? [],
             tags: note.tags ?? [],
             createdAt: timestamp,
             updatedAt: timestamp,

@@ -88,7 +88,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label-field">Prenom *</label>
+              <label className="label-field">Prénom *</label>
               <input value={name} onChange={(e) => setName(e.target.value)} className="input-field" required />
             </div>
             <div>
@@ -105,13 +105,13 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
                 onChange={(e) => setSex(e.target.value as CharacterSex | '')}
                 className="input-field"
               >
-                <option value="">Non precise</option>
+                <option value="">Non précisé</option>
                 <option value="male">Homme</option>
                 <option value="female">Femme</option>
               </select>
             </div>
             <div>
-              <label className="label-field">Age</label>
+              <label className="label-field">Âge</label>
               <input
                 type="number"
                 min="0"
@@ -134,29 +134,29 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
           </div>
 
           <div>
-            <label className="label-field">Personnalite / Caractere</label>
+            <label className="label-field">Personnalité / Caractère</label>
             <textarea value={personality} onChange={(e) => setPersonality(e.target.value)} className="textarea-field" rows={2} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label-field">Qualites (separees par des virgules)</label>
+              <label className="label-field">Qualités (séparées par des virgules)</label>
               <input value={qualities} onChange={(e) => setQualities(e.target.value)} className="input-field" placeholder="Courageux, loyal, empathique" />
             </div>
             <div>
-              <label className="label-field">Defauts (separes par des virgules)</label>
+              <label className="label-field">Défauts (séparés par des virgules)</label>
               <input value={flaws} onChange={(e) => setFlaws(e.target.value)} className="input-field" placeholder="Impulsif, orgueilleux" />
             </div>
           </div>
 
           <div>
-            <label className="label-field">Competences (separees par des virgules)</label>
-            <input value={skills} onChange={(e) => setSkills(e.target.value)} className="input-field" placeholder="Escrime, equitation, diplomatie" />
+            <label className="label-field">Compétences (séparées par des virgules)</label>
+            <input value={skills} onChange={(e) => setSkills(e.target.value)} className="input-field" placeholder="Escrime, équitation, diplomatie" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label-field">Metier</label>
+              <label className="label-field">Métier</label>
               <input value={profession} onChange={(e) => setProfession(e.target.value)} className="input-field" />
             </div>
             <div>
@@ -220,7 +220,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
           <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
             <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">
-              {existing ? 'Enregistrer' : 'Creer'}
+              {existing ? 'Enregistrer' : 'Créer'}
             </button>
           </div>
         </form>
