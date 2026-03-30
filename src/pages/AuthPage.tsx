@@ -77,6 +77,13 @@ export function AuthPage() {
       }
       // Mark local data as synced — won't show migration banner on next logout/login
       localStorage.setItem(LOCAL_SYNCED_KEY, '1');
+
+      // Redirect to intended page if any
+      const redirect = sessionStorage.getItem('emlb-redirect-after-login');
+      if (redirect) {
+        sessionStorage.removeItem('emlb-redirect-after-login');
+        window.location.href = redirect;
+      }
     } catch {
       // Error already set in store
     }

@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         readerName: session.readerName || 'Un relecteur',
         bookTitle: session.bookTitle,
         commentCount: sent,
-        reviewUrl: `${baseUrl}/reviews`,
+        reviewUrl: `${baseUrl}/reviews/${session.id}`,
       });
     }
 

@@ -25,6 +25,7 @@ interface ReviewStore {
   addAuthorComment: (sessionId: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateComment: (sessionId: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>) => Promise<void>;
   deleteComment: (sessionId: string, commentId: string) => Promise<void>;
+  sendAuthorComments: (sessionId: string) => Promise<number>;
 
   // ─── Reader side (by token) ───
   readerSession: ReviewSession | null;
@@ -110,6 +111,14 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     set((s) => ({
       currentComments: s.currentComments.filter((c) => c.id !== commentId && c.parentId !== commentId),
     }));
+  },
+
+  sendAuthorComments: async (sessionId: string) => {
+    const { sent } = await api.reviews.sendAuthorComments(sessionId);
+    // Refresh comments to get updated statuses
+    const { comments } = await api.reviews.get(sessionId);
+    set({ currentComments: comments });
+    return sent;
   },
 
   // ─── Reader side ───────────────────────────────────────────────────────

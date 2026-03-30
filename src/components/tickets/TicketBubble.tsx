@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MessageSquarePlus, Plus, List, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface TicketBubbleProps {
   onCreateTicket: () => void;
@@ -10,9 +10,20 @@ interface TicketBubbleProps {
 export function TicketBubble({ onCreateTicket }: TicketBubbleProps) {
   const [expanded, setExpanded] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Pages under AppShell have a sidebar — position the bubble to the right of it.
+  // All other pages (HomePage, StandaloneShell, AdminShell) → flush left.
+  const appShellPaths = ['characters', 'places', 'chapters', 'timeline', 'progress', 'world', 'maps', 'notes', 'settings'];
+  const hasSidebar =
+    appShellPaths.some((p) => location.pathname.startsWith(`/${p}`)) ||
+    location.pathname === '/reviews';
 
   return (
-    <div className="fixed bottom-6 left-[17.5rem] z-40 hidden md:flex flex-col items-start gap-2">
+    <div className={cn(
+      'fixed bottom-6 z-40 hidden md:flex flex-col items-start gap-2',
+      hasSidebar ? 'left-[17.5rem]' : 'left-6'
+    )}>
       {/* Expanded menu */}
       {expanded && (
         <div className="bg-white rounded-lg shadow-lg border border-parchment-300 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 mb-1">

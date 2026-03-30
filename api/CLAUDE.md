@@ -15,6 +15,7 @@ Ce dossier contient les **serverless functions Vercel** qui forment le backend d
 | `JWT_SECRET` | Secret pour signer/vérifier les tokens JWT (30 jours d'expiration) |
 | `UPSTASH_REDIS_REST_URL` | URL de l'instance Upstash Redis |
 | `UPSTASH_REDIS_REST_TOKEN` | Token d'accès Upstash Redis |
+| `RESEND_API_KEY` | Clé API Resend pour l'envoi d'emails de notification |
 
 > ⚠️ Ces variables n'ont **PAS** le préfixe `VITE_` — elles sont côté serveur uniquement. Le fichier `src/lib/redis.ts` (côté client) utilise `VITE_UPSTASH_*` — c'est un résidu historique pour la sync directe.
 
@@ -61,6 +62,18 @@ redis.del(key)         // → void
 ```
 
 Toutes les données sont stockées en JSON stringifié dans des clés Redis simples (pas de hashes, sets, etc.).
+
+### `_lib/email.ts`
+
+Envoi d'emails via **Resend**. Si `RESEND_API_KEY` n'est pas définie, les fonctions retournent silencieusement sans rien envoyer.
+
+```typescript
+sendReviewInviteEmail({to, authorName, bookTitle, reviewUrl})   // Invitation de relecture (avec liste fonctionnalités)
+sendCommentsNotificationEmail({to, ...})                        // Relecteur → auteur : commentaires envoyés
+sendReviewCompletedEmail({to, ...})                             // Relecteur → auteur : relecture terminée
+sendTicketCreatedEmail({to, ticketType, ticketModule, ...})     // Ticket créé → notification aux admins
+sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → relecteur : réponses envoyées
+```
 
 ---
 
@@ -116,7 +129,7 @@ Toutes les données sont stockées en JSON stringifié dans des clés Redis simp
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
 | GET | `/api/tickets` | Oui | Liste les tickets visibles (public + propres privés) |
-| POST | `/api/tickets` | Oui | Crée un ticket |
+| POST | `/api/tickets` | Oui | Crée un ticket + email aux admins |
 | GET | `/api/tickets/{id}` | Oui | Détail d'un ticket + commentaires + statusChanges |
 | PATCH | `/api/tickets/{id}` | Admin | Modifie le statut ou la release d'un ticket |
 | DELETE | `/api/tickets/{id}` | Admin | Supprime un ticket |
@@ -151,6 +164,7 @@ Toutes les données sont stockées en JSON stringifié dans des clés Redis simp
 | POST | `/api/reviews/{id}/comments` | Oui | Ajoute un commentaire auteur |
 | PATCH | `/api/reviews/{id}/comments/{cid}` | Oui | Modifie un commentaire |
 | DELETE | `/api/reviews/{id}/comments/{cid}` | Oui | Supprime un commentaire |
+| POST | `/api/reviews/{id}/send` | Oui | Envoi groupé des brouillons auteur (draft → sent) + email relecteur |
 
 ### Reviews — Côté relecteur (accès par token, pas d'auth)
 
@@ -163,7 +177,7 @@ Toutes les données sont stockées en JSON stringifié dans des clés Redis simp
 | POST | `/api/review/{token}/comments` | Non | Ajoute un commentaire relecteur |
 | PATCH | `/api/review/{token}/comments/{cid}` | Non | Modifie un commentaire |
 | DELETE | `/api/review/{token}/comments/{cid}` | Non | Supprime un commentaire |
-| POST | `/api/review/{token}/send` | Non | Envoie les brouillons (draft → sent) |
+| POST | `/api/review/{token}/send` | Non | Envoie les brouillons (draft → sent) + email auteur |
 
 ### Admin
 

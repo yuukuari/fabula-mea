@@ -8,6 +8,8 @@ L'application est une **SPA React** déployée sur **Vercel**, avec des serverle
 
 L'application inclut aussi un **système de relecture** permettant à un auteur de partager des chapitres/scènes avec des relecteurs externes (non-inscrits). Les relecteurs accèdent via un lien unique à une page publique (sans authentification) et peuvent commenter le texte en sélectionnant des passages.
 
+Un **système d'emails** (via Resend) notifie les utilisateurs à différentes étapes : invitation de relecture, envoi de commentaires (relecteur → auteur, auteur → relecteur), complétion de relecture, et création de tickets. En développement local, les emails ne sont pas envoyés mais **simulés dans la console** (`📧 [DEV EMAIL]`).
+
 ---
 
 ## Architecture bi-modale : Dev vs Production
@@ -29,6 +31,7 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
 - **Base de données** → `src/lib/dev-db.ts` : toutes les données (livres, tickets, releases, commentaires) sont dans `localStorage` avec le préfixe `emlb-dev:`.
 - **Aucun serveur nécessaire** : juste `npm run dev` suffit.
 - **Aucune variable d'environnement nécessaire**.
+- **Emails simulés** : un helper `devEmailLog` dans `dev-db.ts` affiche dans la console les détails de chaque email qui serait envoyé en production (destinataire, sujet, contenu).
 
 ### Mode production (Vercel)
 
@@ -38,6 +41,7 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
   - `JWT_SECRET` — Secret pour signer les tokens JWT
   - `UPSTASH_REDIS_REST_URL` — URL de l'instance Upstash Redis
   - `UPSTASH_REDIS_REST_TOKEN` — Token d'accès Upstash Redis
+  - `RESEND_API_KEY` — Clé API Resend pour l'envoi d'emails
 
 ### Clés localStorage (dev) vs Redis (prod)
 
@@ -150,7 +154,7 @@ Choisir le layout adapté :
 ├── api/                         ← Serverless functions (Vercel) — CommonJS
 │   ├── CLAUDE.md                ← Doc spécifique API
 │   ├── package.json             ← { "type": "commonjs" }
-│   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis)
+│   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis, email)
 │   ├── auth/                    ← signup, login, me
 │   ├── book/                    ← CRUD livre par utilisateur
 │   ├── tickets/                 ← CRUD tickets + commentaires + réactions
@@ -175,7 +179,7 @@ Choisir le layout adapté :
 │   │   ├── dev-db.ts            ← Mock DB localStorage
 │   │   ├── redis.ts             ← Client Upstash côté client (sync directe)
 │   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS, countCharacters, countUnitLabel...)
-│   │   ├── calculations.ts      ← Calculs progression (mots/jour, scènes/jour, getTodayProgress)
+│   │   ├── calculations.ts      ← Calculs progression (mots/jour, scènes/jour, getTodayProgress, dailySnapshot)
 │   │   ├── export-epub.ts       ← Génération EPUB 3
 │   │   ├── export-pdf.ts        ← Export PDF via window.print()
 │   │   ├── migration.ts         ← Migration single-book → multi-book
@@ -196,11 +200,11 @@ Choisir le layout adapté :
 │   │   ├── CharactersPage.tsx   ← Gestion personnages
 │   │   ├── PlacesPage.tsx       ← Gestion lieux
 │   │   ├── ChaptersPage.tsx     ← Chapitres + scènes + éditeur
-│   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage/lieu, filtres croisés)
+│   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage OU par lieu, filtres croisés)
 │   │   ├── ProgressPage.tsx     ← Progression + objectifs + Pomodoro + suivi journalier
 │   │   ├── WorldPage.tsx        ← Notes de worldbuilding
 │   │   ├── MapsPage.tsx         ← Cartes interactives
-│   │   ├── NotesIdeasPage.tsx   ← Notes & idées (TipTap + checklists + drag-and-drop)
+│   │   ├── NotesIdeasPage.tsx   ← Notes & idées (grille de cartes, TipTap avec toolbar complète + checklists)
 │   │   ├── SettingsPage.tsx     ← Paramètres + export + import
 │   │   ├── TicketsPage.tsx      ← Tickets/feedback
 │   │   ├── ReleaseNotesPage.tsx ← Notes de version
@@ -241,7 +245,7 @@ Un livre contient :
 - **Scenes** — Scènes avec statut (outline/draft/revision/complete), personnages, lieu, contenu TipTap
 - **Tags** — Système d'étiquettes réutilisables
 - **WorldNotes** — Notes de worldbuilding catégorisées
-- **NoteIdeas** — Notes et idées libres avec éditeur TipTap (checklists, formatage riche), réordonnables par drag-and-drop
+- **NoteIdeas** — Notes et idées libres avec éditeur TipTap (toolbar complète : titres, formatage, alignement, listes, checklists, citations, images, liens), affichées en grille de cartes (comme l'univers), avec vue détail au clic
 - **Maps** — Cartes avec épingles liées aux lieux
 - **ProjectGoals** — Objectifs (date cible, mots/scène, objectif journalier, périodes exclues)
 - **WritingSessions** — Historique des sessions d'écriture
@@ -256,12 +260,14 @@ Un livre contient :
 
 Les tickets sont globaux (pas liés à un livre). Système de feedback avec :
 - Types : `bug`, `question`, `improvement`
+- Module concerné : `TicketModule` — catégorise le ticket par section de l'application (auth, characters, places, chapters, timeline, progress, world, maps, notes, reviews, settings, export, other)
 - Visibilité : `public` (visible par tous) ou `private` (visible seulement par l'auteur et les admins)
 - Statuts : `open`, `closed_done`, `closed_duplicate`
 - Commentaires avec éditeur TipTap riche
 - Réactions emoji
 - Assignation optionnelle à une release
 - Timeline d'activité (changements de statut, assignation release)
+- **Notification email** : à la création d'un ticket, un email est envoyé à tous les admins (via `sendTicketCreatedEmail`)
 
 ### Reviews (Relecture)
 
@@ -275,9 +281,15 @@ Système de relecture permettant à un auteur de partager des extraits de son li
   - `completed` : le relecteur a marqué sa relecture comme terminée (il peut encore consulter en lecture seule)
   - `closed` : l'auteur clôture la session (le relecteur voit un écran "relecture clôturée")
 - **Commentaires** : le relecteur sélectionne du texte → ajoute un commentaire → brouillon → envoi
-  - Statuts commentaire : `draft` (brouillon, non visible par l'auteur), `sent` (envoyé), `closed` (résolu par l'auteur)
+  - Statuts commentaire : `draft` (brouillon, non visible par le destinataire), `sent` (envoyé), `closed` (résolu par l'auteur)
   - Réponses (replies) : threaded via `parentId`
   - L'auteur peut répondre et résoudre les commentaires
+  - **Les commentaires de l'auteur** sont aussi en brouillon par défaut → envoi groupé via un bouton « Envoyer (N) » → email au relecteur (`sendAuthorRepliedEmail`)
+- **Emails de notification** :
+  - Invitation de relecture (à la création de la session) → `sendReviewInviteEmail` (avec liste des fonctionnalités)
+  - Relecteur envoie ses commentaires → `sendCommentsNotificationEmail` (à l'auteur, lien vers `reviews/{id}`)
+  - Auteur envoie ses réponses → `sendAuthorRepliedEmail` (au relecteur, lien vers `review/{token}`)
+  - Relecteur termine sa relecture → `sendReviewCompletedEmail` (à l'auteur, lien vers `reviews/{id}`)
 - **Highlights** : le texte commenté est surligné dans le contenu (via `injectHighlights` dans `src/lib/review-highlights.ts`)
 - **Clic commentaire → scroll** : cliquer sur un commentaire scrolle vers le passage surligné dans le contenu
 - **Panneau collapsible** : le plan (nav) et les commentaires sont collapsibles sur desktop, drawers sur mobile
@@ -385,8 +397,11 @@ npm run preview  # Preview du build en local
 5. **CORS** : chaque endpoint prod doit appeler `handleCors(req, res)` en premier.
 6. **Auth** : chaque endpoint protégé doit appeler `requireAuth(req, res)` qui retourne `{ userId }` ou `null`.
 7. **Le `useBookStore`** est le store le plus complexe (~794 lignes). Il gère tout le contenu d'un livre et auto-save en local + cloud.
-8. **TipTap** est utilisé pour l'éditeur de scènes, les descriptions de tickets, et les commentaires. Les toolbars sont dans les composants editor.
+8. **TipTap** est utilisé pour l'éditeur de scènes, les descriptions de tickets, les notes & idées (avec checklists via TaskList/TaskItem), et les commentaires. Les toolbars sont dans les composants editor. Les styles TaskList sont dans `index.css`.
 9. **La page relecteur** (`/review/:token`) est publique et accessible sans authentification. La `TicketBubble` et le `TicketForm` sont masqués pour les utilisateurs non connectés.
 10. **Les sessions de relecture** figent un snapshot des chapitres/scènes au moment de la création. Les modifications ultérieures du livre n'affectent pas les relectures en cours.
-11. **Les commentaires de relecture** ont un workflow draft → sent → closed. Le relecteur crée des brouillons, les envoie explicitement, puis l'auteur peut les résoudre.
-12. **Mettre à jour ce fichier** : après toute modification du code (nouvelle fonctionnalité, changement d'architecture, nouveau type, nouvel endpoint…), vérifier si des informations de ce `CLAUDE.md` (et `api/CLAUDE.md`) doivent être mises à jour pour rester en phase avec le code (structure des fichiers, modèle de données, clés de stockage, points d'attention, etc.).
+11. **Les commentaires de relecture** ont un workflow draft → sent → closed. Le relecteur ET l'auteur créent des brouillons, les envoient explicitement (envoi groupé), et l'auteur peut résoudre les commentaires.
+12. **Redirection post-login** : si un utilisateur non connecté tente d'accéder à une page (ex: lien email `reviews/{id}`), l'URL est sauvegardée dans `sessionStorage` (`emlb-redirect-after-login`) et l'utilisateur est redirigé après connexion.
+13. **Emails** : en prod, les emails sont envoyés via Resend (`api/_lib/email.ts`). En dev, `devEmailLog()` dans `dev-db.ts` affiche les emails simulés dans la console du navigateur.
+14. **TicketBubble** : positionnée à gauche sur les pages avec sidebar (AppShell), et tout à gauche sur les pages sans sidebar (HomePage, StandaloneShell).
+15. **Mettre à jour ce fichier** : après toute modification du code (nouvelle fonctionnalité, changement d'architecture, nouveau type, nouvel endpoint…), vérifier si des informations de ce `CLAUDE.md` (et `api/CLAUDE.md`) doivent être mises à jour pour rester en phase avec le code (structure des fichiers, modèle de données, clés de stockage, points d'attention, etc.).

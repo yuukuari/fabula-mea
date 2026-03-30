@@ -32,10 +32,13 @@ export async function sendReviewInviteEmail(opts: {
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
             <strong>${opts.authorName}</strong> vous invite à relire son livre <strong>« ${opts.bookTitle} »</strong>.
           </p>
-          <p style="font-size: 16px; color: #333; line-height: 1.6;">
-            Cliquez sur le bouton ci-dessous pour commencer votre relecture. Vous pourrez ajouter 
-            des commentaires directement sur le texte.
-          </p>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">Vous pourrez :</p>
+          <ul style="font-size: 15px; color: #333; line-height: 1.8; padding-left: 20px;">
+            <li>Lire les chapitres et scènes partagés</li>
+            <li>Sélectionner du texte et ajouter des commentaires</li>
+            <li>Envoyer vos commentaires quand vous êtes prêt</li>
+            <li>Échanger avec l'auteur sur vos remarques</li>
+          </ul>
           <div style="text-align: center; margin: 30px 0;">
             <a href="${opts.reviewUrl}" 
                style="background-color: #8b2252; color: white; padding: 14px 28px; 
@@ -180,5 +183,46 @@ export async function sendTicketCreatedEmail(opts: {
     });
   } catch (e) {
     console.error('Failed to send ticket created email:', e);
+  }
+}
+
+export async function sendAuthorRepliedEmail(opts: {
+  to: string;
+  authorName: string;
+  bookTitle: string;
+  commentCount: number;
+  reviewUrl: string;
+}): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: opts.to,
+      subject: `${opts.authorName} a répondu à vos commentaires sur « ${opts.bookTitle} »`,
+      html: `
+        <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #8b2252; font-size: 24px;">Nouvelles réponses de l'auteur</h2>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            <strong>${opts.authorName}</strong> a envoyé <strong>${opts.commentCount} réponse${opts.commentCount > 1 ? 's' : ''}</strong>
+            sur la relecture de <strong>« ${opts.bookTitle} »</strong>.
+          </p>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Consultez ses réponses directement sur la page de relecture.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${opts.reviewUrl}"
+               style="background-color: #8b2252; color: white; padding: 14px 28px;
+                      text-decoration: none; border-radius: 8px; font-size: 16px;
+                      font-weight: bold; display: inline-block;">
+              Voir les réponses
+            </a>
+          </div>
+        </div>
+      `,
+    });
+  } catch (e) {
+    console.error('Failed to send author replied email:', e);
   }
 }

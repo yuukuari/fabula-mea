@@ -120,7 +120,14 @@ export default function App() {
   }
 
   // Auth required (both dev and production)
-  if (!user) return <AuthPage />;
+  if (!user) {
+    // Save intended destination so we can redirect after login
+    const intended = window.location.pathname + window.location.search;
+    if (intended !== '/' && intended !== '/auth') {
+      sessionStorage.setItem('emlb-redirect-after-login', intended);
+    }
+    return <AuthPage />;
+  }
 
   return <RouterProvider router={router} />;
 }

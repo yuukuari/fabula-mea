@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Feather, BookOpen, ChevronDown, ChevronRight, ChevronLeft, Clock, PlayCircle, CheckCircle2, Lock, PanelLeft, MessageSquare, X, Menu, Archive } from 'lucide-react';
+import { Feather, BookOpen, ChevronDown, ChevronRight, ChevronLeft, Clock, PlayCircle, CheckCircle2, Lock, PanelLeft, MessageSquare, X, Menu, Archive, Send } from 'lucide-react';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ReviewCommentPanel } from '@/components/reviews/ReviewCommentPanel';
@@ -28,6 +28,7 @@ export function ReviewAuthorView() {
     updateComment,
     deleteComment,
     closeSession,
+    sendAuthorComments,
   } = useReviewStore();
 
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
@@ -40,6 +41,8 @@ export function ReviewAuthorView() {
   } | null>(null);
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
   const [isClosing, setIsClosing] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [sentCount, setSentCount] = useState<number | null>(null);
 
   // Panel visibility
   const [navOpen, setNavOpen] = useState(true);
@@ -78,7 +81,7 @@ export function ReviewAuthorView() {
       startOffset: data.startOffset,
       endOffset: data.endOffset,
       content: data.content,
-      status: 'sent',
+      status: 'draft',
       parentId: data.parentId,
     });
     if (window.innerWidth < 1024) setMobileCommentsOpen(true);
@@ -116,6 +119,15 @@ export function ReviewAuthorView() {
     setIsClosing(false);
   };
 
+  const handleSendAuthorComments = async () => {
+    if (!id) return;
+    setIsSending(true);
+    const count = await sendAuthorComments(id);
+    setSentCount(count);
+    setIsSending(false);
+    setTimeout(() => setSentCount(null), 3000);
+  };
+
   if (isLoading || !currentSession) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -131,6 +143,7 @@ export function ReviewAuthorView() {
 
   const sentComments = currentComments.filter((c) => c.status === 'sent' && !c.isAuthor && !c.parentId).length;
   const closedComments = currentComments.filter((c) => c.status === 'closed').length;
+  const authorDraftCount = currentComments.filter((c) => c.status === 'draft' && c.isAuthor).length;
   const isClosed = currentSession.status === 'closed';
   const isClosable = currentSession.status === 'completed' || currentSession.status === 'in_progress';
 
@@ -218,6 +231,21 @@ export function ReviewAuthorView() {
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {authorDraftCount > 0 && (
+            <button
+              onClick={handleSendAuthorComments}
+              disabled={isSending}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-bordeaux-500 text-white rounded-lg hover:bg-bordeaux-600 transition-colors disabled:opacity-50"
+              title={`Envoyer ${authorDraftCount} réponse${authorDraftCount > 1 ? 's' : ''}`}
+            >
+              {isSending ? <div className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">Envoyer ({authorDraftCount})</span>
+              <span className="sm:hidden">{authorDraftCount}</span>
+            </button>
+          )}
+          {sentCount !== null && sentCount > 0 && (
+            <span className="text-xs text-green-600 font-medium px-2">{sentCount} envoyé{sentCount > 1 ? 's' : ''} !</span>
+          )}
           {isClosable && (
             <button
               onClick={handleCloseSession}

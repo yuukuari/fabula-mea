@@ -235,6 +235,10 @@ export const api = {
       IS_DEV
         ? devDb.reviews.deleteComment(sessionId, commentId)
         : apiFetch<{ ok: boolean }>(`/reviews/${sessionId}/comments/${commentId}`, { method: 'DELETE' }),
+    sendAuthorComments: (sessionId: string) =>
+      IS_DEV
+        ? devDb.reviews.sendAuthorComments(sessionId)
+        : apiFetch<{ sent: number }>(`/reviews/${sessionId}/send`, { method: 'POST' }),
   },
 
   // ─── Review public (reader side, by token, no auth) ─────────────────────

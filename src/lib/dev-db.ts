@@ -570,6 +570,38 @@ export const devDb = {
       return { ok: true };
     },
 
+    /** Batch-send author draft comments — marks as sent and notifies reader */
+    async sendAuthorComments(sessionId: string): Promise<{ sent: number }> {
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+      let sent = 0;
+      for (let i = 0; i < comments.length; i++) {
+        if (comments[i].status === 'draft' && comments[i].isAuthor) {
+          comments[i] = { ...comments[i], status: 'sent', updatedAt: new Date().toISOString() };
+          sent++;
+        }
+      }
+      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+
+      // Log email that would be sent to reader in production
+      if (sent > 0) {
+        const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
+        if (session?.readerEmail) {
+          devEmailLog({
+            to: session.readerEmail,
+            subject: `${session.authorName} a répondu à vos commentaires sur « ${session.bookTitle} »`,
+            description: 'Notification réponses auteur → relecteur',
+            details: {
+              'Auteur': session.authorName,
+              'Livre': session.bookTitle,
+              'Réponses': `${sent}`,
+            },
+          });
+        }
+      }
+
+      return { sent };
+    },
+
     /** Batch-send draft comments (reader side — mark as sent) */
     async sendComments(sessionId: string): Promise<{ sent: number }> {
       const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
