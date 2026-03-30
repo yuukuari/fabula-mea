@@ -5,7 +5,8 @@ import { useEditorStore } from '@/store/useEditorStore';
 import { SceneInlineEditor, countWords } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
-import { cn, SCENE_STATUS_LABELS } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel } from '@/lib/utils';
+import { getTodayProgress } from '@/lib/calculations';
 import type { Scene, Chapter } from '@/types';
 
 const STATUS_DOT: Record<string, string> = {
@@ -21,6 +22,9 @@ export function SceneEditor() {
   const chapters = useBookStore((s) => s.chapters);
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
+  const countUnit = useBookStore((s) => s.countUnit ?? 'words');
+  const bookId = useBookStore((s) => s.id);
+  const dailyGoal = useBookStore((s) => s.goals?.dailyGoal);
 
   const [visibleSceneId, setVisibleSceneId] = useState<string | null>(entrySceneId);
 
@@ -156,6 +160,12 @@ export function SceneEditor() {
   const totalWords = scenes.reduce((sum, sc) => sum + countWords(sc.content ?? ''), 0);
   const totalTarget = scenes.reduce((sum, sc) => sum + sc.targetWordCount, 0);
 
+  // Daily progress
+  const totalCount = countUnit === 'characters'
+    ? scenes.reduce((sum, sc) => sum + countCharacters(sc.content ?? ''), 0)
+    : totalWords;
+  const todayCount = bookId ? getTodayProgress(bookId, totalCount).todayCount : 0;
+
   const visibleScene = visibleSceneId ? scenes.find((s) => s.id === visibleSceneId) : null;
   const visibleChapter = visibleScene ? chapters.find((c) => c.id === visibleScene.chapterId) : null;
 
@@ -213,7 +223,7 @@ export function SceneEditor() {
                         {sceneLabel}
                       </p>
                       <p className="text-[10px] text-ink-200 mt-0.5">
-                        {wc} / {scene.targetWordCount} mots
+                        {wc} / {scene.targetWordCount} {countUnitLabel(countUnit)}
                       </p>
                     </div>
 
@@ -273,11 +283,26 @@ export function SceneEditor() {
 
         {/* Stats globales */}
         <div className="hidden sm:flex items-center gap-2 text-xs text-ink-200 shrink-0">
-          <span>{totalWords.toLocaleString('fr-FR')} mots</span>
+          <span>{totalWords.toLocaleString('fr-FR')} {countUnitLabel(countUnit)}</span>
           {totalTarget > 0 && (
             <span>/ {totalTarget.toLocaleString('fr-FR')} objectif</span>
           )}
         </div>
+
+        {/* Daily progress indicator */}
+        {dailyGoal && dailyGoal > 0 && (
+          <div className="hidden sm:flex items-center gap-1.5 text-xs shrink-0" title={`Aujourd'hui : ${todayCount.toLocaleString('fr-FR')} / ${dailyGoal.toLocaleString('fr-FR')} ${countUnit === 'characters' ? 'signes' : 'mots'}`}>
+            <div className="w-16 h-1.5 bg-parchment-200 rounded-full overflow-hidden">
+              <div
+                className={cn('h-full rounded-full transition-all', todayCount >= dailyGoal ? 'bg-green-500' : 'bg-bordeaux-400')}
+                style={{ width: `${Math.min(100, (todayCount / dailyGoal) * 100)}%` }}
+              />
+            </div>
+            <span className={cn('tabular-nums', todayCount >= dailyGoal ? 'text-green-600' : 'text-ink-200')}>
+              {todayCount >= dailyGoal ? '✓' : `${todayCount}/${dailyGoal}`}
+            </span>
+          </div>
+        )}
 
         {/* Sauvegarde auto */}
         <div className="hidden md:flex items-center gap-1.5 text-xs text-ink-200 shrink-0">
@@ -425,7 +450,7 @@ export function SceneEditor() {
                                 />
                               </div>
                               <span className="text-xs text-ink-200">
-                                {wc} / {scene.targetWordCount} mots
+                                {wc} / {scene.targetWordCount} {countUnitLabel(countUnit)}
                               </span>
                             </>
                           );

@@ -7,9 +7,9 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import {
   getSceneProgress, getOverallProgress, getIncompleteScenesCount,
   getCompletedScenesCount, getWorkingDaysRemaining, getScenesPerDay,
-  getDaysUntilDeadline, countExcludedDays
+  getDaysUntilDeadline, countExcludedDays, getTodayProgress
 } from '@/lib/calculations';
-import { cn } from '@/lib/utils';
+import { cn, countUnitLabel } from '@/lib/utils';
 
 export function ProgressPage() {
   const scenes = useBookStore((s) => s.scenes);
@@ -19,6 +19,8 @@ export function ProgressPage() {
   const updateGoals = useBookStore((s) => s.updateGoals);
   const updateScene = useBookStore((s) => s.updateScene);
   const writingMode = useBookStore((s) => s.writingMode);
+  const countUnit = useBookStore((s) => s.countUnit ?? 'words');
+  const bookId = useBookStore((s) => s.id);
   const addExcludedPeriod = useBookStore((s) => s.addExcludedPeriod);
   const deleteExcludedPeriod = useBookStore((s) => s.deleteExcludedPeriod);
 
@@ -31,6 +33,11 @@ export function ProgressPage() {
   const scenesPerDay = getScenesPerDay(scenes, goals);
   const daysUntilDeadline = getDaysUntilDeadline(goals);
   const totalWords = scenes.reduce((sum, s) => sum + s.currentWordCount, 0);
+
+  // Daily progress tracking
+  const dailyGoal = goals.dailyGoal ?? 0;
+  const { todayCount } = getTodayProgress(bookId, totalWords);
+  const dailyGoalReached = dailyGoal > 0 && todayCount >= dailyGoal;
 
   return (
     <div className="page-container">
@@ -60,16 +67,63 @@ export function ProgressPage() {
             </div>
             <div className="grid grid-cols-4 gap-4">
               <StatCard icon={CheckCircle} label="Scenes terminees" value={`${completedScenes}/${scenes.length}`} />
-              <StatCard icon={TrendingUp} label="Mots ecrits" value={totalWords.toLocaleString()} />
+              <StatCard icon={TrendingUp} label={`${countUnit === 'characters' ? 'Signes' : 'Mots'} ecrits`} value={totalWords.toLocaleString()} />
               <StatCard icon={Clock} label="Jours de travail restants" value={workingDays.toString()} />
               <StatCard icon={Calendar} label="Scenes/jour necessaires" value={scenesPerDay.toFixed(1)} />
+            </div>
+          </div>
+
+          {/* Daily Progress */}
+          <div className={cn(
+            'card-fantasy p-6 border-2',
+            dailyGoalReached ? 'border-green-300 bg-green-50/30' : dailyGoal > 0 ? 'border-parchment-200' : 'border-parchment-200'
+          )}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display text-lg font-semibold text-ink-500">Aujourd'hui</h3>
+              {dailyGoalReached && (
+                <span className="flex items-center gap-1.5 text-sm font-medium text-green-600">
+                  <CheckCircle className="w-5 h-5" /> Objectif atteint !
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-3xl font-display font-bold text-ink-500">
+                  {todayCount.toLocaleString('fr-FR')}
+                  <span className="text-sm font-normal text-ink-300 ml-2">
+                    {countUnit === 'characters' ? 'signes' : 'mots'} aujourd'hui
+                  </span>
+                </p>
+                {dailyGoal > 0 && (
+                  <div className="mt-2">
+                    <div className="h-2.5 bg-parchment-200 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all duration-500',
+                          dailyGoalReached ? 'bg-green-500' : 'bg-bordeaux-400'
+                        )}
+                        style={{ width: `${Math.min(100, (todayCount / dailyGoal) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-ink-200 mt-1">
+                      {todayCount.toLocaleString('fr-FR')} / {dailyGoal.toLocaleString('fr-FR')} {countUnit === 'characters' ? 'signes' : 'mots'}
+                      {' '}({Math.round((todayCount / dailyGoal) * 100)}%)
+                    </p>
+                  </div>
+                )}
+                {!dailyGoal && (
+                  <p className="text-xs text-ink-200 mt-1">
+                    Définissez un objectif journalier dans les paramètres ci-dessous.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Goals Settings */}
           <div className="card-fantasy p-6">
             <h3 className="font-display text-lg font-semibold text-ink-500 mb-4">Parametres</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="label-field">Date de debut</label>
                 <input
@@ -95,7 +149,7 @@ export function ProgressPage() {
                 )}
               </div>
               <div>
-                <label className="label-field">Mots par scene (par defaut)</label>
+                <label className="label-field">{countUnit === 'characters' ? 'Signes par scène (par défaut)' : 'Mots par scene (par defaut)'}</label>
                 <input
                   type="number"
                   value={goals.defaultWordsPerScene}
@@ -103,6 +157,20 @@ export function ProgressPage() {
                   className="input-field"
                   min={100}
                 />
+              </div>
+              <div>
+                <label className="label-field">Objectif journalier ({countUnit === 'characters' ? 'signes' : 'mots'})</label>
+                <input
+                  type="number"
+                  value={goals.dailyGoal ?? ''}
+                  onChange={(e) => updateGoals({ dailyGoal: e.target.value ? Number(e.target.value) : undefined })}
+                  className="input-field"
+                  min={0}
+                  placeholder={countUnit === 'characters' ? 'ex: 3000' : 'ex: 500'}
+                />
+                <p className="text-xs text-ink-200 mt-1">
+                  Laissez vide pour desactiver le suivi journalier
+                </p>
               </div>
             </div>
           </div>
@@ -186,7 +254,7 @@ export function ProgressPage() {
                                 min={0}
                               />
                             )}
-                            <span className="text-xs text-ink-200">/ {scene.targetWordCount}</span>
+                            <span className="text-xs text-ink-200">/ {scene.targetWordCount} {countUnitLabel(countUnit)}</span>
                           </div>
                           {progress >= 1 && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}
                         </div>

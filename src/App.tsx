@@ -11,6 +11,7 @@ import { TimelinePage } from '@/pages/TimelinePage';
 import { ProgressPage } from '@/pages/ProgressPage';
 import { WorldPage } from '@/pages/WorldPage';
 import { MapsPage } from '@/pages/MapsPage';
+import { NotesIdeasPage } from '@/pages/NotesIdeasPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AuthPage } from '@/pages/AuthPage';
 import { TicketsPage } from '@/pages/TicketsPage';
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
           { path: 'progress', element: <ProgressPage /> },
           { path: 'world', element: <WorldPage /> },
           { path: 'maps', element: <MapsPage /> },
+          { path: 'notes', element: <NotesIdeasPage /> },
           { path: 'reviews', element: <ReviewsPage /> },
           { path: 'settings', element: <SettingsPage /> },
         ],

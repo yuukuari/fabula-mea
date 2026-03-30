@@ -131,3 +131,54 @@ export async function sendReviewCompletedEmail(opts: {
     console.error('Failed to send review completed email:', e);
   }
 }
+
+export async function sendTicketCreatedEmail(opts: {
+  to: string;
+  ticketType: string;
+  ticketModule?: string;
+  title: string;
+  description: string;
+  authorName: string;
+  authorEmail: string;
+  ticketUrl: string;
+}): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  const typeLabels: Record<string, string> = { bug: 'Bug', question: 'Question', improvement: 'Amélioration' };
+  const typeLabel = typeLabels[opts.ticketType] || opts.ticketType;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: opts.to,
+      subject: `[Ticket ${typeLabel}] ${opts.title}`,
+      html: `
+        <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #8b2252; font-size: 24px;">Nouveau ticket : ${typeLabel}</h2>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            <strong>${opts.authorName}</strong> (${opts.authorEmail}) a créé un nouveau ticket.
+          </p>
+          <table style="font-size: 15px; color: #333; margin: 20px 0; border-collapse: collapse;">
+            <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Type</td><td>${typeLabel}</td></tr>
+            ${opts.ticketModule ? `<tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Section</td><td>${opts.ticketModule}</td></tr>` : ''}
+            <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Titre</td><td>${opts.title}</td></tr>
+          </table>
+          <div style="background: #f9f6f0; padding: 16px; border-radius: 8px; margin: 20px 0; font-size: 15px; color: #333; line-height: 1.6;">
+            ${opts.description}
+          </div>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${opts.ticketUrl}" 
+               style="background-color: #8b2252; color: white; padding: 14px 28px; 
+                      text-decoration: none; border-radius: 8px; font-size: 16px; 
+                      font-weight: bold; display: inline-block;">
+              Voir le ticket
+            </a>
+          </div>
+        </div>
+      `,
+    });
+  } catch (e) {
+    console.error('Failed to send ticket created email:', e);
+  }
+}

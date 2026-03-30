@@ -136,6 +136,7 @@ export interface ProjectGoals {
   targetEndDate?: string;
   startDate?: string;
   defaultWordsPerScene: number;
+  dailyGoal?: number;
   excludedPeriods: ExcludedPeriod[];
 }
 
@@ -201,6 +202,19 @@ export interface MapItem {
 // ─── Writing Mode ───
 export type WritingMode = 'count' | 'write';
 
+// ─── Count Unit ───
+export type CountUnit = 'words' | 'characters';
+
+// ─── Notes & Ideas ───
+export interface NoteIdea {
+  id: EntityId;
+  title: string;
+  content: string; // HTML (TipTap)
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Library (multi-book) ───
 export interface BookMeta {
   id: EntityId;
@@ -208,6 +222,7 @@ export interface BookMeta {
   author: string;
   genre?: string;
   writingMode: WritingMode;
+  countUnit?: CountUnit;
   chaptersCount: number;
   scenesCount: number;
   charactersCount: number;
@@ -219,6 +234,20 @@ export interface BookMeta {
 export type TicketType = 'bug' | 'question' | 'improvement';
 export type TicketVisibility = 'public' | 'private';
 export type TicketStatus = 'open' | 'closed_done' | 'closed_duplicate';
+export type TicketModule =
+  | 'auth'
+  | 'characters'
+  | 'places'
+  | 'chapters'
+  | 'timeline'
+  | 'progress'
+  | 'world'
+  | 'maps'
+  | 'notes'
+  | 'reviews'
+  | 'settings'
+  | 'export'
+  | 'other';
 
 export interface Ticket {
   id: EntityId;
@@ -226,6 +255,7 @@ export interface Ticket {
   userName: string;
   userEmail: string;
   type: TicketType;
+  module?: TicketModule;
   title: string;
   description: string; // HTML from TipTap
   visibility: TicketVisibility;
@@ -369,6 +399,7 @@ export interface BookProject {
   genre?: string;
   synopsis?: string;
   writingMode: WritingMode;
+  countUnit?: CountUnit;
   characters: Character[];
   places: Place[];
   chapters: Chapter[];
@@ -378,6 +409,7 @@ export interface BookProject {
   writingSessions: WritingSession[];
   worldNotes: WorldNote[];
   maps: MapItem[];
+  noteIdeas?: NoteIdea[];
   selfComments?: SelfComment[];
   graphNodePositions?: Record<string, { x: number; y: number }>;
   createdAt: string;

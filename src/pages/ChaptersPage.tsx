@@ -5,7 +5,7 @@ import { useBookStore } from '@/store/useBookStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel } from '@/lib/utils';
 import { getSceneProgress } from '@/lib/calculations';
 import type { Scene, SceneStatus } from '@/types';
 
@@ -16,6 +16,7 @@ export function ChaptersPage() {
   const places = useBookStore((s) => s.places);
   const maps = useBookStore((s) => s.maps ?? []);
   const writingMode = useBookStore((s) => s.writingMode);
+  const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const addChapter = useBookStore((s) => s.addChapter);
   const deleteChapter = useBookStore((s) => s.deleteChapter);
   const addScene = useBookStore((s) => s.addScene);
@@ -159,8 +160,8 @@ export function ChaptersPage() {
                                     style={{ width: `${progress * 100}%` }}
                                   />
                                 </div>
-                                <span className="text-xs text-ink-200 w-16 text-right">
-                                  {scene.currentWordCount}/{scene.targetWordCount}
+                                <span className="text-xs text-ink-200 text-right">
+                                  {scene.currentWordCount}/{scene.targetWordCount} {countUnitLabel(countUnit)}
                                 </span>
                               </div>
                             </div>
@@ -286,6 +287,7 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
   const places = useBookStore((s) => s.places);
   const goals = useBookStore((s) => s.goals);
   const writingMode = useBookStore((s) => s.writingMode);
+  const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const addScene = useBookStore((s) => s.addScene);
   const updateScene = useBookStore((s) => s.updateScene);
 
@@ -396,18 +398,18 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label-field">Objectif mots</label>
+              <label className="label-field">Objectif {countUnitLabel(countUnit)}</label>
               <input type="number" value={targetWordCount} onChange={(e) => setTargetWordCount(Number(e.target.value))} className="input-field" min={0} />
             </div>
             {writingMode === 'count' && (
               <div>
-                <label className="label-field">Mots écrits</label>
+                <label className="label-field">{countUnit === 'characters' ? 'Signes écrits' : 'Mots écrits'}</label>
                 <input type="number" value={currentWordCount} onChange={(e) => setCurrentWordCount(Number(e.target.value))} className="input-field" min={0} />
               </div>
             )}
             {writingMode === 'write' && (
               <div>
-                <label className="label-field">Mots écrits</label>
+                <label className="label-field">{countUnit === 'characters' ? 'Signes écrits' : 'Mots écrits'}</label>
                 <p className="input-field bg-parchment-100 text-ink-300 cursor-not-allowed select-none">
                   {currentWordCount} <span className="text-xs">(calculé automatiquement)</span>
                 </p>

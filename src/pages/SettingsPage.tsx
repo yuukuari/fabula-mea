@@ -3,7 +3,7 @@ import { Download, Upload, Hash, PenLine, AlertTriangle, X, BookOpen, FileText }
 import { useBookStore } from '@/store/useBookStore';
 import { exportEpub } from '@/lib/export-epub';
 import { exportPdf } from '@/lib/export-pdf';
-import type { WritingMode } from '@/types';
+import type { WritingMode, CountUnit } from '@/types';
 
 /** Modale de confirmation de changement de mode */
 function WritingModeChangeDialog({
@@ -107,8 +107,10 @@ export function SettingsPage() {
   const genre = useBookStore((s) => s.genre);
   const synopsis = useBookStore((s) => s.synopsis);
   const writingMode = useBookStore((s) => s.writingMode);
+  const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const updateProject = useBookStore((s) => s.updateProject);
   const updateWritingMode = useBookStore((s) => s.updateWritingMode);
+  const updateCountUnit = useBookStore((s) => s.updateCountUnit);
   const exportProject = useBookStore((s) => s.exportProject);
   const importProject = useBookStore((s) => s.importProject);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -265,6 +267,38 @@ export function SettingsPage() {
                 </span>
               )}
             </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Count unit */}
+      <div className="card-fantasy p-6 mb-6">
+        <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Unité de comptage</h3>
+        <p className="text-sm text-ink-300 mb-4">
+          Choisissez si les objectifs et jauges sont basés sur les mots ou les signes (espaces compris). L'autre valeur sera affichée à titre informatif.
+        </p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => updateCountUnit('words')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all ${
+              countUnit === 'words'
+                ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+            }`}
+          >
+            Mots
+          </button>
+          <button
+            type="button"
+            onClick={() => updateCountUnit('characters')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all ${
+              countUnit === 'characters'
+                ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+            }`}
+          >
+            Signes (espaces compris)
           </button>
         </div>
       </div>

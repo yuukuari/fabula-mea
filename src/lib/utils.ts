@@ -107,3 +107,28 @@ export const WORLD_NOTE_CATEGORY_LABELS: Record<string, string> = {
   language: 'Langues',
   custom: 'Autre',
 };
+
+/** Count characters including spaces from HTML text */
+export function countCharacters(html: string): number {
+  const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+  return text.length;
+}
+
+/** Count words from HTML text */
+export function countWordsFromHtml(html: string): number {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return 0;
+  return text.split(' ').filter(Boolean).length;
+}
+
+/** Format count with unit label */
+export function formatCount(value: number, unit: 'words' | 'characters'): string {
+  return unit === 'characters'
+    ? `${value.toLocaleString('fr-FR')} signes`
+    : `${value.toLocaleString('fr-FR')} mots`;
+}
+
+/** Short unit label */
+export function countUnitLabel(unit: 'words' | 'characters'): string {
+  return unit === 'characters' ? 'signes' : 'mots';
+}

@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { redis } from '../_lib/redis';
 import { requireAuth, getAuthUser } from '../_lib/auth';
 import { cors } from '../_lib/cors';
+import { sendTicketCreatedEmail } from '../_lib/email';
 
 function generateId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
@@ -13,6 +14,7 @@ interface Ticket {
   userName: string;
   userEmail: string;
   type: 'bug' | 'question' | 'improvement';
+  module?: 'auth' | 'characters' | 'places' | 'chapters' | 'timeline' | 'progress' | 'world' | 'maps' | 'notes' | 'reviews' | 'settings' | 'export' | 'other';
   title: string;
   description: string;
   visibility: 'public' | 'private';
@@ -69,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'POST') {
     // Create ticket
-    const { type, title, description, visibility } = req.body;
+    const { type, title, description, visibility, module } = req.body;
     if (!type || !title || !description) {
       return res.status(400).json({ error: 'Type, titre et description requis' });
     }
@@ -83,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userName: user.name,
       userEmail: user.email,
       type,
+      module: module || undefined,
       title,
       description,
       visibility: visibility ?? 'public',
@@ -96,26 +99,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     tickets.push(ticket);
     await redis.set('emlb:tickets', JSON.stringify(tickets));
 
-    // Send email notification (optional - if RESEND_API_KEY is set)
-    const resendKey = process.env.RESEND_API_KEY;
-    const supportEmail = process.env.SUPPORT_EMAIL || 'jonathancambot+eml-tickets@hotmail.com';
-    if (resendKey) {
-      try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${resendKey}`,
-          },
-          body: JSON.stringify({
-            from: 'Ecrire Mon Livre <tickets@ecrire-mon-livre.fr>',
-            to: supportEmail,
-            subject: `[Ticket ${type}] ${title}`,
-            html: `<h2>${title}</h2><p><strong>Type :</strong> ${type}</p><p><strong>Par :</strong> ${user.name} (${user.email})</p><hr/>${description}`,
-          }),
+    // Send email notification to all admins
+    const baseUrl = req.headers.origin || 'https://ecrire-mon-livre.fr';
+    const ticketUrl = `${baseUrl}/tickets?id=${ticket.id}`;
+    const memberIdsJson = await redis.get('emlb:member-ids');
+    const memberIds: string[] = memberIdsJson ? JSON.parse(memberIdsJson) : [];
+    for (const mid of memberIds) {
+      if (mid === auth.userId) continue; // don't notify the ticket author if they are admin
+      const adminUser = await getUser(mid);
+      if (adminUser?.isAdmin) {
+        await sendTicketCreatedEmail({
+          to: adminUser.email,
+          ticketType: ticket.type,
+          ticketModule: ticket.module,
+          title: ticket.title,
+          description: ticket.description,
+          authorName: user.name,
+          authorEmail: user.email,
+          ticketUrl,
         });
-      } catch (e) {
-        console.error('Email send failed:', e);
       }
     }
 

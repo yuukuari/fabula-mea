@@ -167,15 +167,15 @@ Choisir le layout adapté :
 │   ├── index.css                ← Tailwind directives + styles globaux
 │   │
 │   ├── types/
-│   │   └── index.ts             ← Tous les types TypeScript (~309 lignes)
+│   │   └── index.ts             ← Tous les types TypeScript (~402 lignes)
 │   │
 │   ├── lib/
 │   │   ├── api.ts               ← ⭐ Façade API (IS_DEV ternaire)
 │   │   ├── dev-auth.ts          ← Mock auth localStorage
 │   │   ├── dev-db.ts            ← Mock DB localStorage
 │   │   ├── redis.ts             ← Client Upstash côté client (sync directe)
-│   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS...)
-│   │   ├── calculations.ts      ← Calculs progression (mots/jour, scènes/jour)
+│   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS, countCharacters, countUnitLabel...)
+│   │   ├── calculations.ts      ← Calculs progression (mots/jour, scènes/jour, getTodayProgress)
 │   │   ├── export-epub.ts       ← Génération EPUB 3
 │   │   ├── export-pdf.ts        ← Export PDF via window.print()
 │   │   ├── migration.ts         ← Migration single-book → multi-book
@@ -184,7 +184,7 @@ Choisir le layout adapté :
 │   ├── store/
 │   │   ├── useAuthStore.ts      ← Authentification (login/signup/logout)
 │   │   ├── useLibraryStore.ts   ← Bibliothèque multi-livres (persist Zustand)
-│   │   ├── useBookStore.ts      ← ⭐ Store principal (~794 lignes) : tout le contenu du livre
+│   │   ├── useBookStore.ts      ← ⭐ Store principal (~870 lignes) : tout le contenu du livre
 │   │   ├── useEditorStore.ts    ← État éditeur de scène (open/close/entrySceneId)
 │   │   ├── useSyncStore.ts      ← Statut synchronisation cloud
 │   │   ├── useTicketStore.ts    ← CRUD tickets + commentaires + réactions
@@ -196,10 +196,11 @@ Choisir le layout adapté :
 │   │   ├── CharactersPage.tsx   ← Gestion personnages
 │   │   ├── PlacesPage.tsx       ← Gestion lieux
 │   │   ├── ChaptersPage.tsx     ← Chapitres + scènes + éditeur
-│   │   ├── TimelinePage.tsx     ← Frise chronologique
-│   │   ├── ProgressPage.tsx     ← Progression + objectifs + Pomodoro
+│   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage/lieu, filtres croisés)
+│   │   ├── ProgressPage.tsx     ← Progression + objectifs + Pomodoro + suivi journalier
 │   │   ├── WorldPage.tsx        ← Notes de worldbuilding
 │   │   ├── MapsPage.tsx         ← Cartes interactives
+│   │   ├── NotesIdeasPage.tsx   ← Notes & idées (TipTap + checklists + drag-and-drop)
 │   │   ├── SettingsPage.tsx     ← Paramètres + export + import
 │   │   ├── TicketsPage.tsx      ← Tickets/feedback
 │   │   ├── ReleaseNotesPage.tsx ← Notes de version
@@ -240,9 +241,11 @@ Un livre contient :
 - **Scenes** — Scènes avec statut (outline/draft/revision/complete), personnages, lieu, contenu TipTap
 - **Tags** — Système d'étiquettes réutilisables
 - **WorldNotes** — Notes de worldbuilding catégorisées
+- **NoteIdeas** — Notes et idées libres avec éditeur TipTap (checklists, formatage riche), réordonnables par drag-and-drop
 - **Maps** — Cartes avec épingles liées aux lieux
-- **ProjectGoals** — Objectifs (date cible, mots/scène, périodes exclues)
+- **ProjectGoals** — Objectifs (date cible, mots/scène, objectif journalier, périodes exclues)
 - **WritingSessions** — Historique des sessions d'écriture
+- **CountUnit** — Unité de comptage choisie (`'words'` ou `'characters'`), configurable à la création du livre ou dans les paramètres
 
 ### Modes d'écriture (`WritingMode`)
 
@@ -309,6 +312,7 @@ saveBook() → localStorage.setItem(key, json)   ← toujours
 - `ecrire-mon-livre-book-{bookId}` — Données complètes d'un livre
 - `emlb-token` — Token JWT (prod) ou token dev (dev)
 - `emlb-last-seen-version` — Dernière version vue (pour badge "Nouveau" sur releases)
+- `emlb-daily-snapshot:{bookId}` — Snapshot du total de mots/signes en début de journée (suivi progression journalière)
 
 ### Synchronisation cloud
 

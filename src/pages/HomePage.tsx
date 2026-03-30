@@ -7,7 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { VersionBadge } from '@/components/releases/VersionBadge';
-import type { WritingMode } from '@/types';
+import type { WritingMode, CountUnit } from '@/types';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -21,17 +21,19 @@ export function HomePage() {
   const [newAuthor, setNewAuthor] = useState('');
   const [newGenre, setNewGenre] = useState('');
   const [writingMode, setWritingMode] = useState<WritingMode | null>(null);
+  const [countUnit, setCountUnit] = useState<CountUnit>('words');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const handleCreate = () => {
     if (!newTitle.trim() || !writingMode) return;
-    const bookId = createBook(newTitle.trim(), newAuthor.trim(), newGenre.trim(), writingMode);
-    initNewBook(bookId, newTitle.trim(), newAuthor.trim(), newGenre.trim(), writingMode);
+    const bookId = createBook(newTitle.trim(), newAuthor.trim(), newGenre.trim(), writingMode, countUnit);
+    initNewBook(bookId, newTitle.trim(), newAuthor.trim(), newGenre.trim(), writingMode, countUnit);
     selectBook(bookId);
     setNewTitle('');
     setNewAuthor('');
     setNewGenre('');
     setWritingMode(null);
+    setCountUnit('words');
     setShowCreate(false);
     navigate('/characters');
   };
@@ -39,6 +41,7 @@ export function HomePage() {
   const handleCancelCreate = () => {
     setShowCreate(false);
     setWritingMode(null);
+    setCountUnit('words');
   };
 
   const handleSelect = (bookId: string) => {
@@ -219,6 +222,42 @@ export function HomePage() {
               {!writingMode && newTitle.trim() && (
                 <p className="text-xs text-red-400 mt-2">Veuillez choisir un mode d'écriture pour continuer.</p>
               )}
+            </div>
+
+            {/* Count unit */}
+            <div className="mb-6">
+              <label className="label-field mb-3">Unité de comptage</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCountUnit('words')}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
+                    countUnit === 'words'
+                      ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                      : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+                  )}
+                >
+                  Mots
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCountUnit('characters')}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
+                    countUnit === 'characters'
+                      ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                      : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+                  )}
+                >
+                  Signes (espaces compris)
+                </button>
+              </div>
+              <p className="text-xs text-ink-200 mt-1.5">
+                {countUnit === 'characters'
+                  ? 'Les objectifs et jauges seront basés sur le nombre de signes. Le nombre de mots sera affiché à titre informatif.'
+                  : 'Les objectifs et jauges seront basés sur le nombre de mots. Le nombre de signes sera affiché à titre informatif.'}
+              </p>
             </div>
 
             <div className="flex gap-3">

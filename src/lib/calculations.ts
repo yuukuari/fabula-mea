@@ -76,3 +76,41 @@ export function getDaysUntilDeadline(goals: ProjectGoals): number {
   if (!goals.targetEndDate) return 0;
   return differenceInDays(parseISO(goals.targetEndDate), new Date());
 }
+
+/**
+ * Get today's written count by comparing current total to a stored snapshot from the start of today.
+ * Uses localStorage to track the "start of day" total.
+ */
+export function getTodayProgress(
+  bookId: string,
+  currentTotal: number,
+): { todayCount: number; startOfDayTotal: number } {
+  const todayKey = `emlb-daily-snapshot:${bookId}`;
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const stored = localStorage.getItem(todayKey);
+  let startOfDayTotal = currentTotal;
+
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed.date === todayStr) {
+        startOfDayTotal = parsed.total;
+      } else {
+        // New day — snapshot the current total
+        localStorage.setItem(todayKey, JSON.stringify({ date: todayStr, total: currentTotal }));
+        startOfDayTotal = currentTotal;
+      }
+    } catch {
+      localStorage.setItem(todayKey, JSON.stringify({ date: todayStr, total: currentTotal }));
+    }
+  } else {
+    // First time — snapshot now
+    localStorage.setItem(todayKey, JSON.stringify({ date: todayStr, total: currentTotal }));
+  }
+
+  return {
+    todayCount: Math.max(0, currentTotal - startOfDayTotal),
+    startOfDayTotal,
+  };
+}

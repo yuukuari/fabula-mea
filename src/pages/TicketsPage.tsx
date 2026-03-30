@@ -20,7 +20,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useReleaseStore } from '@/store/useReleaseStore';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { useNavigate } from 'react-router-dom';
-import type { Ticket, TicketType, TicketStatus, TicketComment, TicketStatusChange } from '@/types';
+import type { Ticket, TicketType, TicketStatus, TicketModule, TicketComment, TicketStatusChange } from '@/types';
 
 const TYPE_CONFIG: Record<TicketType, { icon: typeof Bug; label: string; color: string }> = {
   bug: { icon: Bug, label: 'Bug', color: 'bg-red-100 text-red-700' },
@@ -34,6 +34,22 @@ const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; icon: 
   closed_duplicate: { label: 'Dupliqué', color: 'bg-gray-100 text-gray-600', icon: Copy },
 };
 
+const MODULE_LABELS: Record<string, string> = {
+  auth: 'Login / Inscription',
+  characters: 'Personnages',
+  places: 'Lieux',
+  chapters: 'Chapitres / Scènes',
+  timeline: 'Timeline',
+  progress: 'Progression',
+  world: 'Worldbuilding',
+  maps: 'Cartes',
+  notes: 'Notes & Idées',
+  reviews: 'Relectures',
+  settings: 'Paramètres',
+  export: 'Export',
+  other: 'Autre',
+};
+
 const QUICK_REACTIONS = ['👍', '👎', '❤️', '🎉', '😕', '🔥'];
 
 export function TicketsPage() {
@@ -41,6 +57,7 @@ export function TicketsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | TicketType>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
+  const [moduleFilter, setModuleFilter] = useState<'all' | TicketModule>('all');
 
   useEffect(() => {
     loadTickets();
@@ -52,6 +69,10 @@ export function TicketsPage() {
       if (statusFilter === 'all') return true;
       if (statusFilter === 'open') return t.status === 'open';
       return t.status !== 'open';
+    })
+    .filter((t) => {
+      if (moduleFilter === 'all') return true;
+      return t.module === moduleFilter;
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -105,6 +126,16 @@ export function TicketsPage() {
             </button>
           ))}
         </div>
+        <select
+          value={moduleFilter}
+          onChange={(e) => setModuleFilter(e.target.value as 'all' | TicketModule)}
+          className="text-sm border border-parchment-300 rounded-lg px-3 py-1.5 bg-white text-ink-400"
+        >
+          <option value="all">Toutes sections</option>
+          {Object.entries(MODULE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Ticket list */}
@@ -154,6 +185,12 @@ function TicketRow({ ticket, onClick }: { ticket: Ticket; onClick: () => void })
           <span>{ticket.userName}</span>
           <span>•</span>
           <span>{new Date(ticket.createdAt).toLocaleDateString('fr-FR')}</span>
+          {ticket.module && MODULE_LABELS[ticket.module] && (
+            <>
+              <span>•</span>
+              <span className="badge bg-purple-50 text-purple-600 text-[10px] py-0 px-1.5">{MODULE_LABELS[ticket.module]}</span>
+            </>
+          )}
           {ticket.visibility === 'private' && (
             <>
               <span>•</span>
@@ -327,6 +364,11 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
               {ticket.visibility === 'private' && (
                 <span className="badge bg-gray-100 text-gray-500">
                   <EyeOff className="w-3 h-3 mr-1" /> Privé
+                </span>
+              )}
+              {ticket.module && MODULE_LABELS[ticket.module] && (
+                <span className="badge bg-purple-50 text-purple-600">
+                  {MODULE_LABELS[ticket.module]}
                 </span>
               )}
             </div>

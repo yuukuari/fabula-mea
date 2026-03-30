@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle, Shield, MessageSquare, MessageSquarePlus, Tag, Eye } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -18,6 +18,7 @@ const navItems = [
   { to: '/progress', icon: Target, label: 'Avancement' },
   { to: '/world', icon: Globe, label: 'Univers' },
   { to: '/maps', icon: Map, label: 'Cartes' },
+  { to: '/notes', icon: Lightbulb, label: 'Notes & Idées' },
   { to: '/reviews', icon: Eye, label: 'Relectures' },
   { to: '/settings', icon: Settings, label: 'Parametres' },
 ];

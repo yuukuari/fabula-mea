@@ -3,7 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
-  Relationship, KeyEvent, MapItem, MapPin, SelfComment,
+  Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
@@ -20,12 +20,13 @@ interface BookStore extends BookProject {
   loadBook: (bookId: string) => void;
   saveBook: () => void;
   unloadBook: () => void;
-  initNewBook: (bookId: string, title: string, author?: string, genre?: string, writingMode?: import('@/types').WritingMode) => void;
+  initNewBook: (bookId: string, title: string, author?: string, genre?: string, writingMode?: import('@/types').WritingMode, countUnit?: import('@/types').CountUnit) => void;
   updateSceneContent: (sceneId: string, content: string, wordCount: number) => void;
 
   // Project
   updateProject: (data: Partial<Pick<BookProject, 'title' | 'author' | 'genre' | 'synopsis'>>) => void;
   updateWritingMode: (mode: import('@/types').WritingMode, deleteContent: boolean) => void;
+  updateCountUnit: (unit: import('@/types').CountUnit) => void;
 
   // Characters
   addCharacter: (char: Partial<Character> & { name: string }) => string;
@@ -87,6 +88,12 @@ interface BookStore extends BookProject {
   updateSelfComment: (id: string, data: Partial<Pick<SelfComment, 'content'>>) => void;
   deleteSelfComment: (id: string) => void;
 
+  // Note Ideas
+  addNoteIdea: (note: Partial<NoteIdea> & { title: string }) => string;
+  updateNoteIdea: (id: string, data: Partial<NoteIdea>) => void;
+  deleteNoteIdea: (id: string) => void;
+  reorderNoteIdeas: (noteIds: string[]) => void;
+
   // Graph node positions
   saveGraphNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
 
@@ -114,6 +121,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     writingSessions: [],
     worldNotes: [],
     maps: [],
+    noteIdeas: [],
     selfComments: [],
     graphNodePositions: {},
   };
@@ -127,6 +135,7 @@ function extractProjectData(state: BookStore): BookProject {
     genre: state.genre,
     synopsis: state.synopsis,
     writingMode: state.writingMode,
+    countUnit: state.countUnit,
     characters: state.characters,
     places: state.places,
     chapters: state.chapters,
@@ -136,6 +145,7 @@ function extractProjectData(state: BookStore): BookProject {
     writingSessions: state.writingSessions,
     worldNotes: state.worldNotes,
     maps: state.maps,
+    noteIdeas: state.noteIdeas,
     selfComments: state.selfComments,
     graphNodePositions: state.graphNodePositions,
     createdAt: state.createdAt,
@@ -159,7 +169,7 @@ export const useBookStore = create<BookStore>()(
       _loaded: false,
 
       // ─── Lifecycle ───
-      initNewBook: (bookId, title, author = '', genre = '', writingMode = 'count') => {
+      initNewBook: (bookId, title, author = '', genre = '', writingMode = 'count', countUnit = 'words') => {
         const timestamp = now();
         const newState = {
           ...emptyState(),
@@ -168,6 +178,7 @@ export const useBookStore = create<BookStore>()(
           author,
           genre,
           writingMode,
+          countUnit,
           createdAt: timestamp,
           updatedAt: timestamp,
           lastSavedAt: timestamp,
@@ -281,6 +292,12 @@ export const useBookStore = create<BookStore>()(
               ? { ...sc, content: undefined, currentWordCount: 0, updatedAt: now() }
               : { ...sc, updatedAt: now() }
           ),
+          ...touchSave(),
+        })),
+
+      updateCountUnit: (unit) =>
+        set((s) => ({
+          countUnit: unit,
           ...touchSave(),
         })),
 
@@ -784,6 +801,47 @@ export const useBookStore = create<BookStore>()(
       deleteSelfComment: (id) =>
         set((s) => ({
           selfComments: (s.selfComments ?? []).filter((c) => c.id !== id),
+          ...touchSave(),
+        })),
+
+      // ─── Note Ideas ───
+      addNoteIdea: (note) => {
+        const id = generateId();
+        const timestamp = now();
+        set((s) => ({
+          noteIdeas: [...(s.noteIdeas ?? []), {
+            id,
+            title: note.title,
+            content: note.content ?? '',
+            order: (s.noteIdeas ?? []).length,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          }],
+          ...touchSave(),
+        }));
+        return id;
+      },
+
+      updateNoteIdea: (id, data) =>
+        set((s) => ({
+          noteIdeas: (s.noteIdeas ?? []).map((n) =>
+            n.id === id ? { ...n, ...data, updatedAt: now() } : n
+          ),
+          ...touchSave(),
+        })),
+
+      deleteNoteIdea: (id) =>
+        set((s) => ({
+          noteIdeas: (s.noteIdeas ?? []).filter((n) => n.id !== id),
+          ...touchSave(),
+        })),
+
+      reorderNoteIdeas: (noteIds) =>
+        set((s) => ({
+          noteIdeas: noteIds.map((id, i) => {
+            const note = (s.noteIdeas ?? []).find((n) => n.id === id)!;
+            return { ...note, order: i };
+          }),
           ...touchSave(),
         })),
 

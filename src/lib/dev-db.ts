@@ -64,6 +64,21 @@ function setJson(key: string, value: unknown): void {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+// ─── Dev email logging ───────────────────────────────────────────────────────
+
+function devEmailLog(opts: { to: string; subject: string; description: string; details?: Record<string, string> }): void {
+  console.group(`📧 [DEV] Email — ${opts.description}`);
+  console.log(`   To:      ${opts.to}`);
+  console.log(`   Subject: ${opts.subject}`);
+  if (opts.details) {
+    for (const [key, value] of Object.entries(opts.details)) {
+      console.log(`   ${key}: ${value}`);
+    }
+  }
+  console.log('   (email non envoyé en mode développement)');
+  console.groupEnd();
+}
+
 // ─── Public API (same shape as the real serverless functions) ─────────────────
 
 export const devDb = {
@@ -136,6 +151,7 @@ export const devDb = {
 
     async create(data: {
       type: Ticket['type'];
+      module?: Ticket['module'];
       title: string;
       description: string;
       visibility: Ticket['visibility'];
@@ -147,6 +163,7 @@ export const devDb = {
         userName: user.name,
         userEmail: user.email,
         type: data.type,
+        module: data.module,
         title: data.title,
         description: data.description,
         visibility: data.visibility,
@@ -158,6 +175,35 @@ export const devDb = {
       const tickets = getJson<Ticket[]>('emlb-dev:tickets', []);
       tickets.push(ticket);
       setJson('emlb-dev:tickets', tickets);
+
+      // Log email that would be sent to admins in production
+      const allUsers = devAuth.listUsers();
+      const admins = allUsers.filter((u) => u.isAdmin);
+      for (const admin of admins) {
+        devEmailLog({
+          to: admin.email,
+          subject: `[Ticket ${data.type}] ${data.title}`,
+          description: 'Notification nouveau ticket → admin',
+          details: {
+            'Type': data.type,
+            ...(data.module ? { 'Section': data.module } : {}),
+            'Par': `${user.name} (${user.email})`,
+            'Visibilité': data.visibility,
+          },
+        });
+      }
+      if (admins.length === 0) {
+        devEmailLog({
+          to: '(aucun admin trouvé — en prod: support email)',
+          subject: `[Ticket ${data.type}] ${data.title}`,
+          description: 'Notification nouveau ticket → admin',
+          details: {
+            'Type': data.type,
+            'Par': `${user.name} (${user.email})`,
+          },
+        });
+      }
+
       return { ticket };
     },
 
@@ -424,6 +470,21 @@ export const devDb = {
       const sessionIds = getJson<string[]>(`emlb-dev:u:${uid}:reviews`, []);
       sessionIds.push(session.id);
       setJson(`emlb-dev:u:${uid}:reviews`, sessionIds);
+
+      // Log email that would be sent in production
+      if (data.readerEmail) {
+        devEmailLog({
+          to: data.readerEmail,
+          subject: `${data.authorName} vous invite à relire « ${data.bookTitle} »`,
+          description: 'Invitation à la relecture',
+          details: {
+            'Auteur': data.authorName,
+            'Livre': data.bookTitle,
+            'Lien': `${window.location.origin}/review/${token}`,
+          },
+        });
+      }
+
       return { session };
     },
 
@@ -520,6 +581,24 @@ export const devDb = {
         }
       }
       setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+
+      // Log email that would be sent to author in production
+      if (sent > 0) {
+        const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
+        if (session?.authorEmail) {
+          devEmailLog({
+            to: session.authorEmail,
+            subject: `${session.readerName || 'Un relecteur'} a envoyé ${sent} commentaire${sent > 1 ? 's' : ''} sur « ${session.bookTitle} »`,
+            description: 'Notification commentaires relecture',
+            details: {
+              'Relecteur': session.readerName || 'Un relecteur',
+              'Livre': session.bookTitle,
+              'Commentaires': `${sent}`,
+            },
+          });
+        }
+      }
+
       return { sent };
     },
   },
@@ -611,6 +690,21 @@ export const devDb = {
         }
       }
       setJson(`emlb-dev:review:${session.id}:comments`, comments);
+
+      // Log email that would be sent to author in production
+      if (sent > 0 && session.authorEmail) {
+        devEmailLog({
+          to: session.authorEmail,
+          subject: `${session.readerName || 'Un relecteur'} a envoyé ${sent} commentaire${sent > 1 ? 's' : ''} sur « ${session.bookTitle} »`,
+          description: 'Notification commentaires relecture',
+          details: {
+            'Relecteur': session.readerName || 'Un relecteur',
+            'Livre': session.bookTitle,
+            'Commentaires': `${sent}`,
+          },
+        });
+      }
+
       return { sent };
     },
 
@@ -622,6 +716,20 @@ export const devDb = {
       session.completedAt = new Date().toISOString();
       setJson(`emlb-dev:review:token:${token}`, session);
       setJson(`emlb-dev:review:${session.id}`, session);
+
+      // Log email that would be sent to author in production
+      if (session.authorEmail) {
+        devEmailLog({
+          to: session.authorEmail,
+          subject: `${session.readerName || 'Un relecteur'} a terminé la relecture de « ${session.bookTitle} »`,
+          description: 'Notification relecture terminée',
+          details: {
+            'Relecteur': session.readerName || 'Un relecteur',
+            'Livre': session.bookTitle,
+          },
+        });
+      }
+
       return { session };
     },
   },

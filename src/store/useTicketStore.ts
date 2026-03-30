@@ -15,6 +15,7 @@ interface TicketStore {
   loadTicket: (id: string) => Promise<void>;
   createTicket: (data: {
     type: Ticket['type'];
+    module?: Ticket['module'];
     title: string;
     description: string;
     visibility: Ticket['visibility'];

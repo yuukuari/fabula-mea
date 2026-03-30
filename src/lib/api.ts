@@ -103,7 +103,7 @@ export const api = {
       IS_DEV
         ? devDb.tickets.list()
         : apiFetch<{ tickets: Ticket[]; statusChanges: TicketStatusChange[] }>('/tickets'),
-    create: (data: { type: Ticket['type']; title: string; description: string; visibility: Ticket['visibility'] }) =>
+    create: (data: { type: Ticket['type']; module?: Ticket['module']; title: string; description: string; visibility: Ticket['visibility'] }) =>
       IS_DEV
         ? devDb.tickets.create(data)
         : apiFetch<{ ticket: Ticket }>('/tickets', {

@@ -16,13 +16,29 @@ import Image from '@tiptap/extension-image';
 import { cn } from '@/lib/utils';
 import { useTicketStore } from '@/store/useTicketStore';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import type { TicketType, TicketVisibility } from '@/types';
+import type { TicketType, TicketVisibility, TicketModule } from '@/types';
 import { useNavigate } from 'react-router-dom';
 
 const TICKET_TYPES: { value: TicketType; label: string; color: string; emoji: string }[] = [
   { value: 'bug', label: 'Bug', color: 'bg-red-100 text-red-700 border-red-200', emoji: '🐛' },
   { value: 'question', label: 'Question', color: 'bg-blue-100 text-blue-700 border-blue-200', emoji: '❓' },
   { value: 'improvement', label: 'Amélioration', color: 'bg-green-100 text-green-700 border-green-200', emoji: '✨' },
+];
+
+const MODULE_OPTIONS: { value: TicketModule; label: string }[] = [
+  { value: 'auth', label: 'Login / Inscription' },
+  { value: 'characters', label: 'Personnages' },
+  { value: 'places', label: 'Lieux' },
+  { value: 'chapters', label: 'Chapitres / Scènes' },
+  { value: 'timeline', label: 'Timeline' },
+  { value: 'progress', label: 'Progression' },
+  { value: 'world', label: 'Worldbuilding' },
+  { value: 'maps', label: 'Cartes' },
+  { value: 'notes', label: 'Notes & Idées' },
+  { value: 'reviews', label: 'Relectures' },
+  { value: 'settings', label: 'Paramètres' },
+  { value: 'export', label: 'Export' },
+  { value: 'other', label: 'Autre' },
 ];
 
 const TEMPLATES: Record<TicketType, string> = {
@@ -41,6 +57,7 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
   const createTicket = useTicketStore((s) => s.createTicket);
 
   const [type, setType] = useState<TicketType>('bug');
+  const [module, setModule] = useState<TicketModule | ''>('');
   const [title, setTitle] = useState('');
   const [visibility, setVisibility] = useState<TicketVisibility>('public');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,6 +146,7 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
     try {
       const ticket = await createTicket({
         type,
+        module: module || undefined,
         title: title.trim(),
         description: editor.getHTML(),
         visibility,
@@ -145,6 +163,7 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
   const handleClose = () => {
     setTitle('');
     setType('bug');
+    setModule('');
     setVisibility('public');
     setShowSuccess(false);
     setCreatedTicketId(null);
@@ -225,6 +244,21 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
                 className="input-field"
                 maxLength={200}
               />
+            </div>
+
+            {/* Module */}
+            <div>
+              <label className="label-field">Section concernée</label>
+              <select
+                value={module}
+                onChange={(e) => setModule(e.target.value as TicketModule | '')}
+                className="input-field"
+              >
+                <option value="">— Sélectionner —</option>
+                {MODULE_OPTIONS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
             </div>
 
             {/* Description (TipTap) */}
