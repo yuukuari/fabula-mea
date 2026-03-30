@@ -28,8 +28,10 @@ export function TimelinePage() {
     [scenes]
   );
 
-  // Apply filters
-  const filteredScenes = useMemo(() => {
+  // Apply filters — matching scene ids (for soft highlight)
+  const matchingSceneIds = useMemo(() => {
+    const hasFilter = highlightChapterId || (viewMode === 'character' && filterPlaceId) || (viewMode === 'place' && filterCharacterId);
+    if (!hasFilter) return null; // null = no filter active, show all normally
     let result = datedScenes;
     if (highlightChapterId) {
       result = result.filter((s) => s.chapterId === highlightChapterId);
@@ -40,31 +42,31 @@ export function TimelinePage() {
     if (viewMode === 'place' && filterCharacterId) {
       result = result.filter((s) => s.characterIds.includes(filterCharacterId));
     }
-    return result;
+    return new Set(result.map((s) => s.id));
   }, [datedScenes, highlightChapterId, filterPlaceId, filterCharacterId, viewMode]);
 
-  // Get time range
+  // Get time range — always from all dated scenes
   const timeRange = useMemo(() => {
-    if (filteredScenes.length === 0) return null;
-    const starts = filteredScenes.map((s) => new Date(s.startDateTime!).getTime());
-    const ends = filteredScenes.map((s) => s.endDateTime ? new Date(s.endDateTime).getTime() : new Date(s.startDateTime!).getTime() + 3600000);
+    if (datedScenes.length === 0) return null;
+    const starts = datedScenes.map((s) => new Date(s.startDateTime!).getTime());
+    const ends = datedScenes.map((s) => s.endDateTime ? new Date(s.endDateTime).getTime() : new Date(s.startDateTime!).getTime() + 3600000);
     return {
       min: Math.min(...starts),
       max: Math.max(...ends),
     };
-  }, [filteredScenes]);
+  }, [datedScenes]);
 
-  // Characters that appear in filtered dated scenes
+  // Characters that appear in dated scenes
   const timelineCharacters = useMemo(() => {
-    const charIds = new Set(filteredScenes.flatMap((s) => s.characterIds));
+    const charIds = new Set(datedScenes.flatMap((s) => s.characterIds));
     return characters.filter((c) => charIds.has(c.id));
-  }, [filteredScenes, characters]);
+  }, [datedScenes, characters]);
 
-  // Places that appear in filtered dated scenes
+  // Places that appear in dated scenes
   const timelinePlaces = useMemo(() => {
-    const placeIds = new Set(filteredScenes.map((s) => s.placeId).filter(Boolean) as string[]);
+    const placeIds = new Set(datedScenes.map((s) => s.placeId).filter(Boolean) as string[]);
     return places.filter((p) => placeIds.has(p.id));
-  }, [filteredScenes, places]);
+  }, [datedScenes, places]);
 
   const totalDuration = timeRange ? timeRange.max - timeRange.min || 1 : 1;
 
@@ -111,7 +113,7 @@ export function TimelinePage() {
     return ch?.color ?? '#999';
   };
 
-  const renderSceneBlock = (scene: Scene) => {
+  const renderSceneBlock = (scene: Scene, dimmed: boolean = false) => {
     const left = getPosition(scene.startDateTime!);
     const width = getWidth(scene);
     const chapter = chapters.find((c) => c.id === scene.chapterId);
@@ -124,7 +126,7 @@ export function TimelinePage() {
     return (
       <div
         key={scene.id}
-        className="absolute top-1 bottom-1 rounded cursor-pointer transition-all group"
+        className={cn('absolute top-1 bottom-1 rounded cursor-pointer transition-all group', dimmed && 'opacity-20')}
         style={{
           left: `${left}%`,
           width: `${width}%`,
@@ -253,11 +255,7 @@ export function TimelinePage() {
         ))}
       </div>
 
-      {filteredScenes.length === 0 ? (
-        <div className="card-fantasy p-8 text-center">
-          <p className="text-ink-300 text-sm">Aucune scène ne correspond aux filtres sélectionnés.</p>
-        </div>
-      ) : (
+      {datedScenes.length > 0 && (
         <div className="card-fantasy p-6 overflow-x-auto">
           {/* Time axis */}
           <div className="relative h-8 mb-2 ml-32">
@@ -277,14 +275,14 @@ export function TimelinePage() {
             {viewMode === 'character' ? (
               /* Character rows */
               timelineCharacters.map((char) => {
-                const charScenes = filteredScenes.filter((s) => s.characterIds.includes(char.id));
+                const charScenes = datedScenes.filter((s) => s.characterIds.includes(char.id));
                 return (
                   <div key={char.id} className="flex items-center gap-3">
                     <div className="w-28 flex-shrink-0 text-right">
                       <span className="text-sm font-medium text-ink-400 truncate block">{char.name}</span>
                     </div>
                     <div className="flex-1 relative h-10 bg-parchment-100 rounded">
-                      {charScenes.map(renderSceneBlock)}
+                      {charScenes.map((s) => renderSceneBlock(s, matchingSceneIds !== null && !matchingSceneIds.has(s.id)))}
                     </div>
                   </div>
                 );
@@ -293,21 +291,21 @@ export function TimelinePage() {
               /* Place rows */
               <>
                 {timelinePlaces.map((place) => {
-                  const placeScenes = filteredScenes.filter((s) => s.placeId === place.id);
+                  const placeScenes = datedScenes.filter((s) => s.placeId === place.id);
                   return (
                     <div key={place.id} className="flex items-center gap-3">
                       <div className="w-28 flex-shrink-0 text-right">
                         <span className="text-sm font-medium text-ink-400 truncate block">{place.name}</span>
                       </div>
                       <div className="flex-1 relative h-10 bg-parchment-100 rounded">
-                        {placeScenes.map(renderSceneBlock)}
+                        {placeScenes.map((s) => renderSceneBlock(s, matchingSceneIds !== null && !matchingSceneIds.has(s.id)))}
                       </div>
                     </div>
                   );
                 })}
                 {/* Scenes without place */}
                 {(() => {
-                  const noPlaceScenes = filteredScenes.filter((s) => !s.placeId);
+                  const noPlaceScenes = datedScenes.filter((s) => !s.placeId);
                   if (noPlaceScenes.length === 0) return null;
                   return (
                     <div className="flex items-center gap-3">
@@ -315,7 +313,7 @@ export function TimelinePage() {
                         <span className="text-sm italic text-ink-200 truncate block">Sans lieu</span>
                       </div>
                       <div className="flex-1 relative h-10 bg-parchment-100 rounded">
-                        {noPlaceScenes.map(renderSceneBlock)}
+                        {noPlaceScenes.map((s) => renderSceneBlock(s, matchingSceneIds !== null && !matchingSceneIds.has(s.id)))}
                       </div>
                     </div>
                   );

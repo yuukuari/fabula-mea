@@ -1,5 +1,5 @@
 import type { Character } from '@/types';
-import { User } from 'lucide-react';
+import { CharacterAvatar } from './CharacterAvatar';
 
 interface CharacterCardProps {
   character: Character;
@@ -11,17 +11,12 @@ export function CharacterCard({ character, onClick }: CharacterCardProps) {
     <div onClick={onClick} className="card-fantasy p-4 cursor-pointer">
       <div className="flex gap-4">
         <div className="flex-shrink-0">
-          {character.imageUrl ? (
-            <img
-              src={character.imageUrl}
-              alt={character.name}
-              className="w-16 h-16 rounded-full object-cover border-2 border-parchment-300"
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-parchment-200 flex items-center justify-center border-2 border-parchment-300">
-              <User className="w-8 h-8 text-ink-200" />
-            </div>
-          )}
+          <CharacterAvatar
+            imageUrl={character.imageUrl}
+            imageOffsetY={character.imageOffsetY}
+            name={character.name}
+            size={16}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-bold text-ink-500 truncate">

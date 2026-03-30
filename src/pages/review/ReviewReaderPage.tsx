@@ -4,6 +4,7 @@ import { Feather, BookOpen, ChevronDown, ChevronRight, Send, CheckCircle2, LogIn
 import { useReviewStore } from '@/store/useReviewStore';
 import { ReviewCommentPanel } from '@/components/reviews/ReviewCommentPanel';
 import { ReviewContentViewer } from '@/components/reviews/ReviewContentViewer';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import type { ReviewSnapshotScene } from '@/types';
 
@@ -36,6 +37,8 @@ export function ReviewReaderPage() {
   const [isSending, setIsSending] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [sentCount, setSentCount] = useState<number | null>(null);
+
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
   // Panel visibility
   const [navOpen, setNavOpen] = useState(true);
@@ -79,8 +82,22 @@ export function ReviewReaderPage() {
 
   const handleComplete = async () => {
     if (!token) return;
+    // If there are unsent drafts, ask user first
+    if (draftCount > 0 && !showCompleteConfirm) {
+      setShowCompleteConfirm(true);
+      return;
+    }
+    setShowCompleteConfirm(false);
     setIsCompleting(true);
     await sendReaderComments(token);
+    await completeReaderSession(token);
+    setIsCompleting(false);
+  };
+
+  const handleCompleteWithoutSending = async () => {
+    if (!token) return;
+    setShowCompleteConfirm(false);
+    setIsCompleting(true);
     await completeReaderSession(token);
     setIsCompleting(false);
   };
@@ -132,6 +149,17 @@ export function ReviewReaderPage() {
 
   const draftCount = readerComments.filter((c) => c.status === 'draft' && !c.isAuthor).length;
   const isCompleted = readerSession?.status === 'completed';
+
+  // Warn before leaving with unsent drafts
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (draftCount > 0) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [draftCount]);
 
   if (readerLoading) {
     return (
@@ -441,6 +469,38 @@ export function ReviewReaderPage() {
               <span className="hidden sm:inline">Terminer la relecture</span>
               <span className="sm:hidden">Terminer</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm complete with unsent drafts */}
+      {showCompleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Commentaires non envoyés</h3>
+            <p className="text-sm text-ink-300 mb-6">
+              Vous avez {draftCount} commentaire{draftCount > 1 ? 's' : ''} en brouillon. Que souhaitez-vous faire ?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setShowCompleteConfirm(false)}
+                className="w-full px-4 py-2.5 text-sm border border-parchment-300 rounded-lg hover:bg-parchment-50 transition-colors text-ink-400"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCompleteWithoutSending}
+                className="w-full px-4 py-2.5 text-sm border border-red-200 text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                Terminer sans envoyer
+              </button>
+              <button
+                onClick={handleComplete}
+                className="w-full px-4 py-2.5 text-sm bg-bordeaux-500 text-white rounded-lg hover:bg-bordeaux-600 transition-colors font-medium"
+              >
+                Envoyer et terminer
+              </button>
+            </div>
           </div>
         </div>
       )}

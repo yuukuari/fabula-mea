@@ -1,14 +1,24 @@
-import { useRef } from 'react';
-import { Upload, X } from 'lucide-react';
+import { useRef, useState, useCallback } from 'react';
+import { Upload, X, Move, Check } from 'lucide-react';
 
 interface ImageUploadProps {
   value?: string;
   onChange: (dataUrl: string | undefined) => void;
   className?: string;
+  /** Display as a circle (for avatars) */
+  round?: boolean;
+  /** Vertical offset percentage (0-100) for avatar centering */
+  offsetY?: number;
+  /** Called when offset changes via drag */
+  onOffsetYChange?: (offsetY: number) => void;
 }
 
-export function ImageUpload({ value, onChange, className = '' }: ImageUploadProps) {
+export function ImageUpload({ value, onChange, className = '', round, offsetY = 50, onOffsetYChange }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isCropping, setIsCropping] = useState(false);
+  const dragStartRef = useRef<{ startY: number; startOffset: number } | null>(null);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,6 +46,8 @@ export function ImageUpload({ value, onChange, className = '' }: ImageUploadProp
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, w, h);
         onChange(canvas.toDataURL('image/jpeg', 0.8));
+        // Reset offset to center when new image is uploaded
+        onOffsetYChange?.(50);
       };
       img.src = reader.result as string;
     };
@@ -55,6 +67,123 @@ export function ImageUpload({ value, onChange, className = '' }: ImageUploadProp
     e.stopPropagation();
     onChange(undefined);
   };
+
+  // Drag to pan offset (only in crop mode)
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (!round || !value || !onOffsetYChange || !isCropping) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setIsDragging(true);
+    dragStartRef.current = { startY: e.clientY, startOffset: offsetY };
+  }, [round, value, offsetY, onOffsetYChange, isCropping]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragStartRef.current || !containerRef.current) return;
+    e.preventDefault();
+    const containerHeight = containerRef.current.getBoundingClientRect().height;
+    const dy = e.clientY - dragStartRef.current.startY;
+    const newOffset = Math.max(0, Math.min(100, dragStartRef.current.startOffset + (dy / containerHeight) * 100));
+    onOffsetYChange?.(Math.round(newOffset));
+  }, [onOffsetYChange]);
+
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+  }, []);
+
+  if (round) {
+    return (
+      <div className={`flex flex-col items-center gap-2 ${className}`}>
+        {value ? (
+          <div className="relative group" ref={containerRef}>
+            <div
+              className={`w-32 h-32 rounded-full overflow-hidden border-2 border-parchment-300 ${isCropping ? 'cursor-grab active:cursor-grabbing ring-2 ring-bordeaux-400' : ''}`}
+              onPointerDown={isCropping ? handlePointerDown : undefined}
+              onPointerMove={isCropping ? handlePointerMove : undefined}
+              onPointerUp={isCropping ? handlePointerUp : undefined}
+              title={isCropping ? 'Glissez pour ajuster le cadrage' : undefined}
+              style={isCropping ? { touchAction: 'none' } : undefined}
+            >
+              <img
+                src={value}
+                alt=""
+                className="w-full h-full object-cover select-none"
+                style={{
+                  transform: `scale(1.4) translateY(${(50 - offsetY) * 0.6}%)`,
+                  WebkitUserDrag: 'none',
+                } as React.CSSProperties}
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+              />
+            </div>
+            {!isCropping && (
+              <button
+                type="button"
+                onClick={handleClickRemove}
+                className="absolute top-0 right-0 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center
+                           text-white opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            {isCropping ? (
+              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full flex items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsCropping(false)}
+                  className="px-3 py-1 bg-bordeaux-500 text-white rounded-full text-xs font-medium hover:bg-bordeaux-600 transition-colors flex items-center gap-1"
+                >
+                  <Check className="w-3 h-3" /> Valider
+                </button>
+              </div>
+            ) : (
+              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full flex items-center gap-1.5 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  onClick={handleClickUpload}
+                  className="px-3 py-1 bg-parchment-100 border border-parchment-300 rounded-full text-xs text-ink-400 hover:bg-parchment-200 transition-colors"
+                >
+                  Changer
+                </button>
+                {onOffsetYChange && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCropping(true)}
+                    className="px-3 py-1 bg-parchment-100 border border-parchment-300 rounded-full text-xs text-ink-400 hover:bg-parchment-200 transition-colors flex items-center gap-1"
+                  >
+                    <Move className="w-3 h-3" /> Recadrer
+                  </button>
+                )}
+              </div>
+            )}
+            {isCropping && (
+              <div className="absolute inset-0 rounded-full pointer-events-none">
+                <div className="w-full h-full rounded-full border-2 border-dashed border-bordeaux-400/40" />
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleClickUpload}
+            className="w-32 h-32 rounded-full border-2 border-dashed border-parchment-300
+                       flex flex-col items-center justify-center gap-1 text-ink-200
+                       hover:border-gold-400 hover:text-ink-300 transition-colors"
+          >
+            <Upload className="w-6 h-6" />
+            <span className="text-xs">Avatar</span>
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFile}
+          className="hidden"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`relative ${className}`}>

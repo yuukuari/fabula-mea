@@ -64,7 +64,9 @@ export function NotesIdeasPage() {
           </button>
         </div>
         <div className="card-fantasy p-6">
-          <h2 className="font-display text-2xl font-bold text-ink-500 mb-4">{selectedNote.title}</h2>
+          {selectedNote.title && (
+            <h2 className="font-display text-2xl font-bold text-ink-500 mb-4">{selectedNote.title}</h2>
+          )}
           {preview && (
             <div
               className="tiptap text-ink-400 font-serif leading-relaxed"
@@ -126,16 +128,22 @@ export function NotesIdeasPage() {
                 onClick={() => setSelectedId(note.id)}
                 className="card-fantasy cursor-pointer overflow-hidden"
               >
-                <div className="w-full h-28 bg-parchment-200 flex items-center justify-center">
-                  <Lightbulb className="w-10 h-10 text-ink-100" />
-                </div>
                 <div className="p-4">
-                  <h3 className="font-display font-bold text-ink-500">{note.title}</h3>
+                  {note.title && (
+                    <h3 className="font-display font-bold text-ink-500 mb-2">{note.title}</h3>
+                  )}
                   {plainText && (
-                    <p className="text-sm text-ink-300 mt-1 line-clamp-2">{plainText}</p>
+                    <div
+                      className="tiptap text-sm text-ink-300 overflow-hidden font-serif leading-relaxed max-h-36 relative"
+                      style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}
+                      dangerouslySetInnerHTML={{ __html: note.content }}
+                    />
+                  )}
+                  {!plainText && !note.title && (
+                    <p className="text-sm text-ink-200 italic">Note vide</p>
                   )}
                   {checklistTotal > 0 && (
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="mt-3 flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-parchment-200 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-bordeaux-400 rounded-full transition-all"
@@ -217,8 +225,9 @@ function NoteIdeaForm({ noteId, onClose }: { noteId: string | null; onClose: () 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
     const content = editor?.getHTML() ?? '';
+    const plainText = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!plainText) return;
 
     if (existing) {
       updateNoteIdea(existing.id, { title, content });
@@ -240,18 +249,17 @@ function NoteIdeaForm({ noteId, onClose }: { noteId: string | null; onClose: () 
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
-            <label className="label-field">Titre *</label>
+            <label className="label-field">Titre</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="input-field"
-              required
-              placeholder="Mon idée..."
+              placeholder="Titre (facultatif)"
             />
           </div>
 
           <div>
-            <label className="label-field">Contenu</label>
+            <label className="label-field">Contenu *</label>
             <div className="border border-parchment-300 rounded-lg overflow-hidden bg-white">
               {/* Full toolbar */}
               {editor && (

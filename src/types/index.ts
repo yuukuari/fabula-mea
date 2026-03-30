@@ -18,6 +18,7 @@ export interface Character {
   sex?: CharacterSex;
   age?: number;
   imageUrl?: string;
+  imageOffsetY?: number; // percentage offset for avatar centering (0 = top, 50 = center, 100 = bottom)
   description: string;
   personality: string;
   qualities: string[];

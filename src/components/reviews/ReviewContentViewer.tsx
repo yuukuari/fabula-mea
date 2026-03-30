@@ -110,9 +110,6 @@ export function ReviewContentViewer({ scene, comments, activeCommentId, onHoverC
       {scene.title && (
         <h3 className="font-display text-lg font-bold text-ink-500 mb-3">{scene.title}</h3>
       )}
-      {scene.description && (
-        <p className="text-sm text-ink-300 italic mb-4">{scene.description}</p>
-      )}
 
       {/* Content */}
       <div

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { ImageUpload } from '@/components/shared/ImageUpload';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import type { CharacterEvolution, CharacterSex } from '@/types';
 
 interface CharacterFormProps {
@@ -22,6 +23,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
   const [sex, setSex] = useState<CharacterSex | ''>(existing?.sex ?? '');
   const [age, setAge] = useState<string>(existing?.age !== undefined && existing?.age !== null ? String(existing.age) : '');
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl);
+  const [imageOffsetY, setImageOffsetY] = useState(existing?.imageOffsetY ?? 50);
   const [description, setDescription] = useState(existing?.description ?? '');
   const [personality, setPersonality] = useState(existing?.personality ?? '');
   const [qualities, setQualities] = useState(existing?.qualities?.join(', ') ?? '');
@@ -35,11 +37,43 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
   const [evolution, setEvolution] = useState<CharacterEvolution>(
     existing?.evolution ?? { beforeStory: '', duringStory: '', endOfStory: '', initiationJourney: '' }
   );
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+
+  // Track if form has been modified
+  const isDirty = useCallback(() => {
+    if (!existing) {
+      // New character: dirty if anything has been filled
+      return !!(name || surname || nickname || sex || age || imageUrl || description || personality || qualities || flaws || skills || profession || lifeGoal || likes || dislikes || notes || evolution.beforeStory || evolution.duringStory || evolution.endOfStory || evolution.initiationJourney);
+    }
+    // Existing: compare against original values
+    return (
+      name !== (existing.name ?? '') ||
+      surname !== (existing.surname ?? '') ||
+      nickname !== (existing.nickname ?? '') ||
+      sex !== (existing.sex ?? '') ||
+      age !== (existing.age !== undefined && existing.age !== null ? String(existing.age) : '') ||
+      imageUrl !== existing.imageUrl ||
+      imageOffsetY !== (existing.imageOffsetY ?? 50) ||
+      description !== (existing.description ?? '') ||
+      personality !== (existing.personality ?? '') ||
+      qualities !== (existing.qualities?.join(', ') ?? '') ||
+      flaws !== (existing.flaws?.join(', ') ?? '') ||
+      skills !== (existing.skills?.join(', ') ?? '') ||
+      profession !== (existing.profession ?? '') ||
+      lifeGoal !== (existing.lifeGoal ?? '') ||
+      likes !== (existing.likes?.join(', ') ?? '') ||
+      dislikes !== (existing.dislikes?.join(', ') ?? '') ||
+      notes !== (existing.notes ?? '') ||
+      evolution.beforeStory !== (existing.evolution?.beforeStory ?? '') ||
+      evolution.duringStory !== (existing.evolution?.duringStory ?? '') ||
+      evolution.endOfStory !== (existing.evolution?.endOfStory ?? '') ||
+      evolution.initiationJourney !== (existing.evolution?.initiationJourney ?? '')
+    );
+  }, [name, surname, nickname, sex, age, imageUrl, imageOffsetY, description, personality, qualities, flaws, skills, profession, lifeGoal, likes, dislikes, notes, evolution, existing]);
 
   const splitList = (str: string) => str.split(',').map((s) => s.trim()).filter(Boolean);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = () => {
     if (!name.trim()) return;
 
     const data = {
@@ -49,6 +83,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
       sex: sex || undefined,
       age: age ? parseInt(age, 10) : undefined,
       imageUrl,
+      imageOffsetY,
       description,
       personality,
       qualities: splitList(qualities),
@@ -70,21 +105,40 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
     onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
       <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-2xl mx-4 my-4">
         <div className="flex items-center justify-between p-6 border-b border-parchment-300">
           <h3 className="font-display text-xl font-bold text-ink-500">
             {existing ? 'Modifier le personnage' : 'Nouveau personnage'}
           </h3>
-          <button type="button" onClick={onClose} className="btn-ghost p-1">
+          <button type="button" onClick={handleClose} className="btn-ghost p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-          <ImageUpload value={imageUrl} onChange={setImageUrl} />
+          <ImageUpload
+            value={imageUrl}
+            onChange={setImageUrl}
+            round
+            offsetY={imageOffsetY}
+            onOffsetYChange={setImageOffsetY}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -218,13 +272,41 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
-            <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+            <button type="button" onClick={handleClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">
               {existing ? 'Enregistrer' : 'Créer'}
             </button>
           </div>
         </form>
       </div>
+
+      {/* Unsaved changes confirmation */}
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">
+                Annuler
+              </button>
+              <button
+                onClick={() => { setShowUnsavedConfirm(false); onClose(); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors"
+              >
+                Quitter
+              </button>
+              <button
+                onClick={() => { setShowUnsavedConfirm(false); handleSave(); }}
+                className="btn-primary text-sm"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

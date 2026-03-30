@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { Feather, BookOpen, ChevronDown, ChevronRight, ChevronLeft, Clock, PlayCircle, CheckCircle2, Lock, PanelLeft, MessageSquare, X, Menu, Archive, Send } from 'lucide-react';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ReviewCommentPanel } from '@/components/reviews/ReviewCommentPanel';
 import { ReviewContentViewer } from '@/components/reviews/ReviewContentViewer';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import type { ReviewSnapshotScene } from '@/types';
 
@@ -43,6 +44,8 @@ export function ReviewAuthorView() {
   const [isClosing, setIsClosing] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sentCount, setSentCount] = useState<number | null>(null);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // Panel visibility
   const [navOpen, setNavOpen] = useState(true);
@@ -117,6 +120,7 @@ export function ReviewAuthorView() {
     setIsClosing(true);
     await closeSession(id);
     setIsClosing(false);
+    setShowCloseConfirm(false);
   };
 
   const handleSendAuthorComments = async () => {
@@ -125,8 +129,34 @@ export function ReviewAuthorView() {
     const count = await sendAuthorComments(id);
     setSentCount(count);
     setIsSending(false);
+    setShowUnsavedConfirm(false);
     setTimeout(() => setSentCount(null), 3000);
   };
+
+  // Compute before early return so useEffect can reference it
+  const authorDraftCount = currentComments.filter((c) => c.status === 'draft' && c.isAuthor).length;
+
+  // Block in-app navigation when there are unsent comments
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      authorDraftCount > 0 && currentLocation.pathname !== nextLocation.pathname
+  );
+
+  // Show the unsaved confirm dialog when blocker fires
+  useEffect(() => {
+    if (blocker.state === 'blocked') {
+      setShowUnsavedConfirm(true);
+    }
+  }, [blocker.state]);
+
+  // Warn before page unload if there are unsent comments
+  useEffect(() => {
+    if (authorDraftCount > 0) {
+      const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+      window.addEventListener('beforeunload', handler);
+      return () => window.removeEventListener('beforeunload', handler);
+    }
+  }, [authorDraftCount]);
 
   if (isLoading || !currentSession) {
     return (
@@ -143,9 +173,32 @@ export function ReviewAuthorView() {
 
   const sentComments = currentComments.filter((c) => c.status === 'sent' && !c.isAuthor && !c.parentId).length;
   const closedComments = currentComments.filter((c) => c.status === 'closed').length;
-  const authorDraftCount = currentComments.filter((c) => c.status === 'draft' && c.isAuthor).length;
   const isClosed = currentSession.status === 'closed';
   const isClosable = currentSession.status === 'completed' || currentSession.status === 'in_progress';
+
+  const handleBack = () => {
+    if (authorDraftCount > 0) {
+      setShowUnsavedConfirm(true);
+    } else {
+      navigate('/reviews');
+    }
+  };
+
+  const handleConfirmLeave = () => {
+    setShowUnsavedConfirm(false);
+    if (blocker.state === 'blocked') {
+      blocker.proceed();
+    } else {
+      navigate('/reviews');
+    }
+  };
+
+  const handleCancelLeave = () => {
+    setShowUnsavedConfirm(false);
+    if (blocker.state === 'blocked') {
+      blocker.reset();
+    }
+  };
 
   const sceneCommentCounts = (sceneId: string) =>
     currentComments.filter((c) => c.sceneId === sceneId && !c.parentId).length;
@@ -205,7 +258,7 @@ export function ReviewAuthorView() {
     <div className="h-[calc(100vh-73px)] flex flex-col">
       {/* Sub-header with session info */}
       <div className="border-b border-parchment-200 bg-parchment-50/50 px-4 py-2.5 flex items-center gap-2 sm:gap-3 flex-shrink-0">
-        <button onClick={() => navigate('/reviews')} className="flex items-center gap-1 text-sm text-ink-300 hover:text-ink-500 transition-colors flex-shrink-0">
+        <button onClick={handleBack} className="flex items-center gap-1 text-sm text-ink-300 hover:text-ink-500 transition-colors flex-shrink-0">
           <ChevronLeft className="w-4 h-4" />
           <span className="hidden sm:inline">Relectures</span>
         </button>
@@ -248,7 +301,7 @@ export function ReviewAuthorView() {
           )}
           {isClosable && (
             <button
-              onClick={handleCloseSession}
+              onClick={() => setShowCloseConfirm(true)}
               disabled={isClosing}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-ink-200 text-ink-400 rounded-lg hover:bg-parchment-100 transition-colors disabled:opacity-50"
               title="Clôturer la relecture"
@@ -345,6 +398,62 @@ export function ReviewAuthorView() {
           </div>
         </div>
       </div>
+
+      {/* Unsent comments confirmation */}
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Réponses non envoyées</h3>
+            <p className="text-sm text-ink-300 mb-6">
+              Vous avez {authorDraftCount} réponse{authorDraftCount > 1 ? 's' : ''} en brouillon. Si vous quittez, elles ne seront pas envoyées au relecteur.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={handleCancelLeave} className="btn-secondary text-sm">
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmLeave}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors"
+              >
+                Quitter
+              </button>
+              <button
+                onClick={async () => { await handleSendAuthorComments(); if (blocker.state === 'blocked') blocker.proceed(); }}
+                className="btn-primary text-sm flex items-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Envoyer ({authorDraftCount})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close session confirmation */}
+      {showCloseConfirm && (
+        <ConfirmDialog
+          open={true}
+          title="Clôturer cette relecture"
+          description={
+            (() => {
+              const parts: string[] = [];
+              if (currentSession.status === 'in_progress') {
+                parts.push("Le relecteur n'a pas encore indiqué avoir terminé sa relecture.");
+              }
+              const pending = currentComments.filter((c) => c.status === 'sent' && !c.isAuthor && !c.parentId).length;
+              if (pending > 0) {
+                parts.push(`${pending} commentaire${pending > 1 ? 's sont encore à traiter' : ' est encore à traiter'}.`);
+              }
+              parts.push('Une fois clôturée, la relecture ne sera plus accessible au relecteur.');
+              return parts.join(' ');
+            })()
+          }
+          confirmLabel="Clôturer"
+          onConfirm={handleCloseSession}
+          onCancel={() => setShowCloseConfirm(false)}
+        />
+      )}
     </div>
   );
 }

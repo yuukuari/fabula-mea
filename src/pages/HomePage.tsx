@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, Feather, Trash2, Users, MapPin, Film, Hash, PenLine, Shield, LogOut, UserCircle } from 'lucide-react';
+import { Plus, BookOpen, Feather, Trash2, Users, MapPin, Film, Hash, PenLine, Shield, LogOut, UserCircle, MessageSquare } from 'lucide-react';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useReviewStore } from '@/store/useReviewStore';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { VersionBadge } from '@/components/releases/VersionBadge';
@@ -15,6 +16,24 @@ export function HomePage() {
   const { initNewBook, loadBook } = useBookStore();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const reviewSessions = useReviewStore((s) => s.sessions);
+  const loadReviewSessions = useReviewStore((s) => s.loadSessions);
+
+  // Load review sessions to show pending comments badges
+  useEffect(() => {
+    if (user) loadReviewSessions();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Compute pending comments count per book (exclude closed sessions)
+  const pendingByBook = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const s of reviewSessions) {
+      if (s.status !== 'closed' && s.pendingCommentsCount > 0) {
+        map[s.bookId] = (map[s.bookId] || 0) + s.pendingCommentsCount;
+      }
+    }
+    return map;
+  }, [reviewSessions]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -35,7 +54,7 @@ export function HomePage() {
     setWritingMode(null);
     setCountUnit('words');
     setShowCreate(false);
-    navigate('/characters');
+    navigate('/encyclopedia');
   };
 
   const handleCancelCreate = () => {
@@ -47,7 +66,7 @@ export function HomePage() {
   const handleSelect = (bookId: string) => {
     selectBook(bookId);
     loadBook(bookId);
-    navigate('/characters');
+    navigate('/encyclopedia');
   };
 
   const handleDelete = (bookId: string) => {
@@ -354,6 +373,14 @@ export function HomePage() {
                 <p className="text-[10px] text-ink-200 mt-2">
                   Modifie le {new Date(book.updatedAt).toLocaleDateString('fr-FR')}
                 </p>
+
+                {/* Pending review comments badge */}
+                {pendingByBook[book.id] > 0 && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>{pendingByBook[book.id]} commentaire{pendingByBook[book.id] > 1 ? 's' : ''} en attente</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>

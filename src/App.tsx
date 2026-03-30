@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { StandaloneShell } from '@/components/layout/StandaloneShell';
 import { HomePage } from '@/pages/HomePage';
+import { EncyclopediaPage } from '@/pages/EncyclopediaPage';
 import { CharactersPage } from '@/pages/CharactersPage';
 import { PlacesPage } from '@/pages/PlacesPage';
 import { ChaptersPage } from '@/pages/ChaptersPage';
@@ -36,10 +37,11 @@ function RootLayout() {
   const ticketFormOpen = useTicketFormStore((s) => s.open);
   const showTicketForm = useTicketFormStore((s) => s.show);
   const hideTicketForm = useTicketFormStore((s) => s.hide);
+  const currentBookId = useLibraryStore((s) => s.currentBookId);
   return (
     <>
       <Outlet />
-      {user && !editorOpen && <TicketBubble onCreateTicket={showTicketForm} />}
+      {user && !editorOpen && !currentBookId && <TicketBubble onCreateTicket={showTicketForm} />}
       {user && <TicketForm open={ticketFormOpen} onClose={hideTicketForm} />}
       <NewReleaseModal />
     </>
@@ -63,6 +65,7 @@ const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
+          { path: 'encyclopedia', element: <EncyclopediaPage /> },
           { path: 'characters', element: <CharactersPage /> },
           { path: 'characters/:id', element: <CharactersPage /> },
           { path: 'places', element: <PlacesPage /> },

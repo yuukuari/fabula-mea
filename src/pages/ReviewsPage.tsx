@@ -29,6 +29,22 @@ export function ReviewsPage() {
   const [closeTarget, setCloseTarget] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [activeStatuses, setActiveStatuses] = useState<Set<ReviewSession['status']>>(
+    new Set(['pending', 'in_progress', 'completed'])
+  );
+
+  const toggleStatus = (status: ReviewSession['status']) => {
+    setActiveStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        // Don't allow deselecting all
+        if (next.size > 1) next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     loadSessions();
@@ -58,9 +74,11 @@ export function ReviewsPage() {
   const closeTargetSession = closeTarget ? sessions.find((s) => s.id === closeTarget) : null;
   const closeTargetPending = closeTargetSession?.pendingCommentsCount ?? 0;
 
-  const sortedSessions = [...sessions].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const sortedSessions = [...sessions]
+    .filter((s) => activeStatuses.has(s.status))
+    .sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -77,6 +95,33 @@ export function ReviewsPage() {
           <span className="hidden sm:inline">Nouvelle relecture</span>
         </button>
       </div>
+
+      {/* Status filters */}
+      {sessions.length > 0 && (
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(Object.entries(STATUS_CONFIG) as [ReviewSession['status'], typeof STATUS_CONFIG[keyof typeof STATUS_CONFIG]][]).map(([status, config]) => {
+            const count = sessions.filter((s) => s.status === status).length;
+            const isActive = activeStatuses.has(status);
+            const StatusIcon = config.icon;
+            return (
+              <button
+                key={status}
+                onClick={() => toggleStatus(status)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
+                  isActive
+                    ? `${config.bg} ${config.color} border-current`
+                    : 'bg-parchment-100 text-ink-200 border-parchment-200 hover:bg-parchment-200'
+                )}
+              >
+                <StatusIcon className="w-3 h-3" />
+                {config.label}
+                {count > 0 && <span className="ml-0.5">({count})</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">

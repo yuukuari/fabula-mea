@@ -4,6 +4,7 @@ import type { Character, Relationship } from '@/types';
 import { useBookStore } from '@/store/useBookStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { CharacterAvatar } from './CharacterAvatar';
 import { RelationshipEditor } from './RelationshipEditor';
 import { useNavigate } from 'react-router-dom';
 
@@ -75,13 +76,12 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
       {/* Header */}
       <div className="card-fantasy p-6 mb-6">
         <div className="flex gap-6">
-          {character.imageUrl ? (
-            <img src={character.imageUrl} alt={character.name} className="w-32 h-32 rounded-xl object-cover border-2 border-parchment-300" />
-          ) : (
-            <div className="w-32 h-32 rounded-xl bg-parchment-200 flex items-center justify-center border-2 border-parchment-300">
-              <User className="w-16 h-16 text-ink-200" />
-            </div>
-          )}
+          <CharacterAvatar
+            imageUrl={character.imageUrl}
+            imageOffsetY={character.imageOffsetY}
+            name={character.name}
+            size={32}
+          />
           <div className="flex-1">
             <h2 className="font-display text-3xl font-bold text-ink-500">
               {character.name} {character.surname}
@@ -249,9 +249,13 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
                       className="flex items-start gap-3 flex-1 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
                       onClick={() => target && navigate(`/characters/${target.id}`)}
                     >
-                      <div className="w-8 h-8 rounded-full bg-parchment-300 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <User className="w-4 h-4 text-ink-300" />
-                      </div>
+                      <CharacterAvatar
+                        imageUrl={target?.imageUrl}
+                        imageOffsetY={target?.imageOffsetY}
+                        name={target?.name ?? 'Inconnu'}
+                        size={8}
+                        className="mt-0.5"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-ink-500">{target?.name ?? 'Inconnu'}</span>

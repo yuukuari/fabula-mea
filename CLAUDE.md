@@ -196,11 +196,12 @@ Choisir le layout adapté :
 │   │   └── useReviewStore.ts    ← CRUD sessions de relecture + commentaires
 │   │
 │   ├── pages/                   ← Pages de l'application
-│   │   ├── HomePage.tsx         ← Accueil / sélection de livre
+│   │   ├── HomePage.tsx         ← Accueil / sélection de livre (badge commentaires en attente)
+│   │   ├── EncyclopediaPage.tsx ← ⭐ Tableau de bord du livre (stats, objectif du jour, manuscrit, relectures, encyclopédie)
 │   │   ├── CharactersPage.tsx   ← Gestion personnages
 │   │   ├── PlacesPage.tsx       ← Gestion lieux
 │   │   ├── ChaptersPage.tsx     ← Chapitres + scènes + éditeur
-│   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage OU par lieu, filtres croisés)
+│   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage OU par lieu, filtres croisés, filtrage doux par opacité)
 │   │   ├── ProgressPage.tsx     ← Progression + objectifs + Pomodoro + suivi journalier
 │   │   ├── WorldPage.tsx        ← Notes de worldbuilding
 │   │   ├── MapsPage.tsx         ← Cartes interactives
@@ -208,7 +209,7 @@ Choisir le layout adapté :
 │   │   ├── SettingsPage.tsx     ← Paramètres + export + import
 │   │   ├── TicketsPage.tsx      ← Tickets/feedback
 │   │   ├── ReleaseNotesPage.tsx ← Notes de version
-│   │   ├── ReviewsPage.tsx      ← Liste des sessions de relecture (auteur)
+│   │   ├── ReviewsPage.tsx      ← Liste des sessions de relecture (auteur, filtres par statut)
 │   │   ├── AuthPage.tsx         ← Login/Inscription
 │   │   ├── review/
 │   │   │   └── ReviewReaderPage.tsx ← Page publique relecteur (sans auth)
@@ -223,11 +224,11 @@ Choisir le layout adapté :
 │       │   ├── AdminShell.tsx   ← Layout admin
 │       │   └── SearchDialog.tsx ← Recherche globale (Cmd+K)
 │       ├── editor/              ← Éditeur TipTap (SceneEditor, SceneInlineEditor, EditorTabs)
-│       ├── characters/          ← Fiches personnages, relations, graphe
+│       ├── characters/          ← Fiches personnages, relations, graphe, CharacterAvatar (composant réutilisable avatar rond)
 │       ├── maps/                ← Viewer de cartes, épingles
 │       ├── progress/            ← Pomodoro, stats
-│       ├── shared/              ← ConfirmDialog, EmptyState, ImageUpload, TagBadge
-│       ├── tickets/             ← TicketBubble (conditionnel: masquée si non-logué), TicketForm
+│       ├── shared/              ← ConfirmDialog, EmptyState, ImageUpload (mode rond avec recadrage), TagBadge
+│       ├── tickets/             ← TicketBubble (affichée uniquement sur la HomePage), TicketForm
 │       ├── releases/            ← NewReleaseModal, composants release
 │       └── reviews/             ← NewReviewDialog, ReviewCommentPanel, ReviewContentViewer
 ```
@@ -239,13 +240,13 @@ Choisir le layout adapté :
 ### Entités d'un livre (`BookProject`)
 
 Un livre contient :
-- **Characters** — Personnages avec relations mutuelles, évolution, événements clés
+- **Characters** — Personnages avec relations mutuelles, évolution, événements clés, avatar rond avec `imageOffsetY` (pourcentage 0-100 pour le centrage vertical de l'image)
 - **Places** — Lieux typés (ville, bâtiment, paysage...) avec connexions
 - **Chapters** — Chapitres ordonnés, contenant des scènes
 - **Scenes** — Scènes avec statut (outline/draft/revision/complete), personnages, lieu, contenu TipTap
 - **Tags** — Système d'étiquettes réutilisables
 - **WorldNotes** — Notes de worldbuilding catégorisées
-- **NoteIdeas** — Notes et idées libres avec éditeur TipTap (toolbar complète : titres, formatage, alignement, listes, checklists, citations, images, liens), affichées en grille de cartes (comme l'univers), avec vue détail au clic
+- **NoteIdeas** — Notes et idées libres avec éditeur TipTap (toolbar complète : titres, formatage, alignement, listes, checklists, citations, images, liens), affichées en grille de cartes avec aperçu HTML du contenu (titre facultatif, contenu obligatoire), vue détail au clic
 - **Maps** — Cartes avec épingles liées aux lieux
 - **ProjectGoals** — Objectifs (date cible, mots/scène, objectif journalier, périodes exclues)
 - **WritingSessions** — Historique des sessions d'écriture
@@ -294,7 +295,11 @@ Système de relecture permettant à un auteur de partager des extraits de son li
 - **Clic commentaire → scroll** : cliquer sur un commentaire scrolle vers le passage surligné dans le contenu
 - **Panneau collapsible** : le plan (nav) et les commentaires sont collapsibles sur desktop, drawers sur mobile
 - **Lecture seule** : quand la session est `completed`, le relecteur peut consulter mais plus commenter
-- **TicketBubble masquée** : la bulle de création de ticket n'est pas affichée pour les utilisateurs non connectés (relecteurs)
+- **Confirmation commentaires non envoyés** : l'auteur et le relecteur voient une modale de confirmation s'ils tentent de quitter avec des brouillons non envoyés. Côté auteur, `useBlocker` (react-router) intercepte toute navigation in-app + `beforeunload` pour la fermeture d'onglet
+- **Filtres de statut** : la liste des relectures (auteur) dispose de filtres par statut (en attente, en cours, terminée, clôturée)
+- **Indicateur commentaires en attente** : la page d'accueil (HomePage) et la sidebar affichent un badge sur les livres/relectures ayant des commentaires en attente (les sessions clôturées sont exclues du décompte)
+- **Confirmation de clôture** : le bouton « Clôturer » côté auteur demande confirmation via une modale
+- **TicketBubble masquée** : la bulle de création de ticket est affichée uniquement sur la HomePage. La création de ticket est accessible via le menu « Aide & Support » dans la sidebar
 
 ### Releases
 
@@ -403,5 +408,9 @@ npm run preview  # Preview du build en local
 11. **Les commentaires de relecture** ont un workflow draft → sent → closed. Le relecteur ET l'auteur créent des brouillons, les envoient explicitement (envoi groupé), et l'auteur peut résoudre les commentaires.
 12. **Redirection post-login** : si un utilisateur non connecté tente d'accéder à une page (ex: lien email `reviews/{id}`), l'URL est sauvegardée dans `sessionStorage` (`emlb-redirect-after-login`) et l'utilisateur est redirigé après connexion.
 13. **Emails** : en prod, les emails sont envoyés via Resend (`api/_lib/email.ts`). En dev, `devEmailLog()` dans `dev-db.ts` affiche les emails simulés dans la console du navigateur.
-14. **TicketBubble** : positionnée à gauche sur les pages avec sidebar (AppShell), et tout à gauche sur les pages sans sidebar (HomePage, StandaloneShell).
-15. **Mettre à jour ce fichier** : après toute modification du code (nouvelle fonctionnalité, changement d'architecture, nouveau type, nouvel endpoint…), vérifier si des informations de ce `CLAUDE.md` (et `api/CLAUDE.md`) doivent être mises à jour pour rester en phase avec le code (structure des fichiers, modèle de données, clés de stockage, points d'attention, etc.).
+14. **TicketBubble** : affichée uniquement sur la HomePage (quand aucun livre n'est sélectionné). Dans les pages livre, la création de ticket se fait via le menu « Aide & Support » dans la sidebar.
+15. **Sidebar** : la navigation livre commence par un lien top-level « Vue d'ensemble » (tableau de bord), puis des groupes dépliables — Encyclopédie (Personnages, Lieux, Cartes, Univers), Manuscrit (Chapitres, Chronologie, Avancement, Relectures), Notes & Idées, Paramètres, et Aide & Support (Créer un ticket avec style bouton, Tickets). L'expansion automatique suit la route active. La sélection d'un livre redirige vers `/encyclopedia` (tableau de bord).
+16. **Timeline (filtrage doux)** : les filtres de la chronologie ne masquent plus les scènes non correspondantes, elles sont affichées avec une opacité réduite (`opacity-20`). L'axe temporel et les rangées restent stables.
+17. **ImageUpload rond** : le composant `ImageUpload` supporte un mode `round` avec un bouton « Recadrer » pour entrer en mode crop (drag-to-pan vertical, `offsetY`) et un bouton « Valider » pour confirmer. Utilisé pour les avatars de personnages. Un composant `CharacterAvatar` (`src/components/characters/CharacterAvatar.tsx`) affiche l'avatar rond avec `imageOffsetY` en différentes tailles (8/10/12/16/32), utilisé dans CharacterDetail, CharacterCard et RelationshipGraph.
+18. **Confirmation modifications non sauvegardées** : le formulaire de personnage (CharacterForm) affiche une modale à 3 boutons (Annuler/Quitter/Enregistrer) si l'utilisateur tente de fermer avec des modifications non sauvegardées.
+19. **Mettre à jour ce fichier** : après toute modification du code (nouvelle fonctionnalité, changement d'architecture, nouveau type, nouvel endpoint…), vérifier si des informations de ce `CLAUDE.md` (et `api/CLAUDE.md`) doivent être mises à jour pour rester en phase avec le code (structure des fichiers, modèle de données, clés de stockage, points d'attention, etc.).

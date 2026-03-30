@@ -1,5 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb } from 'lucide-react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -10,18 +10,51 @@ import { useReviewStore } from '@/store/useReviewStore';
 import { useTicketFormStore } from '@/store/useTicketFormStore';
 import { VersionBadge } from '@/components/releases/VersionBadge';
 
-const navItems = [
-  { to: '/characters', icon: Users, label: 'Personnages' },
-  { to: '/places', icon: MapPin, label: 'Lieux' },
-  { to: '/chapters', icon: BookOpen, label: 'Chapitres' },
-  { to: '/timeline', icon: Clock, label: 'Chronologie' },
-  { to: '/progress', icon: Target, label: 'Avancement' },
-  { to: '/world', icon: Globe, label: 'Univers' },
-  { to: '/maps', icon: Map, label: 'Cartes' },
-  { to: '/notes', icon: Lightbulb, label: 'Notes & Idées' },
-  { to: '/reviews', icon: Eye, label: 'Relectures' },
-  { to: '/settings', icon: Settings, label: 'Parametres' },
+interface NavGroup {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  basePaths: string[];
+  items: { to: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: 'Encyclopédie',
+    icon: Compass,
+    basePaths: ['/characters', '/places', '/maps', '/world'],
+    items: [
+      { to: '/characters', icon: Users, label: 'Personnages' },
+      { to: '/places', icon: MapPin, label: 'Lieux' },
+      { to: '/maps', icon: Map, label: 'Cartes' },
+      { to: '/world', icon: Globe, label: 'Univers & Glossaire' },
+    ],
+  },
+  {
+    label: 'Manuscrit',
+    icon: ScrollText,
+    basePaths: ['/chapters', '/timeline', '/progress', '/reviews'],
+    items: [
+      { to: '/chapters', icon: BookOpen, label: 'Chapitres' },
+      { to: '/timeline', icon: Clock, label: 'Chronologie' },
+      { to: '/progress', icon: Target, label: 'Avancement' },
+      { to: '/reviews', icon: Eye, label: 'Relectures' },
+    ],
+  },
 ];
+
+const directNavItems = [
+  { to: '/notes', icon: Lightbulb, label: 'Notes & Idées' },
+  { to: '/settings', icon: Settings, label: 'Paramètres' },
+];
+
+const supportGroup = {
+  label: 'Aide & Support',
+  icon: HelpCircle,
+  basePaths: ['/tickets'],
+  items: [
+    { to: '/tickets', icon: List, label: 'Tickets' },
+  ],
+};
 
 const adminItems = [
   { to: '/admin/members', icon: Users, label: 'Membres' },
@@ -37,6 +70,7 @@ interface SidebarProps {
 
 export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const bookTitle = useBookStore((s) => s.title);
   const books = useLibraryStore((s) => s.books);
   const currentBookId = useLibraryStore((s) => s.currentBookId);
@@ -47,6 +81,45 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
 
   const [showSwitcher, setShowSwitcher] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
+
+  // Collapsible group state — auto-expand group whose route is active
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    for (const group of navGroups) {
+      if (group.basePaths.some((p) => location.pathname.startsWith(p))) {
+        initial.add(group.label);
+      }
+    }
+    if (supportGroup.basePaths.some((p) => location.pathname.startsWith(p))) {
+      initial.add(supportGroup.label);
+    }
+    return initial;
+  });
+
+  // Auto-expand when route changes
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      for (const group of navGroups) {
+        if (group.basePaths.some((p) => location.pathname.startsWith(p))) {
+          next.add(group.label);
+        }
+      }
+      if (supportGroup.basePaths.some((p) => location.pathname.startsWith(p))) {
+        next.add(supportGroup.label);
+      }
+      return next;
+    });
+  }, [location.pathname]);
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
 
   // Load review sessions for sidebar badge
   const user = useAuthStore((s) => s.user);
@@ -84,7 +157,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
     selectBook(bookId);
     loadBook(bookId);
     setShowSwitcher(false);
-    navigate('/characters');
+    navigate('/encyclopedia');
     onMobileClose();
   };
 
@@ -175,35 +248,144 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {/* Dashboard — top-level link */}
+        <NavLink
+          to="/encyclopedia"
+          onClick={onMobileClose}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+              isActive
+                ? 'bg-parchment-200 text-bordeaux-500'
+                : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
+            )
+          }
+        >
+          <LayoutDashboard className="w-5 h-5" />
+          <span>Vue d'ensemble</span>
+        </NavLink>
+
+        <div className="h-px bg-parchment-200 my-2" />
+
+        {navGroups.map((group) => {
+          const GroupIcon = group.icon;
+          const isExpanded = expandedGroups.has(group.label);
+          const isGroupActive = group.basePaths.some((p) => location.pathname.startsWith(p));
+          return (
+            <div key={group.label}>
+              <button
+                onClick={() => toggleGroup(group.label)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                  isGroupActive ? 'text-bordeaux-500' : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
+                )}
+              >
+                <GroupIcon className="w-5 h-5" />
+                <span className="flex-1 text-left">{group.label}</span>
+                <ChevronRight className={cn('w-4 h-4 transition-transform duration-200', isExpanded && 'rotate-90')} />
+              </button>
+              {isExpanded && (
+                <div className="ml-4 mt-0.5 space-y-0.5">
+                  {group.items.map(({ to, icon: Icon, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      onClick={onMobileClose}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                          'text-ink-300 hover:bg-parchment-200 hover:text-ink-500',
+                          isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
+                        )
+                      }
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{label}</span>
+                      {to === '/reviews' && totalPendingComments > 0 && (
+                        <span className="ml-auto text-[10px] font-bold bg-bordeaux-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight">
+                          {totalPendingComments}
+                        </span>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {directNavItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             onClick={onMobileClose}
             className={({ isActive }) =>
-              cn('sidebar-link', isActive && 'sidebar-link-active')
+              cn(
+                'flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                isActive ? 'text-bordeaux-500' : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
+              )
             }
           >
             <Icon className="w-5 h-5" />
             <span>{label}</span>
-            {to === '/reviews' && totalPendingComments > 0 && (
-              <span className="ml-auto text-[10px] font-bold bg-bordeaux-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight">
-                {totalPendingComments}
-              </span>
-            )}
           </NavLink>
         ))}
+
+        <div className="h-px bg-parchment-200 my-2" />
+
+        {/* Support group */}
+        {(() => {
+          const GroupIcon = supportGroup.icon;
+          const isExpanded = expandedGroups.has(supportGroup.label);
+          const isGroupActive = supportGroup.basePaths.some((p) => location.pathname.startsWith(p));
+          return (
+            <div>
+              <button
+                onClick={() => toggleGroup(supportGroup.label)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                  isGroupActive ? 'text-bordeaux-500' : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
+                )}
+              >
+                <GroupIcon className="w-5 h-5" />
+                <span className="flex-1 text-left">{supportGroup.label}</span>
+                <ChevronRight className={cn('w-4 h-4 transition-transform duration-200', isExpanded && 'rotate-90')} />
+              </button>
+              {isExpanded && (
+                <div className="ml-4 mt-0.5 space-y-0.5">
+                  <button
+                    onClick={() => { openTicketForm(); onMobileClose(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
+                               bg-bordeaux-50 text-bordeaux-600 hover:bg-bordeaux-100 border border-bordeaux-200"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Créer un ticket</span>
+                  </button>
+                  {supportGroup.items.map(({ to, icon: Icon, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      onClick={onMobileClose}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                          'text-ink-300 hover:bg-parchment-200 hover:text-ink-500',
+                          isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
+                        )
+                      }
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </nav>
 
       <div className="p-4 border-t border-parchment-300 space-y-3">
-        {/* Mobile-only ticket button */}
-        <button
-          onClick={() => { openTicketForm(); onMobileClose(); }}
-          className="md:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-400 bg-bordeaux-50 border border-bordeaux-200 rounded-lg hover:bg-bordeaux-100 transition-colors"
-        >
-          <MessageSquarePlus className="w-4 h-4 text-bordeaux-500" />
-          <span>Signaler un bug / suggestion</span>
-        </button>
         <AutoSaveIndicator />
         <UserSection />
       </div>

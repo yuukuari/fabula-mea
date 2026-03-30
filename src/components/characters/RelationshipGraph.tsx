@@ -10,6 +10,7 @@ interface Node {
   surname?: string;
   sex?: CharacterSex;
   imageUrl?: string;
+  imageOffsetY?: number;
   x: number;
   y: number;
   vx: number;
@@ -162,7 +163,7 @@ export function RelationshipGraph() {
 
     nodesRef.current = characters.map((c, i) => {
       const ex = existing.get(c.id);
-      if (ex) return { ...ex, name: c.name, surname: c.surname, sex: c.sex, imageUrl: c.imageUrl };
+      if (ex) return { ...ex, name: c.name, surname: c.surname, sex: c.sex, imageUrl: c.imageUrl, imageOffsetY: c.imageOffsetY };
       // Use saved position if available
       const saved = graphNodePositions[c.id];
       if (saved) {
@@ -172,6 +173,7 @@ export function RelationshipGraph() {
           surname: c.surname,
           sex: c.sex,
           imageUrl: c.imageUrl,
+          imageOffsetY: c.imageOffsetY,
           x: saved.x,
           y: saved.y,
           vx: 0,
@@ -186,6 +188,7 @@ export function RelationshipGraph() {
         surname: c.surname,
         sex: c.sex,
         imageUrl: c.imageUrl,
+        imageOffsetY: c.imageOffsetY,
         x: w / 2 + r * Math.cos(angle),
         y: h / 2 + r * Math.sin(angle),
         vx: 0,
@@ -361,8 +364,28 @@ export function RelationshipGraph() {
       ctx.clip();
 
       if (imageReady) {
-        // Draw avatar image
-        ctx.drawImage(img!, node.x - r, node.y - r, r * 2, r * 2);
+        // Draw avatar image with cover behavior + scale/offset (matches CharacterAvatar CSS)
+        const imgW = img!.naturalWidth;
+        const imgH = img!.naturalHeight;
+        const diameter = r * 2;
+        const imgAspect = imgW / imgH;
+        let drawW: number, drawH: number, drawX: number, drawY: number;
+        if (imgAspect > 1) {
+          drawH = diameter;
+          drawW = diameter * imgAspect;
+        } else {
+          drawW = diameter;
+          drawH = diameter / imgAspect;
+        }
+        // Scale 1.4x to ensure enough overflow for visible offset (same as CSS scale(1.4))
+        drawW *= 1.4;
+        drawH *= 1.4;
+        drawX = node.x - drawW / 2;
+        drawY = node.y - drawH / 2;
+        // Vertical offset — same formula as CSS translateY(${(50 - offsetY) * 0.6}%)
+        const oY = node.imageOffsetY ?? 50;
+        drawY += (50 - oY) * 0.6 / 100 * drawH;
+        ctx.drawImage(img!, drawX, drawY, drawW, drawH);
       } else {
         // Gray fill with initials
         ctx.fillStyle = NODE_FILL;
