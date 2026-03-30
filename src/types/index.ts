@@ -285,6 +285,82 @@ export interface Release {
   updatedAt: string;
 }
 
+// ─── Reviews (relecture) ───
+export type ReviewSessionStatus = 'pending' | 'in_progress' | 'completed' | 'closed';
+export type ReviewCommentStatus = 'draft' | 'sent' | 'closed';
+
+export interface ReviewSnapshotChapter {
+  id: EntityId;
+  title?: string;
+  number: number;
+  synopsis?: string;
+  color: string;
+  sceneIds: EntityId[];
+}
+
+export interface ReviewSnapshotScene {
+  id: EntityId;
+  title?: string;
+  description: string;
+  chapterId: EntityId;
+  orderInChapter: number;
+  content?: string; // HTML (TipTap)
+  characterIds: EntityId[];
+  placeId?: EntityId;
+}
+
+export interface ReviewSession {
+  id: EntityId;
+  bookId: EntityId;
+  bookTitle: string;
+  authorName: string;
+  authorEmail: string;
+  userId: EntityId; // auteur
+  token: string; // UUID public pour le lien
+  readerName?: string;
+  readerEmail?: string;
+  status: ReviewSessionStatus;
+  snapshot: {
+    chapters: ReviewSnapshotChapter[];
+    scenes: ReviewSnapshotScene[];
+  };
+  commentsCount: number;
+  pendingCommentsCount: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  closedAt?: string;
+}
+
+export interface ReviewComment {
+  id: EntityId;
+  sessionId: EntityId;
+  sceneId: EntityId;
+  isAuthor: boolean;
+  authorLabel: string; // nom du relecteur ou de l'auteur
+  selectedText: string;
+  /** Offset in plain text (HTML stripped) of the scene content */
+  startOffset: number;
+  endOffset: number;
+  content: string;
+  status: ReviewCommentStatus;
+  parentId?: EntityId; // réponse à un autre commentaire
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Self-comments (author notes on their own scenes) ───
+export interface SelfComment {
+  id: EntityId;
+  sceneId: EntityId;
+  selectedText: string;
+  startOffset: number;
+  endOffset: number;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Root Store ───
 export interface BookProject {
   id: EntityId;
@@ -302,6 +378,7 @@ export interface BookProject {
   writingSessions: WritingSession[];
   worldNotes: WorldNote[];
   maps: MapItem[];
+  selfComments?: SelfComment[];
   graphNodePositions?: Record<string, { x: number; y: number }>;
   createdAt: string;
   updatedAt: string;

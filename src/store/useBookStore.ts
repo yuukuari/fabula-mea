@@ -3,7 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
-  Relationship, KeyEvent, MapItem, MapPin,
+  Relationship, KeyEvent, MapItem, MapPin, SelfComment,
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
@@ -82,6 +82,11 @@ interface BookStore extends BookProject {
   updateMapPin: (mapId: string, pinId: string, data: Partial<MapPin>) => void;
   deleteMapPin: (mapId: string, pinId: string) => void;
 
+  // Self-comments
+  addSelfComment: (comment: Omit<SelfComment, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateSelfComment: (id: string, data: Partial<Pick<SelfComment, 'content'>>) => void;
+  deleteSelfComment: (id: string) => void;
+
   // Graph node positions
   saveGraphNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
 
@@ -109,6 +114,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     writingSessions: [],
     worldNotes: [],
     maps: [],
+    selfComments: [],
     graphNodePositions: {},
   };
 }
@@ -130,6 +136,7 @@ function extractProjectData(state: BookStore): BookProject {
     writingSessions: state.writingSessions,
     worldNotes: state.worldNotes,
     maps: state.maps,
+    selfComments: state.selfComments,
     graphNodePositions: state.graphNodePositions,
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
@@ -752,6 +759,31 @@ export const useBookStore = create<BookStore>()(
               ? { ...m, pins: m.pins.filter((p) => p.id !== pinId), updatedAt: now() }
               : m
           ),
+          ...touchSave(),
+        })),
+
+      // ─── Self-comments ───
+      addSelfComment: (comment) => {
+        const id = generateId();
+        const timestamp = now();
+        set((s) => ({
+          selfComments: [...(s.selfComments ?? []), { ...comment, id, createdAt: timestamp, updatedAt: timestamp }],
+          ...touchSave(),
+        }));
+        return id;
+      },
+
+      updateSelfComment: (id, data) =>
+        set((s) => ({
+          selfComments: (s.selfComments ?? []).map((c) =>
+            c.id === id ? { ...c, ...data, updatedAt: now() } : c
+          ),
+          ...touchSave(),
+        })),
+
+      deleteSelfComment: (id) =>
+        set((s) => ({
+          selfComments: (s.selfComments ?? []).filter((c) => c.id !== id),
           ...touchSave(),
         })),
 

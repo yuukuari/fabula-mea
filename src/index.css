@@ -193,3 +193,18 @@
   color: #9a8d7e;
   font-style: italic;
 }
+
+/* Review highlights */
+.review-content mark[data-comment-id] {
+  background-color: rgba(139, 34, 82, 0.15);
+  border-bottom: 2px solid rgba(139, 34, 82, 0.4);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-radius: 2px;
+  padding: 1px 0;
+}
+
+.review-content mark[data-comment-id]:hover,
+.review-content mark[data-comment-id].review-highlight-active {
+  background-color: rgba(139, 34, 82, 0.35);
+}

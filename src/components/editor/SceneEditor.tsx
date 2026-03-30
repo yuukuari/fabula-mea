@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Minus, X, User, MapPin, ChevronRight, BookOpen, PanelLeft, Menu, Calendar } from 'lucide-react';
+import { Minus, X, User, MapPin, ChevronRight, BookOpen, PanelLeft, PanelRight, Menu, Calendar, MessageCircle } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { SceneInlineEditor, countWords } from './SceneInlineEditor';
+import { SelfCommentPanel } from './SelfCommentPanel';
+import { getSelectionOffsets } from '@/lib/review-highlights';
 import { cn, SCENE_STATUS_LABELS } from '@/lib/utils';
 import type { Scene, Chapter } from '@/types';
 
@@ -25,6 +27,17 @@ export function SceneEditor() {
   // Desktop : panneau replié ou non
   // Mobile : drawer ouvert ou non
   const [navOpen, setNavOpen] = useState(true);
+
+  // Notes panel
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [pendingSelection, setPendingSelection] = useState<{
+    selectedText: string;
+    startOffset: number;
+    endOffset: number;
+  } | null>(null);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+
+  const selfComments = useBookStore((s) => s.selfComments ?? []);
 
   const sceneRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const rightPanelRef = useRef<HTMLDivElement>(null);
@@ -105,6 +118,37 @@ export function SceneEditor() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, minimize]);
+
+  // Handle text selection for self-comments
+  const handleTextSelection = useCallback(() => {
+    if (!notesOpen) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+
+    const text = selection.toString().trim();
+    if (!text) return;
+
+    // Find which scene container the selection is in
+    const range = selection.getRangeAt(0);
+    const container = range.startContainer.parentElement?.closest('[id^="scene-"]');
+    if (!container) return;
+
+    const sceneId = container.id.replace('scene-', '');
+
+    // Find the .ProseMirror container within this scene
+    const proseMirrorEl = container.querySelector('.ProseMirror');
+    if (!proseMirrorEl || !proseMirrorEl.contains(range.startContainer)) return;
+
+    const offsets = getSelectionOffsets(proseMirrorEl as HTMLElement);
+    if (!offsets) return;
+
+    setVisibleSceneId(sceneId);
+    setPendingSelection({
+      selectedText: offsets.text,
+      startOffset: offsets.startOffset,
+      endOffset: offsets.endOffset,
+    });
+  }, [notesOpen]);
 
   if (!isOpen) return null;
 
@@ -241,6 +285,21 @@ export function SceneEditor() {
           <span>Sauvegarde auto</span>
         </div>
 
+        {/* Toggle notes panel */}
+        <button
+          onClick={() => setNotesOpen((v) => !v)}
+          className={cn(
+            'btn-ghost p-1.5 shrink-0 transition-colors hidden sm:block',
+            notesOpen && 'text-bordeaux-500'
+          )}
+          title={notesOpen ? 'Masquer les notes' : 'Afficher les notes'}
+        >
+          <MessageCircle className="w-4 h-4" />
+          {visibleSceneId && selfComments.filter((c) => c.sceneId === visibleSceneId).length > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-bordeaux-400 rounded-full" />
+          )}
+        </button>
+
         <button onClick={minimize} className="btn-ghost p-1.5 shrink-0" title="Réduire (Échap)">
           <Minus className="w-4 h-4" />
         </button>
@@ -285,7 +344,7 @@ export function SceneEditor() {
         </div>
 
         {/* ── RIGHT: Livre continu ── */}
-        <div ref={rightPanelRef} className="flex-1 overflow-y-auto">
+        <div ref={rightPanelRef} className="flex-1 overflow-y-auto" onMouseUp={handleTextSelection}>
           <div className="max-w-3xl mx-auto px-6 sm:px-14 py-10 sm:py-12 pb-32">
             {sortedChapters.map((chapter) => {
               const chScenes = getChapterScenes(chapter.id);
@@ -384,6 +443,27 @@ export function SceneEditor() {
                 <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="font-display text-lg">Commencez par créer des chapitres et des scènes</p>
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Notes panel (right) ── */}
+        <div
+          className={cn(
+            'hidden sm:flex flex-col shrink-0 border-l border-parchment-200 bg-parchment-50',
+            'overflow-hidden transition-all duration-200 ease-in-out',
+            notesOpen ? 'w-64' : 'w-0 border-l-0'
+          )}
+        >
+          <div className="w-64 flex flex-col flex-1 min-h-0">
+            {visibleSceneId && (
+              <SelfCommentPanel
+                sceneId={visibleSceneId}
+                pendingSelection={pendingSelection}
+                onClearSelection={() => setPendingSelection(null)}
+                onHighlightComment={setActiveCommentId}
+                activeCommentId={activeCommentId}
+              />
             )}
           </div>
         </div>

@@ -15,22 +15,31 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { AuthPage } from '@/pages/AuthPage';
 import { TicketsPage } from '@/pages/TicketsPage';
 import { ReleaseNotesPage } from '@/pages/ReleaseNotesPage';
+import { ReviewsPage } from '@/pages/ReviewsPage';
+import { ReviewAuthorView } from '@/pages/reviews/ReviewAuthorView';
+import { ReviewReaderPage } from '@/pages/review/ReviewReaderPage';
 import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
 import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
 import { TicketBubble } from '@/components/tickets/TicketBubble';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { NewReleaseModal } from '@/components/releases/NewReleaseModal';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useEditorStore } from '@/store/useEditorStore';
+import { useTicketFormStore } from '@/store/useTicketFormStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
 
 /** Root layout — renders global overlays (ticket bubble, release footer, etc.) on every page */
 function RootLayout() {
-  const [showTicketForm, setShowTicketForm] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  const editorOpen = useEditorStore((s) => s.isOpen);
+  const ticketFormOpen = useTicketFormStore((s) => s.open);
+  const showTicketForm = useTicketFormStore((s) => s.show);
+  const hideTicketForm = useTicketFormStore((s) => s.hide);
   return (
     <>
       <Outlet />
-      <TicketBubble onCreateTicket={() => setShowTicketForm(true)} />
-      <TicketForm open={showTicketForm} onClose={() => setShowTicketForm(false)} />
+      {user && !editorOpen && <TicketBubble onCreateTicket={showTicketForm} />}
+      {user && <TicketForm open={ticketFormOpen} onClose={hideTicketForm} />}
       <NewReleaseModal />
     </>
   );
@@ -41,11 +50,13 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { path: '/', element: <HomePage /> },
+      { path: 'review/:token', element: <ReviewReaderPage /> },
       {
         element: <StandaloneShell />,
         children: [
           { path: 'tickets', element: <TicketsPage /> },
           { path: 'releases', element: <ReleaseNotesPage /> },
+          { path: 'reviews/:id', element: <ReviewAuthorView /> },
         ],
       },
       {
@@ -59,6 +70,7 @@ const router = createBrowserRouter([
           { path: 'progress', element: <ProgressPage /> },
           { path: 'world', element: <WorldPage /> },
           { path: 'maps', element: <MapsPage /> },
+          { path: 'reviews', element: <ReviewsPage /> },
           { path: 'settings', element: <SettingsPage /> },
         ],
       },
@@ -98,6 +110,11 @@ export default function App() {
         <div className="w-8 h-8 border-2 border-bordeaux-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  // Review reader page is public (no auth needed)
+  if (!user && window.location.pathname.startsWith('/review/')) {
+    return <RouterProvider router={router} />;
   }
 
   // Auth required (both dev and production)

@@ -1,11 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle, Shield, MessageSquare, Tag } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle, Shield, MessageSquare, MessageSquarePlus, Tag, Eye } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useSyncStore } from '@/store/useSyncStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useReviewStore } from '@/store/useReviewStore';
+import { useTicketFormStore } from '@/store/useTicketFormStore';
 import { VersionBadge } from '@/components/releases/VersionBadge';
 
 const navItems = [
@@ -16,6 +18,7 @@ const navItems = [
   { to: '/progress', icon: Target, label: 'Avancement' },
   { to: '/world', icon: Globe, label: 'Univers' },
   { to: '/maps', icon: Map, label: 'Cartes' },
+  { to: '/reviews', icon: Eye, label: 'Relectures' },
   { to: '/settings', icon: Settings, label: 'Parametres' },
 ];
 
@@ -39,9 +42,24 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
   const selectBook = useLibraryStore((s) => s.selectBook);
   const loadBook = useBookStore((s) => s.loadBook);
   const unloadBook = useBookStore((s) => s.unloadBook);
+  const openTicketForm = useTicketFormStore((s) => s.show);
 
   const [showSwitcher, setShowSwitcher] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
+
+  // Load review sessions for sidebar badge
+  const user = useAuthStore((s) => s.user);
+  const reviewSessions = useReviewStore((s) => s.sessions);
+  const loadReviewSessions = useReviewStore((s) => s.loadSessions);
+
+  useEffect(() => {
+    if (user) loadReviewSessions();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalPendingComments = reviewSessions.reduce(
+    (sum, s) => s.status === 'closed' ? sum : sum + (s.pendingCommentsCount ?? 0),
+    0
+  );
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -167,11 +185,24 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
           >
             <Icon className="w-5 h-5" />
             <span>{label}</span>
+            {to === '/reviews' && totalPendingComments > 0 && (
+              <span className="ml-auto text-[10px] font-bold bg-bordeaux-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight">
+                {totalPendingComments}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
 
       <div className="p-4 border-t border-parchment-300 space-y-3">
+        {/* Mobile-only ticket button */}
+        <button
+          onClick={() => { openTicketForm(); onMobileClose(); }}
+          className="md:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-400 bg-bordeaux-50 border border-bordeaux-200 rounded-lg hover:bg-bordeaux-100 transition-colors"
+        >
+          <MessageSquarePlus className="w-4 h-4 text-bordeaux-500" />
+          <span>Signaler un bug / suggestion</span>
+        </button>
         <AutoSaveIndicator />
         <UserSection />
       </div>
@@ -180,8 +211,8 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
 
   return (
     <>
-      {/* Desktop: static sidebar */}
-      <div className="hidden md:flex">
+      {/* Desktop: fixed sidebar */}
+      <div className="hidden md:flex fixed inset-y-0 left-0 z-30">
         {sidebarContent}
       </div>
 

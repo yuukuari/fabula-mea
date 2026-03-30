@@ -12,7 +12,7 @@ export function TicketBubble({ onCreateTicket }: TicketBubbleProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="fixed bottom-6 left-6 z-40 flex flex-col items-start gap-2">
+    <div className="fixed bottom-6 left-[17.5rem] z-40 hidden md:flex flex-col items-start gap-2">
       {/* Expanded menu */}
       {expanded && (
         <div className="bg-white rounded-lg shadow-lg border border-parchment-300 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 mb-1">

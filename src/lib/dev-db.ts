@@ -12,7 +12,7 @@
  *   emlb-dev:releases                     → Release[]
  */
 
-import type { Ticket, TicketComment, TicketStatusChange, Release } from '@/types';
+import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment } from '@/types';
 import { devAuth } from '@/lib/dev-auth';
 
 // ─── Token decode (mirrors dev-auth.ts) ──────────────────────────────────────
@@ -367,6 +367,262 @@ export const devDb = {
         };
       });
       return { members };
+    },
+  },
+
+  // ─── Reviews (relecture) ────────────────────────────────────────────────
+
+  reviews: {
+    /** List all review sessions for the current (author) user */
+    async list(): Promise<ReviewSession[]> {
+      const uid = requireUserId();
+      const sessionIds = getJson<string[]>(`emlb-dev:u:${uid}:reviews`, []);
+      const sessions: ReviewSession[] = [];
+      for (const sid of sessionIds) {
+        const s = getJson<ReviewSession | null>(`emlb-dev:review:${sid}`, null);
+        if (s) {
+          // Compute pendingCommentsCount from actual comments
+          const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sid}:comments`, []);
+          s.pendingCommentsCount = comments.filter(c => !c.parentId && c.status === 'sent' && !c.isAuthor).length;
+          sessions.push(s);
+        }
+      }
+      return sessions;
+    },
+
+    /** Create a new review session (author side) */
+    async create(data: {
+      bookId: string;
+      bookTitle: string;
+      authorName: string;
+      authorEmail: string;
+      readerEmail?: string;
+      snapshot: ReviewSession['snapshot'];
+    }): Promise<{ session: ReviewSession }> {
+      const uid = requireUserId();
+      const token = generateId() + generateId(); // longer token for security
+      const session: ReviewSession = {
+        id: generateId(),
+        bookId: data.bookId,
+        bookTitle: data.bookTitle,
+        authorName: data.authorName,
+        authorEmail: data.authorEmail,
+        userId: uid,
+        token,
+        readerEmail: data.readerEmail,
+        status: 'pending',
+        snapshot: data.snapshot,
+        commentsCount: 0,
+        pendingCommentsCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+      // Store session by token (for public access)
+      setJson(`emlb-dev:review:token:${token}`, session);
+      // Store session by id (for author access)
+      setJson(`emlb-dev:review:${session.id}`, session);
+      // Add to the author's session list
+      const sessionIds = getJson<string[]>(`emlb-dev:u:${uid}:reviews`, []);
+      sessionIds.push(session.id);
+      setJson(`emlb-dev:u:${uid}:reviews`, sessionIds);
+      return { session };
+    },
+
+    /** Get a specific session (author side, by id) */
+    async get(id: string): Promise<{ session: ReviewSession; comments: ReviewComment[] }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:${id}`, null);
+      if (!session) throw new Error('Session introuvable');
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${id}:comments`, []);
+      // Compute pendingCommentsCount from actual comments
+      session.pendingCommentsCount = comments.filter(c => !c.parentId && c.status === 'sent' && !c.isAuthor).length;
+      return { session, comments };
+    },
+
+    /** Delete a review session */
+    async delete(id: string): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:${id}`, null);
+      if (!session) throw new Error('Session introuvable');
+      // Remove session data
+      localStorage.removeItem(`emlb-dev:review:${id}`);
+      localStorage.removeItem(`emlb-dev:review:token:${session.token}`);
+      localStorage.removeItem(`emlb-dev:review:${id}:comments`);
+      // Remove from author's list
+      const sessionIds = getJson<string[]>(`emlb-dev:u:${uid}:reviews`, []);
+      setJson(`emlb-dev:u:${uid}:reviews`, sessionIds.filter((s) => s !== id));
+      return { ok: true };
+    },
+
+    /** Close a review session (author => marks as 'closed', hides content from reader) */
+    async closeSession(id: string): Promise<{ session: ReviewSession }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:${id}`, null);
+      if (!session) throw new Error('Session introuvable');
+      session.status = 'closed';
+      session.closedAt = new Date().toISOString();
+      setJson(`emlb-dev:review:${id}`, session);
+      setJson(`emlb-dev:review:token:${session.token}`, session);
+      return { session };
+    },
+
+    /** Author replies to a comment or closes it */
+    async addComment(sessionId: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ comment: ReviewComment }> {
+      const newComment: ReviewComment = {
+        ...comment,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+      comments.push(newComment);
+      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+      // Update comments count on session
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
+      if (session) {
+        session.commentsCount = comments.filter((c) => !c.parentId).length;
+        setJson(`emlb-dev:review:${sessionId}`, session);
+        setJson(`emlb-dev:review:token:${session.token}`, session);
+      }
+      return { comment: newComment };
+    },
+
+    /** Update a comment (content or status) */
+    async updateComment(sessionId: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>): Promise<{ comment: ReviewComment }> {
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+      const idx = comments.findIndex((c) => c.id === commentId);
+      if (idx === -1) throw new Error('Commentaire introuvable');
+      comments[idx] = { ...comments[idx], ...data, updatedAt: new Date().toISOString() };
+      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+      return { comment: comments[idx] };
+    },
+
+    /** Delete a comment */
+    async deleteComment(sessionId: string, commentId: string): Promise<{ ok: boolean }> {
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+      const filtered = comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
+      setJson(`emlb-dev:review:${sessionId}:comments`, filtered);
+      // Update count
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
+      if (session) {
+        session.commentsCount = filtered.filter((c) => !c.parentId).length;
+        setJson(`emlb-dev:review:${sessionId}`, session);
+        setJson(`emlb-dev:review:token:${session.token}`, session);
+      }
+      return { ok: true };
+    },
+
+    /** Batch-send draft comments (reader side — mark as sent) */
+    async sendComments(sessionId: string): Promise<{ sent: number }> {
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+      let sent = 0;
+      for (let i = 0; i < comments.length; i++) {
+        if (comments[i].status === 'draft') {
+          comments[i] = { ...comments[i], status: 'sent', updatedAt: new Date().toISOString() };
+          sent++;
+        }
+      }
+      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+      return { sent };
+    },
+  },
+
+  // ─── Review public (reader side, by token) ─────────────────────────────
+
+  reviewPublic: {
+    /** Get session by public token */
+    async getByToken(token: string): Promise<{ session: ReviewSession }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      return { session };
+    },
+
+    /** Start the review (reader chooses their name) */
+    async start(token: string, data: { readerName: string }): Promise<{ session: ReviewSession }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      session.readerName = data.readerName;
+      session.status = 'in_progress';
+      session.startedAt = new Date().toISOString();
+      setJson(`emlb-dev:review:token:${token}`, session);
+      setJson(`emlb-dev:review:${session.id}`, session);
+      return { session };
+    },
+
+    /** Get comments for a session (by token) */
+    async getComments(token: string): Promise<ReviewComment[]> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      return getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
+    },
+
+    /** Add a comment (reader side) */
+    async addComment(token: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ comment: ReviewComment }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      const newComment: ReviewComment = {
+        ...comment,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
+      comments.push(newComment);
+      setJson(`emlb-dev:review:${session.id}:comments`, comments);
+      // Update comments count
+      session.commentsCount = comments.filter((c) => !c.parentId).length;
+      setJson(`emlb-dev:review:token:${token}`, session);
+      setJson(`emlb-dev:review:${session.id}`, session);
+      return { comment: newComment };
+    },
+
+    /** Update a comment (reader side) */
+    async updateComment(token: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>): Promise<{ comment: ReviewComment }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
+      const idx = comments.findIndex((c) => c.id === commentId);
+      if (idx === -1) throw new Error('Commentaire introuvable');
+      comments[idx] = { ...comments[idx], ...data, updatedAt: new Date().toISOString() };
+      setJson(`emlb-dev:review:${session.id}:comments`, comments);
+      return { comment: comments[idx] };
+    },
+
+    /** Delete a comment (reader side) */
+    async deleteComment(token: string, commentId: string): Promise<{ ok: boolean }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
+      const filtered = comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
+      setJson(`emlb-dev:review:${session.id}:comments`, filtered);
+      session.commentsCount = filtered.filter((c) => !c.parentId).length;
+      setJson(`emlb-dev:review:token:${token}`, session);
+      setJson(`emlb-dev:review:${session.id}`, session);
+      return { ok: true };
+    },
+
+    /** Send all draft comments (marks as sent) */
+    async sendComments(token: string): Promise<{ sent: number }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
+      let sent = 0;
+      for (let i = 0; i < comments.length; i++) {
+        if (comments[i].status === 'draft') {
+          comments[i] = { ...comments[i], status: 'sent', updatedAt: new Date().toISOString() };
+          sent++;
+        }
+      }
+      setJson(`emlb-dev:review:${session.id}:comments`, comments);
+      return { sent };
+    },
+
+    /** Mark the review as completed */
+    async complete(token: string): Promise<{ session: ReviewSession }> {
+      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+      if (!session) throw new Error('Session introuvable');
+      session.status = 'completed';
+      session.completedAt = new Date().toISOString();
+      setJson(`emlb-dev:review:token:${token}`, session);
+      setJson(`emlb-dev:review:${session.id}`, session);
+      return { session };
     },
   },
 };

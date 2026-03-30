@@ -1,0 +1,133 @@
+/**
+ * Email helper using Resend.
+ * Falls back silently if RESEND_API_KEY is not set.
+ */
+import { Resend } from 'resend';
+
+const FROM_EMAIL = 'Ecrire Mon Livre <noreply@ecrire-mon-livre.fr>';
+
+function getResend(): Resend | null {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  return new Resend(key);
+}
+
+export async function sendReviewInviteEmail(opts: {
+  to: string;
+  authorName: string;
+  bookTitle: string;
+  reviewUrl: string;
+}): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: opts.to,
+      subject: `${opts.authorName} vous invite à relire « ${opts.bookTitle} »`,
+      html: `
+        <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #8b2252; font-size: 24px;">Invitation à la relecture</h2>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            <strong>${opts.authorName}</strong> vous invite à relire son livre <strong>« ${opts.bookTitle} »</strong>.
+          </p>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Cliquez sur le bouton ci-dessous pour commencer votre relecture. Vous pourrez ajouter 
+            des commentaires directement sur le texte.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${opts.reviewUrl}" 
+               style="background-color: #8b2252; color: white; padding: 14px 28px; 
+                      text-decoration: none; border-radius: 8px; font-size: 16px; 
+                      font-weight: bold; display: inline-block;">
+              Commencer la relecture
+            </a>
+          </div>
+          <p style="font-size: 13px; color: #888; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            Ce lien est personnel. Il vous donne accès à une session de relecture dédiée.
+          </p>
+        </div>
+      `,
+    });
+  } catch (e) {
+    console.error('Failed to send review invite email:', e);
+  }
+}
+
+export async function sendCommentsNotificationEmail(opts: {
+  to: string;
+  readerName: string;
+  bookTitle: string;
+  commentCount: number;
+  reviewUrl: string;
+}): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: opts.to,
+      subject: `${opts.readerName} a envoyé ${opts.commentCount} commentaire${opts.commentCount > 1 ? 's' : ''} sur « ${opts.bookTitle} »`,
+      html: `
+        <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #8b2252; font-size: 24px;">Nouveaux commentaires</h2>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            <strong>${opts.readerName}</strong> a envoyé <strong>${opts.commentCount} commentaire${opts.commentCount > 1 ? 's' : ''}</strong> 
+            sur votre livre <strong>« ${opts.bookTitle} »</strong>.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${opts.reviewUrl}" 
+               style="background-color: #8b2252; color: white; padding: 14px 28px; 
+                      text-decoration: none; border-radius: 8px; font-size: 16px; 
+                      font-weight: bold; display: inline-block;">
+              Voir les commentaires
+            </a>
+          </div>
+        </div>
+      `,
+    });
+  } catch (e) {
+    console.error('Failed to send comments notification email:', e);
+  }
+}
+
+export async function sendReviewCompletedEmail(opts: {
+  to: string;
+  readerName: string;
+  bookTitle: string;
+  reviewUrl: string;
+}): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: opts.to,
+      subject: `${opts.readerName} a terminé la relecture de « ${opts.bookTitle} »`,
+      html: `
+        <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #8b2252; font-size: 24px;">Relecture terminée !</h2>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            <strong>${opts.readerName}</strong> a terminé la relecture de votre livre <strong>« ${opts.bookTitle} »</strong>.
+          </p>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Consultez ses commentaires et répondez-y directement sur la plateforme.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${opts.reviewUrl}" 
+               style="background-color: #8b2252; color: white; padding: 14px 28px; 
+                      text-decoration: none; border-radius: 8px; font-size: 16px; 
+                      font-weight: bold; display: inline-block;">
+              Voir la relecture
+            </a>
+          </div>
+        </div>
+      `,
+    });
+  } catch (e) {
+    console.error('Failed to send review completed email:', e);
+  }
+}

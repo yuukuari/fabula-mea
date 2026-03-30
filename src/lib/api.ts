@@ -9,7 +9,7 @@
 
 import { devAuth } from '@/lib/dev-auth';
 import { devDb } from '@/lib/dev-db';
-import type { Ticket, TicketComment, TicketStatusChange, Release } from '@/types';
+import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment } from '@/types';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -179,5 +179,107 @@ export const api = {
       IS_DEV
         ? devDb.admin.members()
         : apiFetch<{ members: Array<{ id: string; email: string; name: string; isAdmin: boolean; createdAt: string }> }>('/admin/members'),
+  },
+
+  // ─── Reviews (author side, authenticated) ────────────────────────────────
+
+  reviews: {
+    list: () =>
+      IS_DEV
+        ? devDb.reviews.list()
+        : apiFetch<ReviewSession[]>('/reviews'),
+    create: (data: {
+      bookId: string;
+      bookTitle: string;
+      authorName: string;
+      authorEmail: string;
+      readerEmail?: string;
+      snapshot: ReviewSession['snapshot'];
+    }) =>
+      IS_DEV
+        ? devDb.reviews.create(data)
+        : apiFetch<{ session: ReviewSession }>('/reviews', {
+            method: 'POST',
+            body: JSON.stringify(data),
+          }),
+    get: (id: string) =>
+      IS_DEV
+        ? devDb.reviews.get(id)
+        : apiFetch<{ session: ReviewSession; comments: ReviewComment[] }>(`/reviews/${id}`),
+    delete: (id: string) =>
+      IS_DEV
+        ? devDb.reviews.delete(id)
+        : apiFetch<{ ok: boolean }>(`/reviews/${id}`, { method: 'DELETE' }),
+    closeSession: (id: string) =>
+      IS_DEV
+        ? devDb.reviews.closeSession(id)
+        : apiFetch<{ session: ReviewSession }>(`/reviews/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'closed' }),
+          }),
+    addComment: (sessionId: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>) =>
+      IS_DEV
+        ? devDb.reviews.addComment(sessionId, comment)
+        : apiFetch<{ comment: ReviewComment }>(`/reviews/${sessionId}/comments`, {
+            method: 'POST',
+            body: JSON.stringify(comment),
+          }),
+    updateComment: (sessionId: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>) =>
+      IS_DEV
+        ? devDb.reviews.updateComment(sessionId, commentId, data)
+        : apiFetch<{ comment: ReviewComment }>(`/reviews/${sessionId}/comments/${commentId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+          }),
+    deleteComment: (sessionId: string, commentId: string) =>
+      IS_DEV
+        ? devDb.reviews.deleteComment(sessionId, commentId)
+        : apiFetch<{ ok: boolean }>(`/reviews/${sessionId}/comments/${commentId}`, { method: 'DELETE' }),
+  },
+
+  // ─── Review public (reader side, by token, no auth) ─────────────────────
+
+  reviewPublic: {
+    getByToken: (token: string) =>
+      IS_DEV
+        ? devDb.reviewPublic.getByToken(token)
+        : apiFetch<{ session: ReviewSession }>(`/review/${token}`),
+    start: (token: string, data: { readerName: string }) =>
+      IS_DEV
+        ? devDb.reviewPublic.start(token, data)
+        : apiFetch<{ session: ReviewSession }>(`/review/${token}/start`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+          }),
+    getComments: (token: string) =>
+      IS_DEV
+        ? devDb.reviewPublic.getComments(token)
+        : apiFetch<ReviewComment[]>(`/review/${token}/comments`),
+    addComment: (token: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>) =>
+      IS_DEV
+        ? devDb.reviewPublic.addComment(token, comment)
+        : apiFetch<{ comment: ReviewComment }>(`/review/${token}/comments`, {
+            method: 'POST',
+            body: JSON.stringify(comment),
+          }),
+    updateComment: (token: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>) =>
+      IS_DEV
+        ? devDb.reviewPublic.updateComment(token, commentId, data)
+        : apiFetch<{ comment: ReviewComment }>(`/review/${token}/comments/${commentId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+          }),
+    deleteComment: (token: string, commentId: string) =>
+      IS_DEV
+        ? devDb.reviewPublic.deleteComment(token, commentId)
+        : apiFetch<{ ok: boolean }>(`/review/${token}/comments/${commentId}`, { method: 'DELETE' }),
+    sendComments: (token: string) =>
+      IS_DEV
+        ? devDb.reviewPublic.sendComments(token)
+        : apiFetch<{ sent: number }>(`/review/${token}/send`, { method: 'POST' }),
+    complete: (token: string) =>
+      IS_DEV
+        ? devDb.reviewPublic.complete(token)
+        : apiFetch<{ session: ReviewSession }>(`/review/${token}/complete`, { method: 'POST' }),
   },
 };
