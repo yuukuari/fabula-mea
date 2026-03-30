@@ -29,7 +29,9 @@ export function NewReleaseModal() {
         <p className="text-3xl font-display font-bold text-bordeaux-500 mb-3">
           v{newRelease.version}
         </p>
-        <h3 className="text-sm font-medium text-ink-400 mb-2">{newRelease.title}</h3>
+        {newRelease.title && (
+          <h3 className="text-sm font-medium text-ink-400 mb-2">{newRelease.title}</h3>
+        )}
         {newRelease.description && (
           <div
             className="prose prose-sm max-w-none text-ink-300 mb-4"

@@ -6,6 +6,7 @@ import { useBookStore } from '@/store/useBookStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useSyncStore } from '@/store/useSyncStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { VersionBadge } from '@/components/releases/VersionBadge';
 
 const navItems = [
   { to: '/characters', icon: Users, label: 'Personnages' },
@@ -71,7 +72,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
   const otherBooks = books.filter((b) => b.id !== currentBookId);
 
   const sidebarContent = (
-    <aside className="w-64 min-h-screen bg-parchment-50 border-r border-parchment-300 flex flex-col h-full">
+    <aside className="w-64 h-screen bg-parchment-50 border-r border-parchment-300 flex flex-col overflow-hidden">
       {/* Logo */}
       <div className="p-6 border-b border-parchment-300 flex items-center justify-between">
         <button
@@ -87,6 +88,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
             <p className="text-xs text-ink-300">Mon Livre</p>
           </div>
         </button>
+        <VersionBadge />
         {/* Close button — mobile only */}
         <button
           onClick={onMobileClose}
@@ -167,9 +169,6 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
             <span>{label}</span>
           </NavLink>
         ))}
-
-        {/* Admin section */}
-        <AdminSection onMobileClose={onMobileClose} />
       </nav>
 
       <div className="p-4 border-t border-parchment-300 space-y-3">
@@ -257,48 +256,6 @@ function UserSection() {
       >
         <LogOut className="w-3.5 h-3.5" />
       </button>
-    </div>
-  );
-}
-
-function AdminSection({ onMobileClose }: { onMobileClose: () => void }) {
-  const user = useAuthStore((s) => s.user);
-  const [open, setOpen] = useState(false);
-
-  if (!user?.isAdmin) return null;
-
-  return (
-    <div className="mt-3 pt-3 border-t border-parchment-200">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-ink-300 font-medium hover:bg-parchment-200 hover:text-ink-500 transition-all duration-200"
-      >
-        <Shield className="w-5 h-5 text-bordeaux-400" />
-        <span>Administration</span>
-        {open ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
-      </button>
-      {open && (
-        <div className="ml-3 mt-1 space-y-0.5">
-          {adminItems.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={onMobileClose}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-all duration-200',
-                  isActive
-                    ? 'bg-bordeaux-50 text-bordeaux-500 font-medium'
-                    : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
-                )
-              }
-            >
-              <Icon className="w-4 h-4" />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

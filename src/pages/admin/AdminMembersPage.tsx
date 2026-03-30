@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, Shield, ShieldCheck, Mail, Calendar } from 'lucide-react';
+import { Users, Shield, ShieldCheck, Mail, Calendar, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 
@@ -9,6 +9,7 @@ interface Member {
   name: string;
   isAdmin: boolean;
   createdAt: string;
+  booksCount?: number;
 }
 
 export function AdminMembersPage() {
@@ -75,6 +76,12 @@ export function AdminMembersPage() {
                     <Calendar className="w-3 h-3" />
                     Inscrit le {new Date(member.createdAt).toLocaleDateString('fr-FR')}
                   </span>
+                  {member.booksCount !== undefined && (
+                    <span className="flex items-center gap-1">
+                      <BookOpen className="w-3 h-3" />
+                      {member.booksCount} livre{member.booksCount > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

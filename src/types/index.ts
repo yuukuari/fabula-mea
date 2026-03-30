@@ -231,6 +231,7 @@ export interface Ticket {
   visibility: TicketVisibility;
   status: TicketStatus;
   releaseId?: string;
+  reactions: Record<string, string[]>; // emoji → userId[]
   createdAt: string;
   updatedAt: string;
 }
@@ -252,13 +253,17 @@ export interface TicketStatusChange {
   ticketId: string;
   userId: string;
   userName: string;
-  fromStatus: TicketStatus;
-  toStatus: TicketStatus;
+  /** 'status_change' (default) or 'release_assign' */
+  type?: 'status_change' | 'release_assign';
+  fromStatus?: TicketStatus;
+  toStatus?: TicketStatus;
+  releaseId?: string;
+  releaseName?: string;
   createdAt: string;
 }
 
 // ─── Releases ───
-export type ReleaseStatus = 'planned' | 'current' | 'released';
+export type ReleaseStatus = 'draft' | 'planned' | 'current' | 'released';
 export type ReleaseItemType = 'bugfix' | 'improvement' | 'feature';
 
 export interface ReleaseItem {

@@ -6,10 +6,6 @@ import { SearchDialog, useSearchShortcut } from './SearchDialog';
 import { FloatingPomodoro } from '@/components/progress/FloatingPomodoro';
 import { EditorTabs } from '@/components/editor/EditorTabs';
 import { SceneEditor } from '@/components/editor/SceneEditor';
-import { TicketBubble } from '@/components/tickets/TicketBubble';
-import { TicketForm } from '@/components/tickets/TicketForm';
-import { ReleaseVersionFooter } from '@/components/releases/ReleaseVersionFooter';
-import { NewReleaseModal } from '@/components/releases/NewReleaseModal';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
 
@@ -21,7 +17,6 @@ export function AppShell() {
   const loaded = useBookStore((s) => s._loaded);
   const loadBook = useBookStore((s) => s.loadBook);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showTicketForm, setShowTicketForm] = useState(false);
 
   // Restaure la bibliothèque depuis Redis au démarrage (nouveau device ou nouvelle session)
   useEffect(() => {
@@ -70,10 +65,6 @@ export function AppShell() {
 
       <SearchDialog open={open} onClose={() => setOpen(false)} />
       <FloatingPomodoro />
-      <TicketBubble onCreateTicket={() => setShowTicketForm(true)} />
-      <TicketForm open={showTicketForm} onClose={() => setShowTicketForm(false)} />
-      <ReleaseVersionFooter />
-      <NewReleaseModal />
       {/* Full-screen scene editor */}
       <SceneEditor />
       {/* Floating editor tabs – fixed bottom center */}

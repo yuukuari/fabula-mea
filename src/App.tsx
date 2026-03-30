@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { AdminShell } from '@/components/layout/AdminShell';
+import { StandaloneShell } from '@/components/layout/StandaloneShell';
 import { HomePage } from '@/pages/HomePage';
 import { CharactersPage } from '@/pages/CharactersPage';
 import { PlacesPage } from '@/pages/PlacesPage';
@@ -15,28 +17,59 @@ import { TicketsPage } from '@/pages/TicketsPage';
 import { ReleaseNotesPage } from '@/pages/ReleaseNotesPage';
 import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
 import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
+import { TicketBubble } from '@/components/tickets/TicketBubble';
+import { TicketForm } from '@/components/tickets/TicketForm';
+import { NewReleaseModal } from '@/components/releases/NewReleaseModal';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
 
+/** Root layout — renders global overlays (ticket bubble, release footer, etc.) on every page */
+function RootLayout() {
+  const [showTicketForm, setShowTicketForm] = useState(false);
+  return (
+    <>
+      <Outlet />
+      <TicketBubble onCreateTicket={() => setShowTicketForm(true)} />
+      <TicketForm open={showTicketForm} onClose={() => setShowTicketForm(false)} />
+      <NewReleaseModal />
+    </>
+  );
+}
+
 const router = createBrowserRouter([
-  { path: '/', element: <HomePage /> },
   {
-    element: <AppShell />,
+    element: <RootLayout />,
     children: [
-      { path: 'characters', element: <CharactersPage /> },
-      { path: 'characters/:id', element: <CharactersPage /> },
-      { path: 'places', element: <PlacesPage /> },
-      { path: 'chapters', element: <ChaptersPage /> },
-      { path: 'timeline', element: <TimelinePage /> },
-      { path: 'progress', element: <ProgressPage /> },
-      { path: 'world', element: <WorldPage /> },
-      { path: 'maps', element: <MapsPage /> },
-      { path: 'settings', element: <SettingsPage /> },
-      { path: 'tickets', element: <TicketsPage /> },
-      { path: 'releases', element: <ReleaseNotesPage /> },
-      { path: 'admin/members', element: <AdminMembersPage /> },
-      { path: 'admin/tickets', element: <TicketsPage /> },
-      { path: 'admin/releases', element: <AdminReleasesPage /> },
+      { path: '/', element: <HomePage /> },
+      {
+        element: <StandaloneShell />,
+        children: [
+          { path: 'tickets', element: <TicketsPage /> },
+          { path: 'releases', element: <ReleaseNotesPage /> },
+        ],
+      },
+      {
+        element: <AppShell />,
+        children: [
+          { path: 'characters', element: <CharactersPage /> },
+          { path: 'characters/:id', element: <CharactersPage /> },
+          { path: 'places', element: <PlacesPage /> },
+          { path: 'chapters', element: <ChaptersPage /> },
+          { path: 'timeline', element: <TimelinePage /> },
+          { path: 'progress', element: <ProgressPage /> },
+          { path: 'world', element: <WorldPage /> },
+          { path: 'maps', element: <MapsPage /> },
+          { path: 'settings', element: <SettingsPage /> },
+        ],
+      },
+      {
+        element: <AdminShell />,
+        children: [
+          { path: 'admin/members', element: <AdminMembersPage /> },
+          { path: 'admin/tickets', element: <TicketsPage /> },
+          { path: 'admin/releases', element: <AdminReleasesPage /> },
+        ],
+      },
     ],
   },
 ]);

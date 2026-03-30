@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  Plus, Trash2, Pencil, X, Save, Bug, Sparkles, Zap, Tag, ChevronDown, ChevronUp
+  Plus, Trash2, Pencil, X, Save, Bug, Sparkles, Zap, Tag, ChevronDown, ChevronUp, ExternalLink
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useReleaseStore } from '@/store/useReleaseStore';
 import { useTicketStore } from '@/store/useTicketStore';
@@ -9,6 +10,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import type { Release, ReleaseStatus, ReleaseItem, ReleaseItemType } from '@/types';
 
 const STATUS_OPTIONS: { value: ReleaseStatus; label: string; color: string }[] = [
+  { value: 'draft', label: 'Brouillon', color: 'bg-yellow-100 text-yellow-700' },
   { value: 'planned', label: 'Planifiée', color: 'bg-blue-100 text-blue-600' },
   { value: 'current', label: 'Actuelle', color: 'bg-green-100 text-green-700' },
   { value: 'released', label: 'Publiée', color: 'bg-gray-100 text-gray-500' },
@@ -25,6 +27,7 @@ function generateId(): string {
 }
 
 export function AdminReleasesPage() {
+  const navigate = useNavigate();
   const { releases, loadReleases, createRelease, updateRelease, deleteRelease, isLoading } = useReleaseStore();
   const { tickets, loadTickets } = useTicketStore();
   const [editingRelease, setEditingRelease] = useState<Partial<Release> | null>(null);
@@ -46,7 +49,7 @@ export function AdminReleasesPage() {
       version: '',
       title: '',
       description: '',
-      status: 'planned',
+      status: 'draft',
       items: [],
       ticketIds: [],
     });
@@ -59,11 +62,11 @@ export function AdminReleasesPage() {
   };
 
   const handleSave = async () => {
-    if (!editingRelease?.version?.trim() || !editingRelease?.title?.trim()) return;
+    if (!editingRelease?.version?.trim()) return;
     if (isNew) {
       await createRelease({
         version: editingRelease.version!,
-        title: editingRelease.title!,
+        title: editingRelease.title ?? '',
         description: editingRelease.description ?? '',
         status: editingRelease.status as ReleaseStatus ?? 'planned',
         items: (editingRelease.items ?? []) as ReleaseItem[],
@@ -170,12 +173,12 @@ export function AdminReleasesPage() {
 
               {/* Title */}
               <div>
-                <label className="label-field">Titre *</label>
+                <label className="label-field">Titre</label>
                 <input
                   type="text"
                   value={editingRelease.title ?? ''}
                   onChange={(e) => setEditingRelease({ ...editingRelease, title: e.target.value })}
-                  placeholder="Nom de la release..."
+                  placeholder="Optionnel — nom de la release..."
                   className="input-field"
                 />
               </div>
@@ -240,7 +243,7 @@ export function AdminReleasesPage() {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={!editingRelease.version?.trim() || !editingRelease.title?.trim()}
+                  disabled={!editingRelease.version?.trim()}
                   className="btn-primary flex items-center gap-2 disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" />
@@ -277,7 +280,7 @@ export function AdminReleasesPage() {
                       <span className="font-display font-bold text-ink-500">v{release.version}</span>
                       <span className={cn('badge text-[10px]', statusConf.color)}>{statusConf.label}</span>
                     </div>
-                    <p className="text-sm text-ink-400">{release.title}</p>
+                    <p className="text-sm text-ink-400">{release.title || `Release v${release.version}`}</p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-ink-200">
                       <span>{release.items.length} éléments</span>
                       {linkedTickets.length > 0 && (
@@ -340,9 +343,14 @@ export function AdminReleasesPage() {
                         <h4 className="label-field mb-1">Tickets associés</h4>
                         <div className="space-y-1">
                           {linkedTickets.map((t) => (
-                            <div key={t.id} className="text-sm text-ink-300">
-                              • {t.title} <span className="text-ink-200">(par {t.userName})</span>
-                            </div>
+                            <button
+                              key={t.id}
+                              onClick={() => navigate('/admin/tickets')}
+                              className="flex items-center gap-1.5 text-sm text-bordeaux-500 hover:text-bordeaux-700 hover:underline"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {t.title} <span className="text-ink-200">(par {t.userName})</span>
+                            </button>
                           ))}
                         </div>
                       </div>

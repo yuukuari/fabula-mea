@@ -10,12 +10,14 @@ const STATUS_COLORS: Record<ReleaseStatus, string> = {
   current: 'bg-green-500',
   released: 'bg-ink-300',
   planned: 'bg-blue-400',
+  draft: 'bg-yellow-400',
 };
 
 const STATUS_LABELS: Record<ReleaseStatus, string> = {
   current: 'Version actuelle',
   released: 'Publiée',
   planned: 'À venir',
+  draft: 'Brouillon',
 };
 
 const ITEM_TYPE_CONFIG: Record<ReleaseItemType, { icon: typeof Bug; label: string; color: string }> = {
@@ -35,8 +37,9 @@ export function ReleaseNotesPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sort: current first, then planned (by version desc), then released (by version desc)
+  // Drafts are already filtered out by the API for non-admins
   const sorted = [...releases].sort((a, b) => {
-    const statusOrder: Record<ReleaseStatus, number> = { planned: 0, current: 1, released: 2 };
+    const statusOrder: Record<ReleaseStatus, number> = { draft: -1, planned: 0, current: 1, released: 2 };
     const orderDiff = statusOrder[a.status] - statusOrder[b.status];
     if (orderDiff !== 0) return orderDiff;
     return b.version.localeCompare(a.version, undefined, { numeric: true });
@@ -44,10 +47,6 @@ export function ReleaseNotesPage() {
 
   return (
     <div className="page-container max-w-3xl">
-      <button onClick={() => navigate(-1)} className="btn-ghost flex items-center gap-2 mb-4">
-        <ChevronLeft className="w-4 h-4" /> Retour
-      </button>
-
       <h1 className="section-title mb-2">Notes de version</h1>
       <p className="text-sm text-ink-300 mb-8">
         Historique des mises à jour et améliorations du site.
@@ -125,7 +124,7 @@ function ReleaseEntry({
                 {STATUS_LABELS[release.status]}
               </span>
             </div>
-            <h3 className="text-sm font-medium text-ink-400">{release.title}</h3>
+            <h3 className="text-sm font-medium text-ink-400">{release.title || `Release v${release.version}`}</h3>
           </div>
           {release.releasedAt && (
             <span className="text-xs text-ink-200 flex-shrink-0">

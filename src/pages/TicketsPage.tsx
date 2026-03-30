@@ -1,13 +1,25 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Bug, HelpCircle, Sparkles, Eye, EyeOff, Clock, CheckCircle, Copy,
-  Trash2, ChevronLeft, Send, MessageSquare, Tag, SmilePlus, X
+  Trash2, ChevronLeft, Send, MessageSquare, Tag, SmilePlus, X, ExternalLink,
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Heading1, Heading2, Heading3, Quote, List, ListOrdered,
+  ImagePlus, Link as LinkIcon, Unlink, RemoveFormatting,
 } from 'lucide-react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Placeholder from '@tiptap/extension-placeholder';
+import Link from '@tiptap/extension-link';
+import TextAlign from '@tiptap/extension-text-align';
+import Image from '@tiptap/extension-image';
 import { cn } from '@/lib/utils';
 import { useTicketStore } from '@/store/useTicketStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useReleaseStore } from '@/store/useReleaseStore';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { useNavigate } from 'react-router-dom';
 import type { Ticket, TicketType, TicketStatus, TicketComment, TicketStatusChange } from '@/types';
 
 const TYPE_CONFIG: Record<TicketType, { icon: typeof Bug; label: string; color: string }> = {
@@ -161,6 +173,7 @@ function TicketRow({ ticket, onClick }: { ticket: Ticket; onClick: () => void })
 
 function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => void }) {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const {
     currentTicket: ticket, currentComments: comments, currentStatusChanges: statusChanges,
     loadTicket, updateTicket, deleteTicket, addComment, deleteComment, addReaction,
@@ -168,10 +181,66 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
   const releases = useReleaseStore((s) => s.releases);
   const loadReleases = useReleaseStore((s) => s.loadReleases);
 
-  const [newComment, setNewComment] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDeleteCommentId, setConfirmDeleteCommentId] = useState<string | null>(null);
   const [showReactions, setShowReactions] = useState<string | null>(null);
   const reactionsRef = useRef<HTMLDivElement>(null);
+
+  const [isCommentEmpty, setIsCommentEmpty] = useState(true);
+
+  const commentEditor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      Underline,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Placeholder.configure({ placeholder: 'Ajouter un commentaire...' }),
+      Link.configure({ openOnClick: false }),
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'max-w-full h-auto rounded-lg my-4 mx-auto block',
+        },
+      }),
+    ],
+    content: '',
+    onUpdate: ({ editor: e }) => {
+      setIsCommentEmpty(e.isEmpty);
+    },
+  });
+
+  const addImage = useCallback(() => {
+    if (!commentEditor) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          commentEditor.chain().focus().setImage({ src: reader.result }).run();
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }, [commentEditor]);
+
+  const toggleLink = useCallback(() => {
+    if (!commentEditor) return;
+    if (commentEditor.isActive('link')) {
+      commentEditor.chain().focus().unsetLink().run();
+      return;
+    }
+    const url = window.prompt('URL du lien :');
+    if (url) {
+      commentEditor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }
+  }, [commentEditor]);
 
   const isAdmin = user?.isAdmin ?? false;
   const isOwner = user?.id === ticket?.userId;
@@ -231,9 +300,10 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
   };
 
   const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-    await addComment(ticketId, newComment.trim());
-    setNewComment('');
+    if (!commentEditor || commentEditor.isEmpty) return;
+    await addComment(ticketId, commentEditor.getHTML());
+    commentEditor.commands.setContent('');
+    setIsCommentEmpty(true);
   };
 
   return (
@@ -308,8 +378,8 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
           )}
         </div>
 
-        {/* Release assignment (admin) */}
-        {isAdmin && (
+        {/* Release assignment (admin) / display (user) */}
+        {isAdmin ? (
           <div className="flex items-center gap-2 pt-3 border-t border-parchment-200">
             <Tag className="w-4 h-4 text-ink-200" />
             <span className="text-sm text-ink-300">Release :</span>
@@ -321,18 +391,85 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
               <option value="">Aucune</option>
               {releases.map((r) => (
                 <option key={r.id} value={r.id}>
-                  v{r.version} — {r.title}
+                  v{r.version}{r.title ? ` — ${r.title}` : ''}
                 </option>
               ))}
             </select>
           </div>
-        )}
+        ) : ticket.releaseId ? (
+          <div className="flex items-center gap-2 pt-3 border-t border-parchment-200">
+            <Tag className="w-4 h-4 text-ink-200" />
+            <span className="text-sm text-ink-300">Release :</span>
+            {(() => {
+              const rel = releases.find((r) => r.id === ticket.releaseId);
+              return rel ? (
+                <button
+                  onClick={() => navigate('/releases')}
+                  className="text-sm text-bordeaux-500 hover:underline flex items-center gap-1"
+                >
+                  v{rel.version}{rel.title ? ` — ${rel.title}` : ''}
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              ) : (
+                <span className="text-sm text-ink-300">Inconnue</span>
+              );
+            })()}
+          </div>
+        ) : null}
 
         {/* Description */}
         <div
           className="prose prose-sm max-w-none mt-4 pt-4 border-t border-parchment-200"
           dangerouslySetInnerHTML={{ __html: ticket.description }}
         />
+
+        {/* Reactions on description */}
+        <div className="flex items-center gap-2 mt-3">
+          <div className="relative" ref={showReactions === '__desc__' ? reactionsRef : undefined}>
+            <button
+              onClick={() => setShowReactions(showReactions === '__desc__' ? null : '__desc__')}
+              className="p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100"
+              title="Ajouter une réaction"
+            >
+              <SmilePlus className="w-4 h-4" />
+            </button>
+            {showReactions === '__desc__' && (
+              <div className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-parchment-300 p-2 flex gap-1 z-20">
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      addReaction(ticketId, '__desc__', emoji);
+                      setShowReactions(null);
+                    }}
+                    className="w-8 h-8 rounded hover:bg-parchment-100 flex items-center justify-center text-lg"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {ticket.reactions && Object.keys(ticket.reactions).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(ticket.reactions).map(([emoji, userIds]) => (
+                <button
+                  key={emoji}
+                  onClick={() => addReaction(ticketId, '__desc__', emoji)}
+                  className={cn(
+                    'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors',
+                    (userIds as string[]).includes(user?.id ?? '')
+                      ? 'bg-bordeaux-50 border-bordeaux-200 text-bordeaux-600'
+                      : 'bg-parchment-50 border-parchment-200 text-ink-300 hover:border-parchment-400'
+                  )}
+                >
+                  <span>{emoji}</span>
+                  <span>{(userIds as string[]).length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Timeline (comments + status changes) */}
@@ -349,8 +486,32 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
         {timeline.map((entry) => {
           if (entry.kind === 'status') {
             const sc = entry.data;
-            const fromConf = STATUS_CONFIG[sc.fromStatus];
-            const toConf = STATUS_CONFIG[sc.toStatus];
+
+            // Release assignment activity
+            if (sc.type === 'release_assign') {
+              return (
+                <div
+                  key={sc.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-parchment-50 rounded-lg text-xs text-ink-300 border border-parchment-200"
+                >
+                  <Tag className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                  <span className="font-medium">{sc.userName}</span>
+                  {sc.releaseId
+                    ? <>
+                        a planifié ce ticket dans la release
+                        <span className="badge bg-blue-100 text-blue-700 text-[10px]">{sc.releaseName || sc.releaseId}</span>
+                      </>
+                    : <>a retiré ce ticket de sa release</>}
+                  <span className="ml-auto text-ink-200">
+                    {new Date(sc.createdAt).toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
+              );
+            }
+
+            // Status change activity
+            const fromConf = sc.fromStatus ? STATUS_CONFIG[sc.fromStatus] : null;
+            const toConf = sc.toStatus ? STATUS_CONFIG[sc.toStatus] : null;
             return (
               <div
                 key={sc.id}
@@ -358,9 +519,9 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
               >
                 <span className="font-medium">{sc.userName}</span>
                 a changé le statut de
-                <span className={cn('badge text-[10px]', fromConf.color)}>{fromConf.label}</span>
+                {fromConf && <span className={cn('badge text-[10px]', fromConf.color)}>{fromConf.label}</span>}
                 vers
-                <span className={cn('badge text-[10px]', toConf.color)}>{toConf.label}</span>
+                {toConf && <span className={cn('badge text-[10px]', toConf.color)}>{toConf.label}</span>}
                 <span className="ml-auto text-ink-200">
                   {new Date(sc.createdAt).toLocaleDateString('fr-FR')}
                 </span>
@@ -419,10 +580,10 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
                       </div>
                     )}
                   </div>
-                  {/* Delete (own comment or admin) */}
+                  {/* Delete (own comment or admin) — with confirmation for admin */}
                   {(isOwnComment || isAdmin) && (
                     <button
-                      onClick={() => deleteComment(ticketId, comment.id)}
+                      onClick={() => setConfirmDeleteCommentId(comment.id)}
                       className="p-1 rounded text-ink-200 hover:text-red-500 hover:bg-red-50"
                       title="Supprimer"
                     >
@@ -431,7 +592,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
                   )}
                 </div>
               </div>
-              <p className="text-sm text-ink-400 whitespace-pre-wrap">{comment.content}</p>
+              <div className="prose prose-sm max-w-none text-ink-400" dangerouslySetInnerHTML={{ __html: comment.content }} />
               {/* Reactions */}
               {Object.keys(comment.reactions).length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
@@ -457,28 +618,85 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
         })}
       </div>
 
-      {/* Add comment (admin only for now) */}
-      {isAdmin && (
-        <div className="card-fantasy p-4">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Ajouter un commentaire..."
-            className="textarea-field text-sm"
-            rows={3}
+      {/* Add comment */}
+      <div className="card-fantasy p-4">
+        <div className="border border-parchment-300 rounded-lg overflow-hidden">
+          {commentEditor && (
+            <div className="flex flex-wrap items-center gap-0.5 p-2 border-b border-parchment-200 bg-parchment-50">
+              <MiniToolbarButton active={commentEditor.isActive('heading', { level: 1 })} onClick={() => commentEditor.chain().focus().toggleHeading({ level: 1 }).run()} title="Titre 1">
+                <Heading1 size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('heading', { level: 2 })} onClick={() => commentEditor.chain().focus().toggleHeading({ level: 2 }).run()} title="Titre 2">
+                <Heading2 size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('heading', { level: 3 })} onClick={() => commentEditor.chain().focus().toggleHeading({ level: 3 }).run()} title="Titre 3">
+                <Heading3 size={14} />
+              </MiniToolbarButton>
+              <div className="w-px bg-parchment-300 mx-1 h-5" />
+              <MiniToolbarButton active={commentEditor.isActive('bold')} onClick={() => commentEditor.chain().focus().toggleBold().run()} title="Gras">
+                <Bold size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('italic')} onClick={() => commentEditor.chain().focus().toggleItalic().run()} title="Italique">
+                <Italic size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('underline')} onClick={() => commentEditor.chain().focus().toggleUnderline().run()} title="Souligné">
+                <UnderlineIcon size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('strike')} onClick={() => commentEditor.chain().focus().toggleStrike().run()} title="Barré">
+                <Strikethrough size={14} />
+              </MiniToolbarButton>
+              <div className="w-px bg-parchment-300 mx-1 h-5" />
+              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'left' })} onClick={() => commentEditor.chain().focus().setTextAlign('left').run()} title="Aligner à gauche">
+                <AlignLeft size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'center' })} onClick={() => commentEditor.chain().focus().setTextAlign('center').run()} title="Centrer">
+                <AlignCenter size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'right' })} onClick={() => commentEditor.chain().focus().setTextAlign('right').run()} title="Aligner à droite">
+                <AlignRight size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'justify' })} onClick={() => commentEditor.chain().focus().setTextAlign('justify').run()} title="Justifier">
+                <AlignJustify size={14} />
+              </MiniToolbarButton>
+              <div className="w-px bg-parchment-300 mx-1 h-5" />
+              <MiniToolbarButton active={commentEditor.isActive('bulletList')} onClick={() => commentEditor.chain().focus().toggleBulletList().run()} title="Liste à puces">
+                <List size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('orderedList')} onClick={() => commentEditor.chain().focus().toggleOrderedList().run()} title="Liste numérotée">
+                <ListOrdered size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('blockquote')} onClick={() => commentEditor.chain().focus().toggleBlockquote().run()} title="Citation">
+                <Quote size={14} />
+              </MiniToolbarButton>
+              <div className="w-px bg-parchment-300 mx-1 h-5" />
+              <MiniToolbarButton active={false} onClick={addImage} title="Insérer une image">
+                <ImagePlus size={14} />
+              </MiniToolbarButton>
+              <MiniToolbarButton active={commentEditor.isActive('link')} onClick={toggleLink} title={commentEditor.isActive('link') ? 'Retirer le lien' : 'Ajouter un lien'}>
+                {commentEditor.isActive('link') ? <Unlink size={14} /> : <LinkIcon size={14} />}
+              </MiniToolbarButton>
+              <div className="w-px bg-parchment-300 mx-1 h-5" />
+              <MiniToolbarButton active={false} onClick={() => commentEditor.chain().focus().clearNodes().unsetAllMarks().run()} title="Supprimer le formatage">
+                <RemoveFormatting size={14} />
+              </MiniToolbarButton>
+            </div>
+          )}
+          <EditorContent
+            editor={commentEditor}
+            className="prose prose-sm max-w-none p-3 min-h-[80px] focus-within:ring-2 focus-within:ring-gold-400 rounded-b-lg"
           />
-          <div className="flex justify-end mt-2">
-            <button
-              onClick={handleAddComment}
-              disabled={!newComment.trim()}
-              className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5" />
-              Commenter
-            </button>
-          </div>
         </div>
-      )}
+        <div className="flex justify-end mt-2">
+          <button
+            onClick={handleAddComment}
+            disabled={isCommentEmpty}
+            className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50"
+          >
+            <Send className="w-3.5 h-3.5" />
+            Commenter
+          </button>
+        </div>
+      </div>
 
       <ConfirmDialog
         open={confirmDelete}
@@ -488,6 +706,45 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      <ConfirmDialog
+        open={confirmDeleteCommentId !== null}
+        title="Supprimer le commentaire ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        onConfirm={async () => {
+          if (confirmDeleteCommentId) {
+            await deleteComment(ticketId, confirmDeleteCommentId);
+            setConfirmDeleteCommentId(null);
+          }
+        }}
+        onCancel={() => setConfirmDeleteCommentId(null)}
+      />
     </div>
+  );
+}
+
+function MiniToolbarButton({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={cn(
+        'w-7 h-7 rounded flex items-center justify-center text-xs font-medium transition-colors',
+        active ? 'bg-bordeaux-100 text-bordeaux-600' : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
+      )}
+    >
+      {children}
+    </button>
   );
 }

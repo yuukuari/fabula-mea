@@ -302,3 +302,4 @@ Pourquoi un jour de décalage dans avancement ?
 En plus des mots, indiquer partout le nombre de signes (espace compris)
 On sait pas si on a atteint notre objectif journalier
 Dans la crhonologie, il faudrait voir la description de la scène
+Revoir un peui placement items, trop condensé en bas

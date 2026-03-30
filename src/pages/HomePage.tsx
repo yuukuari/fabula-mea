@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, Feather, Trash2, Users, MapPin, Film, Hash, PenLine } from 'lucide-react';
+import { Plus, BookOpen, Feather, Trash2, Users, MapPin, Film, Hash, PenLine, Shield, LogOut, UserCircle } from 'lucide-react';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { VersionBadge } from '@/components/releases/VersionBadge';
 import type { WritingMode } from '@/types';
 
 export function HomePage() {
   const navigate = useNavigate();
   const { books, createBook, deleteBook, selectBook } = useLibraryStore();
   const { initNewBook, loadBook } = useBookStore();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -55,23 +59,56 @@ export function HomePage() {
   return (
     <div className="min-h-screen bg-parchment-50">
       {/* Header */}
-      <header className="border-b border-parchment-300 bg-parchment-100/50">
-        <div className="max-w-5xl mx-auto px-8 py-12">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="w-14 h-14 bg-bordeaux-500 rounded-xl flex items-center justify-center shadow-lg">
-              <Feather className="w-7 h-7 text-white" />
+      <header className="border-b border-parchment-300 bg-parchment-100/50 sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          {/* Left: logo + version */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-bordeaux-500 rounded-lg flex items-center justify-center shadow">
+                <Feather className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left hidden sm:block">
+                <h1 className="font-display text-lg font-bold text-ink-500 leading-tight">
+                  Ecrire Mon Livre
+                </h1>
+              </div>
             </div>
-            <div>
-              <h1 className="font-display text-3xl font-bold text-ink-500">
-                Ecrire Mon Livre
-              </h1>
-              <p className="text-ink-300 text-sm mt-1">
-                Choisissez un livre ou creez-en un nouveau
-              </p>
-            </div>
+            <VersionBadge />
+          </div>
+
+          {/* Right: admin + user */}
+          <div className="flex items-center gap-3">
+            {user?.isAdmin && (
+              <button
+                onClick={() => navigate('/admin/members')}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bordeaux-50 text-bordeaux-600 border border-bordeaux-200 hover:bg-bordeaux-100 transition-colors text-sm font-medium"
+              >
+                <Shield className="w-4 h-4" />
+                <span className="hidden sm:inline">Administration</span>
+              </button>
+            )}
+            {user && (
+              <div className="flex items-center gap-2">
+                <UserCircle className="w-4 h-4 text-ink-200" />
+                <span className="text-xs text-ink-300 hidden sm:inline">{user.name}</span>
+                <button
+                  onClick={logout}
+                  title="Se déconnecter"
+                  className="p-1 rounded text-ink-200 hover:text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
+
+      {/* Title section */}
+      <div className="max-w-5xl mx-auto px-8 pt-8 pb-2">
+        <h2 className="font-display text-2xl font-bold text-ink-500">Mes livres</h2>
+        <p className="text-ink-300 text-sm mt-1">Choisissez un livre ou créez-en un nouveau</p>
+      </div>
 
       <div className="max-w-5xl mx-auto px-8 py-10">
         {/* Create new book */}

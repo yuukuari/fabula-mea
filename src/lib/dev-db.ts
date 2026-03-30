@@ -151,6 +151,7 @@ export const devDb = {
         description: data.description,
         visibility: data.visibility,
         status: 'open',
+        reactions: {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -187,8 +188,28 @@ export const devDb = {
           ticketId: id,
           userId: user.id,
           userName: user.name,
+          type: 'status_change',
           fromStatus: oldTicket.status,
           toStatus: data.status,
+          createdAt: new Date().toISOString(),
+        });
+        setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
+      }
+
+      // If release changed, add a release assignment entry
+      if (data.releaseId !== undefined && data.releaseId !== oldTicket.releaseId) {
+        const user = getCurrentUser();
+        const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${id}:statusChanges`, []);
+        const releases = getJson<Release[]>('emlb-dev:releases', []);
+        const release = releases.find((r) => r.id === data.releaseId);
+        changes.push({
+          id: generateId(),
+          ticketId: id,
+          userId: user.id,
+          userName: user.name,
+          type: 'release_assign',
+          releaseId: data.releaseId || undefined,
+          releaseName: release ? `v${release.version}${release.title ? ' — ' + release.title : ''}` : undefined,
           createdAt: new Date().toISOString(),
         });
         setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
@@ -232,6 +253,26 @@ export const devDb = {
 
     async addReaction(ticketId: string, commentId: string, emoji: string): Promise<{ comment: TicketComment }> {
       const uid = requireUserId();
+      // Reaction on ticket description
+      if (commentId === '__desc__') {
+        const tickets = getJson<Ticket[]>('emlb-dev:tickets', []);
+        const idx = tickets.findIndex((t) => t.id === ticketId);
+        if (idx === -1) throw new Error('Ticket introuvable');
+        const ticket = { ...tickets[idx] };
+        const reactions = { ...(ticket.reactions ?? {}) };
+        const users = reactions[emoji] ?? [];
+        if (users.includes(uid)) {
+          reactions[emoji] = users.filter((u) => u !== uid);
+          if (reactions[emoji].length === 0) delete reactions[emoji];
+        } else {
+          reactions[emoji] = [...users, uid];
+        }
+        ticket.reactions = reactions;
+        tickets[idx] = ticket;
+        setJson('emlb-dev:tickets', tickets);
+        // Return a dummy comment (the UI uses the ticket store to reload)
+        return { comment: {} as TicketComment };
+      }
       const comments = getJson<TicketComment[]>(`emlb-dev:ticket:${ticketId}:comments`, []);
       const idx = comments.findIndex((c) => c.id === commentId);
       if (idx === -1) throw new Error('Commentaire introuvable');
@@ -255,7 +296,10 @@ export const devDb = {
 
   releases: {
     async list(): Promise<Release[]> {
-      return getJson<Release[]>('emlb-dev:releases', []);
+      const user = getCurrentUser();
+      const all = getJson<Release[]>('emlb-dev:releases', []);
+      // Non-admin users don't see drafts
+      return user.isAdmin ? all : all.filter((r) => r.status !== 'draft');
     },
 
     async get(id: string): Promise<Release> {
@@ -272,16 +316,30 @@ export const devDb = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      const releases = getJson<Release[]>('emlb-dev:releases', []);
+      let releases = getJson<Release[]>('emlb-dev:releases', []);
+      // Auto-demote: if setting this release to 'current', previous 'current' becomes 'released'
+      if (data.status === 'current') {
+        releases = releases.map((r) =>
+          r.status === 'current' ? { ...r, status: 'released' as const, updatedAt: new Date().toISOString() } : r
+        );
+      }
       releases.push(release);
       setJson('emlb-dev:releases', releases);
       return { release };
     },
 
     async update(id: string, data: Partial<Release>): Promise<{ release: Release }> {
-      const releases = getJson<Release[]>('emlb-dev:releases', []);
+      let releases = getJson<Release[]>('emlb-dev:releases', []);
       const idx = releases.findIndex((r) => r.id === id);
       if (idx === -1) throw new Error('Release introuvable');
+      // Auto-demote: if setting this release to 'current', previous 'current' becomes 'released'
+      if (data.status === 'current' && releases[idx].status !== 'current') {
+        releases = releases.map((r, i) =>
+          i !== idx && r.status === 'current'
+            ? { ...r, status: 'released' as const, updatedAt: new Date().toISOString() }
+            : r
+        );
+      }
       const updated = { ...releases[idx], ...data, updatedAt: new Date().toISOString() };
       releases[idx] = updated;
       setJson('emlb-dev:releases', releases);
@@ -298,8 +356,17 @@ export const devDb = {
   // ─── Admin ───────────────────────────────────────────────────────────────
 
   admin: {
-    async members(): Promise<{ members: Array<{ id: string; email: string; name: string; isAdmin: boolean; createdAt: string }> }> {
-      return { members: devAuth.listUsers() };
+    async members(): Promise<{ members: Array<{ id: string; email: string; name: string; isAdmin: boolean; createdAt: string; booksCount: number }> }> {
+      const users = devAuth.listUsers();
+      const members = users.map((u) => {
+        const libKey = `emlb-dev:u:${u.id}:library`;
+        const books = getJson<unknown[]>(libKey, []);
+        return {
+          ...u,
+          booksCount: books.length,
+        };
+      });
+      return { members };
     },
   },
 };

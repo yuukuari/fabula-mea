@@ -1,11 +1,18 @@
 import { useState, useCallback } from 'react';
-import { X, Send, CheckCircle } from 'lucide-react';
+import {
+  X, Send, CheckCircle,
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Heading1, Heading2, Heading3, Quote, List, ListOrdered,
+  ImagePlus, Link as LinkIcon, Unlink, RemoveFormatting,
+} from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
 import { cn } from '@/lib/utils';
 import { useTicketStore } from '@/store/useTicketStore';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -43,20 +50,60 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: 'Décrivez votre retour...' }),
       Link.configure({ openOnClick: false }),
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'max-w-full h-auto rounded-lg my-4 mx-auto block',
+        },
+      }),
     ],
     content: TEMPLATES[type],
   });
 
+  const addImage = useCallback(() => {
+    if (!editor) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          editor.chain().focus().setImage({ src: reader.result }).run();
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }, [editor]);
+
+  const toggleLink = useCallback(() => {
+    if (!editor) return;
+    if (editor.isActive('link')) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    const url = window.prompt('URL du lien :');
+    if (url) {
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }
+  }, [editor]);
+
   const isContentDefault = useCallback(() => {
     if (!editor) return true;
     const currentContent = editor.getHTML();
-    return Object.values(TEMPLATES).some((t) => t === currentContent);
-  }, [editor]);
+    return currentContent === TEMPLATES[type];
+  }, [editor, type]);
 
   const handleTypeChange = (newType: TicketType) => {
     if (newType === type) return;
@@ -186,56 +233,62 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
               <div className="border border-parchment-300 rounded-lg overflow-hidden">
                 {/* Toolbar */}
                 {editor && (
-                  <div className="flex flex-wrap gap-0.5 p-2 border-b border-parchment-200 bg-parchment-50">
-                    <ToolbarButton
-                      active={editor.isActive('bold')}
-                      onClick={() => editor.chain().focus().toggleBold().run()}
-                      title="Gras"
-                    >
-                      <strong>G</strong>
+                  <div className="flex flex-wrap items-center gap-0.5 p-2 border-b border-parchment-200 bg-parchment-50">
+                    <ToolbarButton active={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Titre 1">
+                      <Heading1 size={15} />
                     </ToolbarButton>
-                    <ToolbarButton
-                      active={editor.isActive('italic')}
-                      onClick={() => editor.chain().focus().toggleItalic().run()}
-                      title="Italique"
-                    >
-                      <em>I</em>
+                    <ToolbarButton active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Titre 2">
+                      <Heading2 size={15} />
                     </ToolbarButton>
-                    <ToolbarButton
-                      active={editor.isActive('underline')}
-                      onClick={() => editor.chain().focus().toggleUnderline().run()}
-                      title="Souligné"
-                    >
-                      <u>S</u>
+                    <ToolbarButton active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Titre 3">
+                      <Heading3 size={15} />
                     </ToolbarButton>
-                    <div className="w-px bg-parchment-300 mx-1" />
-                    <ToolbarButton
-                      active={editor.isActive('heading', { level: 3 })}
-                      onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                      title="Titre"
-                    >
-                      H3
+                    <div className="w-px bg-parchment-300 mx-1 h-5" />
+                    <ToolbarButton active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Gras">
+                      <Bold size={15} />
                     </ToolbarButton>
-                    <ToolbarButton
-                      active={editor.isActive('bulletList')}
-                      onClick={() => editor.chain().focus().toggleBulletList().run()}
-                      title="Liste à puces"
-                    >
-                      •
+                    <ToolbarButton active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italique">
+                      <Italic size={15} />
                     </ToolbarButton>
-                    <ToolbarButton
-                      active={editor.isActive('orderedList')}
-                      onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                      title="Liste numérotée"
-                    >
-                      1.
+                    <ToolbarButton active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Souligné">
+                      <UnderlineIcon size={15} />
                     </ToolbarButton>
-                    <ToolbarButton
-                      active={editor.isActive('blockquote')}
-                      onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                      title="Citation"
-                    >
-                      &ldquo;
+                    <ToolbarButton active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()} title="Barré">
+                      <Strikethrough size={15} />
+                    </ToolbarButton>
+                    <div className="w-px bg-parchment-300 mx-1 h-5" />
+                    <ToolbarButton active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Aligner à gauche">
+                      <AlignLeft size={15} />
+                    </ToolbarButton>
+                    <ToolbarButton active={editor.isActive({ textAlign: 'center' })} onClick={() => editor.chain().focus().setTextAlign('center').run()} title="Centrer">
+                      <AlignCenter size={15} />
+                    </ToolbarButton>
+                    <ToolbarButton active={editor.isActive({ textAlign: 'right' })} onClick={() => editor.chain().focus().setTextAlign('right').run()} title="Aligner à droite">
+                      <AlignRight size={15} />
+                    </ToolbarButton>
+                    <ToolbarButton active={editor.isActive({ textAlign: 'justify' })} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justifier">
+                      <AlignJustify size={15} />
+                    </ToolbarButton>
+                    <div className="w-px bg-parchment-300 mx-1 h-5" />
+                    <ToolbarButton active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Liste à puces">
+                      <List size={15} />
+                    </ToolbarButton>
+                    <ToolbarButton active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Liste numérotée">
+                      <ListOrdered size={15} />
+                    </ToolbarButton>
+                    <ToolbarButton active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Citation">
+                      <Quote size={15} />
+                    </ToolbarButton>
+                    <div className="w-px bg-parchment-300 mx-1 h-5" />
+                    <ToolbarButton active={false} onClick={addImage} title="Insérer une image">
+                      <ImagePlus size={15} />
+                    </ToolbarButton>
+                    <ToolbarButton active={editor.isActive('link')} onClick={toggleLink} title={editor.isActive('link') ? 'Retirer le lien' : 'Ajouter un lien'}>
+                      {editor.isActive('link') ? <Unlink size={15} /> : <LinkIcon size={15} />}
+                    </ToolbarButton>
+                    <div className="w-px bg-parchment-300 mx-1 h-5" />
+                    <ToolbarButton active={false} onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()} title="Supprimer le formatage">
+                      <RemoveFormatting size={15} />
                     </ToolbarButton>
                   </div>
                 )}

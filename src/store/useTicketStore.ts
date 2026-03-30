@@ -80,8 +80,8 @@ export const useTicketStore = create<TicketStore>()((set, get) => ({
         tickets: s.tickets.map((t) => (t.id === id ? ticket : t)),
         currentTicket: s.currentTicket?.id === id ? ticket : s.currentTicket,
       }));
-      // Reload ticket to get updated status changes
-      if (data.status) {
+      // Reload ticket to get updated status changes / release assignments
+      if (data.status || data.releaseId !== undefined) {
         get().loadTicket(id);
       }
     } catch (err) {
@@ -125,6 +125,12 @@ export const useTicketStore = create<TicketStore>()((set, get) => ({
 
   addReaction: async (ticketId, commentId, emoji) => {
     try {
+      if (commentId === '__desc__') {
+        // Reaction on ticket description — reload the whole ticket
+        await api.tickets.addReaction(ticketId, commentId, emoji);
+        get().loadTicket(ticketId);
+        return;
+      }
       const { comment } = await api.tickets.addReaction(ticketId, commentId, emoji);
       set((s) => ({
         currentComments: s.currentComments.map((c) => (c.id === commentId ? comment : c)),
