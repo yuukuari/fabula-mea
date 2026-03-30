@@ -17,6 +17,7 @@ interface ExportChapter {
   id: string;
   number: number;
   title: string;
+  type?: 'front_matter' | 'chapter' | 'back_matter';
   scenes: { title: string; content: string }[];
 }
 
@@ -200,17 +201,27 @@ export async function exportEpub(book: ExportBook): Promise<void> {
   const chapterFiles: { id: string; filename: string; title: string }[] = [];
 
   for (const chapter of book.chapters) {
-    const filename = `chapter-${chapter.number}.xhtml`;
-    const chId = `ch-${chapter.number}`;
+    // Skip front/back matter with no scenes
+    if ((chapter.type === 'front_matter' || chapter.type === 'back_matter') && chapter.scenes.length === 0) continue;
 
-    let body = `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${escapeXml(chapter.title)}` : ''}</h1>\n`;
+    const isSpecial = chapter.type === 'front_matter' || chapter.type === 'back_matter';
+    const filename = isSpecial
+      ? `${chapter.type}.xhtml`
+      : `chapter-${chapter.number}.xhtml`;
+    const chId = isSpecial ? chapter.type! : `ch-${chapter.number}`;
+
+    let body = '';
+    if (!isSpecial) {
+      body += `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${escapeXml(chapter.title)}` : ''}</h1>\n`;
+    }
 
     for (let i = 0; i < chapter.scenes.length; i++) {
       const scene = chapter.scenes[i];
       if (i > 0) {
         body += `<hr />\n`;
       }
-      if (scene.title && chapter.scenes.length > 1) {
+      // For special chapters, always show scene title; for regular, only if multiple scenes
+      if (scene.title && (isSpecial || chapter.scenes.length > 1)) {
         body += `<p class="scene-title">${escapeXml(scene.title)}</p>\n`;
       }
       body += cleanHtml(scene.content || '<p></p>') + '\n';
@@ -228,7 +239,13 @@ ${body}
 </html>`
     );
 
-    chapterFiles.push({ id: chId, filename, title: `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}` });
+    chapterFiles.push({
+      id: chId,
+      filename,
+      title: isSpecial
+        ? (chapter.scenes.length === 1 && chapter.scenes[0].title ? chapter.scenes[0].title : (chapter.type === 'front_matter' ? 'Avant l\'histoire' : 'Après l\'histoire'))
+        : `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`,
+    });
   }
 
   // 6. Table of Contents (XHTML - EPUB 3)

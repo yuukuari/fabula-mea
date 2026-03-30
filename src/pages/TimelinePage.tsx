@@ -4,7 +4,7 @@ import { Clock, Edit, X, User, MapPin, Map } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { Scene, SceneStatus } from '@/types';
-import { SCENE_STATUS_LABELS, cn } from '@/lib/utils';
+import { SCENE_STATUS_LABELS, cn, isSpecialChapter, getChapterShortLabel } from '@/lib/utils';
 
 type TimelineViewMode = 'character' | 'place';
 
@@ -147,7 +147,7 @@ export function TimelinePage() {
         {/* Tooltip */}
         <div className="absolute bottom-full left-0 mb-1 bg-ink-500 text-white text-xs rounded-lg p-2.5 hidden group-hover:block z-10 shadow-lg max-w-xs" style={{ minWidth: '200px' }}>
           <div className="font-medium">{scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}</div>
-          {chapter && <div className="text-white/70 mt-0.5">Ch. {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}</div>}
+          {chapter && !isSpecialChapter(chapter) && <div className="text-white/70 mt-0.5">{getChapterShortLabel(chapter)}</div>}
           {scene.description && (
             <div className="text-white/80 mt-1.5 text-[11px] leading-relaxed whitespace-normal border-t border-white/20 pt-1.5">
               {scene.description.length > 200 ? scene.description.slice(0, 200) + '…' : scene.description}

@@ -171,14 +171,14 @@ Choisir le layout adapté :
 │   ├── index.css                ← Tailwind directives + styles globaux
 │   │
 │   ├── types/
-│   │   └── index.ts             ← Tous les types TypeScript (~402 lignes)
+│   │   └── index.ts             ← Tous les types TypeScript (~422 lignes)
 │   │
 │   ├── lib/
 │   │   ├── api.ts               ← ⭐ Façade API (IS_DEV ternaire)
 │   │   ├── dev-auth.ts          ← Mock auth localStorage
 │   │   ├── dev-db.ts            ← Mock DB localStorage
 │   │   ├── redis.ts             ← Client Upstash côté client (sync directe)
-│   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS, countCharacters, countUnitLabel...)
+│   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS, countCharacters, countUnitLabel, isSpecialChapter, getChapterLabel...)
 │   │   ├── calculations.ts      ← Calculs progression (mots/jour, scènes/jour, getTodayProgress, dailySnapshot)
 │   │   ├── export-epub.ts       ← Génération EPUB 3
 │   │   ├── export-pdf.ts        ← Export PDF via window.print()
@@ -188,7 +188,7 @@ Choisir le layout adapté :
 │   ├── store/
 │   │   ├── useAuthStore.ts      ← Authentification (login/signup/logout)
 │   │   ├── useLibraryStore.ts   ← Bibliothèque multi-livres (persist Zustand)
-│   │   ├── useBookStore.ts      ← ⭐ Store principal (~870 lignes) : tout le contenu du livre
+│   │   ├── useBookStore.ts      ← ⭐ Store principal (~965 lignes) : tout le contenu du livre
 │   │   ├── useEditorStore.ts    ← État éditeur de scène (open/close/entrySceneId)
 │   │   ├── useSyncStore.ts      ← Statut synchronisation cloud
 │   │   ├── useTicketStore.ts    ← CRUD tickets + commentaires + réactions
@@ -242,7 +242,11 @@ Choisir le layout adapté :
 Un livre contient :
 - **Characters** — Personnages avec relations mutuelles, évolution, événements clés, avatar rond avec `imageOffsetY` (pourcentage 0-100 pour le centrage vertical de l'image)
 - **Places** — Lieux typés (ville, bâtiment, paysage...) avec connexions
-- **Chapters** — Chapitres ordonnés, contenant des scènes
+- **Chapters** — Chapitres ordonnés, contenant des scènes. Trois types via `ChapterType` :
+  - `front_matter` — Section « Avant l'histoire » (dédicace, prologue, etc.) — number 0, créé automatiquement
+  - `chapter` — Chapitre classique numéroté (type par défaut)
+  - `back_matter` — Section « Après l'histoire » (épilogue, remerciements, etc.) — number 99999, créé automatiquement
+  - Les chapitres front/back matter ne peuvent pas être supprimés ni réordonnés. Ils s'affichent avant/après les chapitres normaux dans l'UI et les exports.
 - **Scenes** — Scènes avec statut (outline/draft/revision/complete), personnages, lieu, contenu TipTap
 - **Tags** — Système d'étiquettes réutilisables
 - **WorldNotes** — Notes de worldbuilding catégorisées
@@ -401,7 +405,7 @@ npm run preview  # Preview du build en local
 4. **Les serverless functions** sont en **CommonJS** (`module.exports`, pas `export default`). Le `tsconfig.json` dans `api/` gère ça.
 5. **CORS** : chaque endpoint prod doit appeler `handleCors(req, res)` en premier.
 6. **Auth** : chaque endpoint protégé doit appeler `requireAuth(req, res)` qui retourne `{ userId }` ou `null`.
-7. **Le `useBookStore`** est le store le plus complexe (~794 lignes). Il gère tout le contenu d'un livre et auto-save en local + cloud.
+7. **Le `useBookStore`** est le store le plus complexe (~965 lignes). Il gère tout le contenu d'un livre et auto-save en local + cloud.
 8. **TipTap** est utilisé pour l'éditeur de scènes, les descriptions de tickets, les notes & idées (avec checklists via TaskList/TaskItem), et les commentaires. Les toolbars sont dans les composants editor. Les styles TaskList sont dans `index.css`.
 9. **La page relecteur** (`/review/:token`) est publique et accessible sans authentification. La `TicketBubble` et le `TicketForm` sont masqués pour les utilisateurs non connectés.
 10. **Les sessions de relecture** figent un snapshot des chapitres/scènes au moment de la création. Les modifications ultérieures du livre n'affectent pas les relectures en cours.

@@ -5,7 +5,7 @@ import { useReviewStore } from '@/store/useReviewStore';
 import { ReviewCommentPanel } from '@/components/reviews/ReviewCommentPanel';
 import { ReviewContentViewer } from '@/components/reviews/ReviewContentViewer';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { cn } from '@/lib/utils';
+import { cn, isSpecialChapter, getChapterShortLabel } from '@/lib/utils';
 import type { ReviewSnapshotScene } from '@/types';
 
 export function ReviewReaderPage() {
@@ -277,6 +277,9 @@ export function ReviewReaderPage() {
             .map((sid) => readerSession.snapshot.scenes.find((s) => s.id === sid))
             .filter(Boolean) as ReviewSnapshotScene[];
           const isExpanded = expandedChapters.has(chapter.id);
+          const isSpecial = isSpecialChapter(chapter);
+          // Hide special chapters that have no scenes
+          if (isSpecial && chapterScenes.length === 0) return null;
           return (
             <div key={chapter.id}>
               <button
@@ -284,8 +287,8 @@ export function ReviewReaderPage() {
                 className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs hover:bg-parchment-100 rounded"
               >
                 {isExpanded ? <ChevronDown className="w-3 h-3 text-ink-200" /> : <ChevronRight className="w-3 h-3 text-ink-200" />}
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: chapter.color }} />
-                <span className="text-ink-400 font-medium truncate">Ch. {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}</span>
+                {!isSpecial && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: chapter.color }} />}
+                <span className={cn('font-medium truncate', isSpecial ? 'text-ink-300 italic' : 'text-ink-400')}>{getChapterShortLabel(chapter)}</span>
               </button>
               {isExpanded && (
                 <div className="ml-5 space-y-0.5">

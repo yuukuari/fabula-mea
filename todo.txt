@@ -25,7 +25,7 @@ Puis l'avancement
 
 Connecteur avec Wattpad ?
 + détail sur arc narratif et chemin initiatique
-Mise en page livre (dédicace, prologue, remerciements, 1ère et 4eme de couv, image)
+/Mise en page livre (dédicace, prologue, remerciements, 1ère et 4eme de couv, image)
 Suivi des intrigues
 Recherche dans le livre, avec résultats
 chronologie compliquée par date exacte, Simplifier chronologie dates
@@ -47,3 +47,4 @@ Mettre à par défaut Times new roman 12 avec interligne 1.5, mais modifiable da
 Transformer une note en fiche univers/personnage/etc.
 Des actions ne sont pas possibles sur la tablette
 Supprimer son compte
+Ajout du glossaire dans le livre (choisir ce qu'on veut ajouter au glossaire)

@@ -142,6 +142,7 @@ export function SettingsPage() {
         id: ch.id,
         number: ch.number,
         title: ch.title ?? '',
+        type: ch.type,
         scenes: ch.sceneIds
           .map((sid) => scenes.find((s) => s.id === sid))
           .filter(Boolean)

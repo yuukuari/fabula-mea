@@ -5,7 +5,7 @@ import type {
   WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
   Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
 } from '@/types';
-import { generateId, now, CHAPTER_COLORS } from '@/lib/utils';
+import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
@@ -158,6 +158,48 @@ function touchSave(extra: Record<string, unknown> = {}) {
   return { ...extra, updatedAt: timestamp, lastSavedAt: timestamp };
 }
 
+/** Ensure a book has front_matter and back_matter chapters (migration for existing books) */
+function ensureSpecialChapters(project: BookProject): BookProject {
+  const hasFront = project.chapters.some(c => c.type === 'front_matter');
+  const hasBack = project.chapters.some(c => c.type === 'back_matter');
+  if (hasFront && hasBack) return project;
+
+  const timestamp = now();
+  const newChapters = [...project.chapters];
+
+  if (!hasFront) {
+    newChapters.push({
+      id: generateId(),
+      title: FRONT_MATTER_LABEL,
+      number: FRONT_MATTER_NUMBER,
+      type: 'front_matter',
+      synopsis: '',
+      sceneIds: [],
+      color: SPECIAL_CHAPTER_COLOR,
+      tags: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+  }
+
+  if (!hasBack) {
+    newChapters.push({
+      id: generateId(),
+      title: BACK_MATTER_LABEL,
+      number: BACK_MATTER_NUMBER,
+      type: 'back_matter',
+      synopsis: '',
+      sceneIds: [],
+      color: SPECIAL_CHAPTER_COLOR,
+      tags: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+  }
+
+  return { ...project, chapters: newChapters };
+}
+
 export const useBookStore = create<BookStore>()(
   subscribeWithSelector(
     (set, get) => ({
@@ -179,6 +221,32 @@ export const useBookStore = create<BookStore>()(
           genre,
           writingMode,
           countUnit,
+          chapters: [
+            {
+              id: generateId(),
+              title: FRONT_MATTER_LABEL,
+              number: FRONT_MATTER_NUMBER,
+              type: 'front_matter' as const,
+              synopsis: '',
+              sceneIds: [] as string[],
+              color: SPECIAL_CHAPTER_COLOR,
+              tags: [] as string[],
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            },
+            {
+              id: generateId(),
+              title: BACK_MATTER_LABEL,
+              number: BACK_MATTER_NUMBER,
+              type: 'back_matter' as const,
+              synopsis: '',
+              sceneIds: [] as string[],
+              color: SPECIAL_CHAPTER_COLOR,
+              tags: [] as string[],
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            },
+          ],
           createdAt: timestamp,
           updatedAt: timestamp,
           lastSavedAt: timestamp,
@@ -203,7 +271,7 @@ export const useBookStore = create<BookStore>()(
 
         const raw = localStorage.getItem(getBookStorageKey(bookId));
         if (raw) {
-          const project = JSON.parse(raw) as BookProject;
+          const project = ensureSpecialChapters(JSON.parse(raw) as BookProject);
           set({ ...project, lastSavedAt: now(), _loaded: true });
         }
 
@@ -213,8 +281,9 @@ export const useBookStore = create<BookStore>()(
             const remote = remoteData as BookProject;
             const cur = get();
             if (!raw || remote.updatedAt > (cur.updatedAt ?? '')) {
-              set({ ...remote, lastSavedAt: now(), _loaded: true });
-              localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(remote));
+              const migrated = ensureSpecialChapters(remote);
+              set({ ...migrated, lastSavedAt: now(), _loaded: true });
+              localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(migrated));
             }
             useSyncStore.getState().setSynced();
           }).catch(() => {
@@ -236,7 +305,7 @@ export const useBookStore = create<BookStore>()(
           title: state.title,
           author: state.author,
           genre: state.genre,
-          chaptersCount: state.chapters.length,
+          chaptersCount: state.chapters.filter(c => (c.type ?? 'chapter') === 'chapter').length,
           scenesCount: state.scenes.length,
           charactersCount: state.characters.length,
         });
@@ -456,21 +525,25 @@ export const useBookStore = create<BookStore>()(
       addChapter: (chapter) => {
         const id = generateId();
         const timestamp = now();
-        set((s) => ({
-          chapters: [...s.chapters, {
-            id,
-            title: chapter.title ?? '',
-            number: chapter.number ?? s.chapters.length + 1,
-            synopsis: chapter.synopsis ?? '',
-            sceneIds: [],
-            color: chapter.color ?? CHAPTER_COLORS[s.chapters.length % CHAPTER_COLORS.length],
-            tags: chapter.tags ?? [],
-            createdAt: timestamp,
+        set((s) => {
+          const regularChapters = s.chapters.filter(c => (c.type ?? 'chapter') === 'chapter');
+          return {
+            chapters: [...s.chapters, {
+              id,
+              title: chapter.title ?? '',
+              number: chapter.number ?? regularChapters.length + 1,
+              type: 'chapter' as const,
+              synopsis: chapter.synopsis ?? '',
+              sceneIds: [],
+              color: chapter.color ?? CHAPTER_COLORS[regularChapters.length % CHAPTER_COLORS.length],
+              tags: chapter.tags ?? [],
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            }],
             updatedAt: timestamp,
-          }],
-          updatedAt: timestamp,
-          lastSavedAt: timestamp,
-        }));
+            lastSavedAt: timestamp,
+          };
+        });
         return id;
       },
 
@@ -483,20 +556,29 @@ export const useBookStore = create<BookStore>()(
         })),
 
       deleteChapter: (id) =>
-        set((s) => ({
-          chapters: s.chapters.filter((c) => c.id !== id),
-          scenes: s.scenes.filter((sc) => sc.chapterId !== id),
-          ...touchSave(),
-        })),
+        set((s) => {
+          const ch = s.chapters.find(c => c.id === id);
+          // Cannot delete front/back matter
+          if (ch && (ch.type === 'front_matter' || ch.type === 'back_matter')) return {};
+          return {
+            chapters: s.chapters.filter((c) => c.id !== id),
+            scenes: s.scenes.filter((sc) => sc.chapterId !== id),
+            ...touchSave(),
+          };
+        }),
 
       reorderChapters: (chapterIds) =>
-        set((s) => ({
-          chapters: chapterIds.map((id, i) => {
+        set((s) => {
+          const specialChapters = s.chapters.filter(c => c.type === 'front_matter' || c.type === 'back_matter');
+          const reordered = chapterIds.map((id, i) => {
             const ch = s.chapters.find((c) => c.id === id)!;
             return { ...ch, number: i + 1 };
-          }),
-          ...touchSave(),
-        })),
+          });
+          return {
+            chapters: [...specialChapters, ...reordered],
+            ...touchSave(),
+          };
+        }),
 
       // ─── Scenes ───
       addScene: (scene) => {

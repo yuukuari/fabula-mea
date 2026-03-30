@@ -8,6 +8,7 @@
 interface ExportChapter {
   number: number;
   title: string;
+  type?: 'front_matter' | 'chapter' | 'back_matter';
   scenes: { title: string; content: string }[];
 }
 
@@ -167,13 +168,19 @@ export function exportPdf(book: ExportBook): void {
   let chaptersHtml = '';
 
   for (const chapter of book.chapters) {
-    chaptersHtml += `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}</h1>\n`;
+    const isSpecial = chapter.type === 'front_matter' || chapter.type === 'back_matter';
+    // Skip front/back matter with no scenes
+    if (isSpecial && chapter.scenes.length === 0) continue;
+
+    if (!isSpecial) {
+      chaptersHtml += `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}</h1>\n`;
+    }
     for (let i = 0; i < chapter.scenes.length; i++) {
       const scene = chapter.scenes[i];
       if (i > 0) {
         chaptersHtml += `<hr />\n`;
       }
-      if (scene.title && chapter.scenes.length > 1) {
+      if (scene.title && (isSpecial || chapter.scenes.length > 1)) {
         chaptersHtml += `<p class="scene-title">${scene.title}</p>\n`;
       }
       chaptersHtml += cleanHtml(scene.content || '<p></p>') + '\n';
@@ -181,7 +188,14 @@ export function exportPdf(book: ExportBook): void {
   }
 
   const tocHtml = book.chapters
-    .map((ch) => `<li><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title || ''}</li>`)
+    .filter((ch) => !((ch.type === 'front_matter' || ch.type === 'back_matter') && ch.scenes.length === 0))
+    .map((ch) => {
+      if (ch.type === 'front_matter' || ch.type === 'back_matter') {
+        const label = ch.scenes.length === 1 && ch.scenes[0].title ? ch.scenes[0].title : (ch.type === 'front_matter' ? 'Avant l\'histoire' : 'Après l\'histoire');
+        return `<li>${label}</li>`;
+      }
+      return `<li><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title || ''}</li>`;
+    })
     .join('\n');
 
   const html = `<!DOCTYPE html>

@@ -5,9 +5,9 @@ import { useBookStore } from '@/store/useBookStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL } from '@/lib/utils';
 import { getSceneProgress } from '@/lib/calculations';
-import type { Scene, SceneStatus } from '@/types';
+import type { Scene, SceneStatus, Chapter } from '@/types';
 
 export function ChaptersPage() {
   const chapters = useBookStore((s) => s.chapters);
@@ -35,26 +35,171 @@ export function ChaptersPage() {
   const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
   const sortedChapters = [...chapters].sort((a, b) => a.number - b.number);
+  const frontMatter = sortedChapters.find(c => c.type === 'front_matter');
+  const backMatter = sortedChapters.find(c => c.type === 'back_matter');
+  const regularChapters = sortedChapters.filter(c => (c.type ?? 'chapter') === 'chapter');
+
+  const renderSceneList = (chapter: Chapter) => {
+    const chapterScenes = chapter.sceneIds
+      .map((sid) => scenes.find((s) => s.id === sid))
+      .filter(Boolean) as Scene[];
+    const isExpanded = expanded[chapter.id] !== false;
+
+    if (!isExpanded) return null;
+
+    return (
+      <div className="px-4 pb-4 space-y-2">
+        {chapterScenes.map((scene, sceneIdx) => {
+          const progress = getSceneProgress(scene);
+          const sceneChars = scene.characterIds
+            .map((cid) => characters.find((c) => c.id === cid))
+            .filter(Boolean);
+          const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
+          const sceneMaps = scenePlace
+            ? maps.filter((m) => m.pins.some((p) => p.placeId === scenePlace.id))
+            : [];
+
+          return (
+            <div key={scene.id} className="bg-parchment-100 rounded-lg p-3 group">
+              <div className="flex items-start gap-3">
+                <GripVertical className="w-4 h-4 text-ink-100 mt-1 opacity-0 group-hover:opacity-100 cursor-grab" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-ink-500 text-sm">{scene.title || `Scène ${sceneIdx + 1}`}</h4>
+                    <span className={cn('badge text-xs', SCENE_STATUS_COLORS[scene.status])}>
+                      {SCENE_STATUS_LABELS[scene.status]}
+                    </span>
+                  </div>
+                  {scene.description && (
+                    <p className="text-xs text-ink-300 mt-1 line-clamp-2">{scene.description}</p>
+                  )}
+                  <div className="flex items-center gap-3 mt-2 text-xs text-ink-200">
+                    {sceneChars.length > 0 && (
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {sceneChars.map((c) => c!.name).join(', ')}
+                      </span>
+                    )}
+                    {scenePlace && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {scenePlace.name}
+                        {sceneMaps.map((m) => (
+                          <button
+                            key={m.id}
+                            onClick={(e) => { e.stopPropagation(); navigate('/maps', { state: { mapId: m.id } }); }}
+                            title={`Voir sur la carte : ${m.name}`}
+                            className="ml-0.5 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                          >
+                            <Map className="w-3 h-3" />
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                    {scene.startDateTime && (
+                      <span>{new Date(scene.startDateTime).toLocaleDateString('fr-FR')}</span>
+                    )}
+                  </div>
+                  {/* Progress bar */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-parchment-300 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all',
+                          progress >= 1 ? 'bg-green-500' : progress > 0.5 ? 'bg-gold-400' : 'bg-bordeaux-400'
+                        )}
+                        style={{ width: `${progress * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-ink-200 text-right">
+                      {scene.currentWordCount}/{scene.targetWordCount} {countUnitLabel(countUnit)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                  {writingMode === 'write' && (
+                    <button
+                      onClick={() => openEditorAt(scene.id)}
+                      className="btn-ghost p-1 text-bordeaux-500 hover:text-bordeaux-700"
+                      title="Écrire cette scène"
+                    >
+                      <PenLine className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button onClick={() => setEditingScene(scene)} className="btn-ghost p-1">
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => setDeleteTarget({ type: 'scene', id: scene.id })} className="btn-ghost p-1 text-red-400">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <button
+          onClick={() => setShowSceneForm(chapter.id)}
+          className="w-full py-2 text-sm text-ink-200 border border-dashed border-parchment-300 rounded-lg
+                     hover:border-gold-400 hover:text-ink-300 transition-colors flex items-center justify-center gap-1"
+        >
+          <Plus className="w-4 h-4" /> Ajouter une scène
+        </button>
+      </div>
+    );
+  };
+
+  const renderSpecialSection = (chapter: Chapter | undefined) => {
+    if (!chapter) return null;
+    const chapterScenes = chapter.sceneIds
+      .map((sid) => scenes.find((s) => s.id === sid))
+      .filter(Boolean) as Scene[];
+    const isExpanded = expanded[chapter.id] !== false;
+    const label = chapter.type === 'front_matter' ? FRONT_MATTER_LABEL : BACK_MATTER_LABEL;
+
+    return (
+      <div className="card-fantasy overflow-hidden border-dashed">
+        <div
+          className="flex items-center gap-3 p-4 cursor-pointer hover:bg-parchment-100 transition-colors"
+          onClick={() => toggleExpand(chapter.id)}
+        >
+          {isExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
+          <div className="flex-1">
+            <h3 className="font-display font-bold text-ink-400 italic">{label}</h3>
+            <p className="text-xs text-ink-200 mt-0.5">Dédicace, prologue, épilogue, remerciements...</p>
+          </div>
+          {chapterScenes.length > 0 && (
+            <span className="text-xs text-ink-200">{chapterScenes.length} page{chapterScenes.length > 1 ? 's' : ''}</span>
+          )}
+        </div>
+        {renderSceneList(chapter)}
+      </div>
+    );
+  };
 
   return (
     <div className="page-container">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="section-title">Chapitres & Scenes</h2>
+        <h2 className="section-title">Chapitres & Scènes</h2>
         <button onClick={() => { setEditingChapterId(null); setShowChapterForm(true); }} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" /><span className="hidden sm:inline">Nouveau chapitre</span>
         </button>
       </div>
 
-      {chapters.length === 0 ? (
-        <EmptyState
-          icon={BookOpen}
-          title="Aucun chapitre"
-          description="Structurez votre histoire en chapitres, puis ajoutez des scenes a chacun."
-          action={<button onClick={() => setShowChapterForm(true)} className="btn-primary">Créer un chapitre</button>}
-        />
-      ) : (
-        <div className="space-y-3">
-          {sortedChapters.map((chapter) => {
+      <div className="space-y-3">
+        {/* Front matter */}
+        {renderSpecialSection(frontMatter)}
+
+        {/* Regular chapters */}
+        {regularChapters.length === 0 ? (
+          <EmptyState
+            icon={BookOpen}
+            title="Aucun chapitre"
+            description="Structurez votre histoire en chapitres, puis ajoutez des scènes à chacun."
+            action={<button onClick={() => setShowChapterForm(true)} className="btn-primary">Créer un chapitre</button>}
+          />
+        ) : (
+          regularChapters.map((chapter) => {
             const chapterScenes = chapter.sceneIds
               .map((sid) => scenes.find((s) => s.id === sid))
               .filter(Boolean) as Scene[];
@@ -76,7 +221,7 @@ export function ChaptersPage() {
                       <h3 className="font-display font-bold text-ink-500">{chapter.title}</h3>
                     )}
                   </div>
-                  <span className="text-xs text-ink-200">{completedScenes}/{chapterScenes.length} scenes</span>
+                  <span className="text-xs text-ink-200">{completedScenes}/{chapterScenes.length} scènes</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingChapterId(chapter.id); setShowChapterForm(true); }}
                     className="btn-ghost p-1"
@@ -95,112 +240,15 @@ export function ChaptersPage() {
                   <p className="px-4 pb-2 text-sm text-ink-300 italic">{chapter.synopsis}</p>
                 )}
 
-                {/* Scenes */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 space-y-2">
-                    {chapterScenes.map((scene, sceneIdx) => {
-                      const progress = getSceneProgress(scene);
-                      const sceneChars = scene.characterIds
-                        .map((cid) => characters.find((c) => c.id === cid))
-                        .filter(Boolean);
-                      const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
-                      const sceneMaps = scenePlace
-                        ? maps.filter((m) => m.pins.some((p) => p.placeId === scenePlace.id))
-                        : [];
-
-                      return (
-                        <div key={scene.id} className="bg-parchment-100 rounded-lg p-3 group">
-                          <div className="flex items-start gap-3">
-                            <GripVertical className="w-4 h-4 text-ink-100 mt-1 opacity-0 group-hover:opacity-100 cursor-grab" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-medium text-ink-500 text-sm">{scene.title || `Scène ${sceneIdx + 1}`}</h4>
-                                <span className={cn('badge text-xs', SCENE_STATUS_COLORS[scene.status])}>
-                                  {SCENE_STATUS_LABELS[scene.status]}
-                                </span>
-                              </div>
-                              {scene.description && (
-                                <p className="text-xs text-ink-300 mt-1 line-clamp-2">{scene.description}</p>
-                              )}
-                              <div className="flex items-center gap-3 mt-2 text-xs text-ink-200">
-                                {sceneChars.length > 0 && (
-                                  <span className="flex items-center gap-1">
-                                    <User className="w-3 h-3" />
-                                    {sceneChars.map((c) => c!.name).join(', ')}
-                                  </span>
-                                )}
-                                {scenePlace && (
-                                  <span className="flex items-center gap-1">
-                                    <MapPin className="w-3 h-3" />
-                                    {scenePlace.name}
-                                    {sceneMaps.map((m) => (
-                                      <button
-                                        key={m.id}
-                                        onClick={(e) => { e.stopPropagation(); navigate('/maps', { state: { mapId: m.id } }); }}
-                                        title={`Voir sur la carte : ${m.name}`}
-                                        className="ml-0.5 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
-                                      >
-                                        <Map className="w-3 h-3" />
-                                      </button>
-                                    ))}
-                                  </span>
-                                )}
-                                {scene.startDateTime && (
-                                  <span>{new Date(scene.startDateTime).toLocaleDateString('fr-FR')}</span>
-                                )}
-                              </div>
-                              {/* Progress bar */}
-                              <div className="mt-2 flex items-center gap-2">
-                                <div className="flex-1 h-1.5 bg-parchment-300 rounded-full overflow-hidden">
-                                  <div
-                                    className={cn(
-                                      'h-full rounded-full transition-all',
-                                      progress >= 1 ? 'bg-green-500' : progress > 0.5 ? 'bg-gold-400' : 'bg-bordeaux-400'
-                                    )}
-                                    style={{ width: `${progress * 100}%` }}
-                                  />
-                                </div>
-                                <span className="text-xs text-ink-200 text-right">
-                                  {scene.currentWordCount}/{scene.targetWordCount} {countUnitLabel(countUnit)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                              {writingMode === 'write' && (
-                                <button
-                                  onClick={() => openEditorAt(scene.id)}
-                                  className="btn-ghost p-1 text-bordeaux-500 hover:text-bordeaux-700"
-                                  title="Écrire cette scène"
-                                >
-                                  <PenLine className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              <button onClick={() => setEditingScene(scene)} className="btn-ghost p-1">
-                                <Edit className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => setDeleteTarget({ type: 'scene', id: scene.id })} className="btn-ghost p-1 text-red-400">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    <button
-                      onClick={() => setShowSceneForm(chapter.id)}
-                      className="w-full py-2 text-sm text-ink-200 border border-dashed border-parchment-300 rounded-lg
-                                 hover:border-gold-400 hover:text-ink-300 transition-colors flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" /> Ajouter une scene
-                    </button>
-                  </div>
-                )}
+                {renderSceneList(chapter)}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+
+        {/* Back matter */}
+        {renderSpecialSection(backMatter)}
+      </div>
 
       {showChapterForm && (
         <ChapterFormDialog

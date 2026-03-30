@@ -5,7 +5,7 @@ import { useEditorStore } from '@/store/useEditorStore';
 import { SceneInlineEditor, countWords } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
-import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel } from '@/lib/utils';
 import { getTodayProgress } from '@/lib/calculations';
 import type { Scene, Chapter } from '@/types';
 
@@ -187,6 +187,9 @@ export function SceneEditor() {
       <div className="flex-1 overflow-y-auto py-2">
         {sortedChapters.map((chapter) => {
           const chScenes = getChapterScenes(chapter.id);
+          const isSpecial = isSpecialChapter(chapter);
+          // Hide special chapters that have no scenes
+          if (isSpecial && chScenes.length === 0) return null;
           return (
             <div key={chapter.id} className="mb-1">
               {/* Chapter row */}
@@ -195,9 +198,14 @@ export function SceneEditor() {
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-left
                            hover:bg-parchment-200/60 transition-colors group"
               >
-                <div className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
-                <span className="text-xs font-semibold text-ink-400 truncate flex-1">
-                  Ch. {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
+                {!isSpecial && (
+                  <div className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
+                )}
+                <span className={cn(
+                  'text-xs truncate flex-1',
+                  isSpecial ? 'font-medium text-ink-300 italic' : 'font-semibold text-ink-400'
+                )}>
+                  {getChapterShortLabel(chapter)}
                 </span>
               </button>
 
@@ -263,10 +271,10 @@ export function SceneEditor() {
 
         {/* Breadcrumb en cours */}
         <div className="flex items-center gap-1.5 min-w-0 flex-1 text-xs text-ink-300">
-          {visibleChapter && (
+          {visibleChapter && !isSpecialChapter(visibleChapter) && (
             <>
               <BookOpen className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Ch. {visibleChapter.number}{visibleChapter.title ? ` — ${visibleChapter.title}` : ''}</span>
+              <span className="truncate">{getChapterShortLabel(visibleChapter)}</span>
               <ChevronRight className="w-3 h-3 shrink-0" />
             </>
           )}
@@ -373,14 +381,20 @@ export function SceneEditor() {
           <div className="max-w-3xl mx-auto px-6 sm:px-14 py-10 sm:py-12 pb-32">
             {sortedChapters.map((chapter) => {
               const chScenes = getChapterScenes(chapter.id);
+              const isSpecial = isSpecialChapter(chapter);
+              // Hide special chapters that have no scenes
+              if (isSpecial && chScenes.length === 0) return null;
               return (
                 <div key={chapter.id} className="mb-12">
-                  <div className="flex items-center gap-3 mb-8">
-                    <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
-                    <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">
-                      Chapitre {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
-                    </h2>
-                  </div>
+                  {/* Don't show heading for front/back matter */}
+                  {!isSpecial && (
+                    <div className="flex items-center gap-3 mb-8">
+                      <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
+                      <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">
+                        {getChapterLabel(chapter)}
+                      </h2>
+                    </div>
+                  )}
 
                   {chScenes.map((scene, idx) => {
                     const sceneChars = scene.characterIds

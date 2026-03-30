@@ -5,7 +5,7 @@ import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useEffect, useMemo } from 'react';
 import { getTodayProgress } from '@/lib/calculations';
-import { countUnitLabel } from '@/lib/utils';
+import { countUnitLabel, isSpecialChapter } from '@/lib/utils';
 
 export function EncyclopediaPage() {
   const navigate = useNavigate();
@@ -97,8 +97,8 @@ export function EncyclopediaPage() {
       {/* Key stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div className="card-fantasy p-4 text-center">
-          <p className="text-2xl font-display font-bold text-bordeaux-500">{chapters.length}</p>
-          <p className="text-xs text-ink-300 mt-1">Chapitre{chapters.length > 1 ? 's' : ''}</p>
+          <p className="text-2xl font-display font-bold text-bordeaux-500">{chapters.filter(c => !isSpecialChapter(c)).length}</p>
+          <p className="text-xs text-ink-300 mt-1">Chapitre{chapters.filter(c => !isSpecialChapter(c)).length > 1 ? 's' : ''}</p>
         </div>
         <div className="card-fantasy p-4 text-center">
           <p className="text-2xl font-display font-bold text-bordeaux-500">{scenes.length}</p>

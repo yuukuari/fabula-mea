@@ -98,10 +98,13 @@ export type PlaceType =
   | 'other';
 
 // ─── Chapters & Scenes ───
+export type ChapterType = 'front_matter' | 'chapter' | 'back_matter';
+
 export interface Chapter {
   id: EntityId;
   title?: string;
   number: number;
+  type?: ChapterType; // default: 'chapter'
   synopsis?: string;
   sceneIds: EntityId[];
   color: string;
@@ -324,6 +327,7 @@ export interface ReviewSnapshotChapter {
   id: EntityId;
   title?: string;
   number: number;
+  type?: ChapterType;
   synopsis?: string;
   color: string;
   sceneIds: EntityId[];

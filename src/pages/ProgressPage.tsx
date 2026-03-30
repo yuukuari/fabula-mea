@@ -9,7 +9,7 @@ import {
   getCompletedScenesCount, getWorkingDaysRemaining, getScenesPerDay,
   getDaysUntilDeadline, countExcludedDays, getTodayProgress
 } from '@/lib/calculations';
-import { cn, countUnitLabel } from '@/lib/utils';
+import { cn, countUnitLabel, isSpecialChapter, getChapterLabel } from '@/lib/utils';
 
 export function ProgressPage() {
   const scenes = useBookStore((s) => s.scenes);
@@ -218,13 +218,16 @@ export function ProgressPage() {
                   .filter(Boolean) as typeof scenes;
 
                 if (chapterScenes.length === 0) return null;
+                const isSpecial = isSpecialChapter(chapter);
 
                 return (
                   <div key={chapter.id}>
                     <div className="flex items-center gap-2 mb-2 mt-4">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: chapter.color }} />
-                      <h4 className="text-sm font-medium text-ink-400">
-                        Chapitre {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
+                      {!isSpecial && (
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: chapter.color }} />
+                      )}
+                      <h4 className={cn('text-sm font-medium', isSpecial ? 'text-ink-300 italic' : 'text-ink-400')}>
+                        {getChapterLabel(chapter)}
                       </h4>
                     </div>
                     {chapterScenes.map((scene, sceneIdx) => {

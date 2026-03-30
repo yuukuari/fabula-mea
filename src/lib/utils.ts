@@ -132,3 +132,30 @@ export function formatCount(value: number, unit: 'words' | 'characters'): string
 export function countUnitLabel(unit: 'words' | 'characters'): string {
   return unit === 'characters' ? 'signes' : 'mots';
 }
+
+// ─── Front/Back matter helpers ───
+
+export const FRONT_MATTER_LABEL = 'Avant l\'histoire';
+export const BACK_MATTER_LABEL = 'Après l\'histoire';
+export const FRONT_MATTER_NUMBER = 0;
+export const BACK_MATTER_NUMBER = 99999;
+export const SPECIAL_CHAPTER_COLOR = '#9CA3AF'; // gray-400
+
+/** Check if a chapter is front or back matter */
+export function isSpecialChapter(chapter: { type?: string }): boolean {
+  return chapter.type === 'front_matter' || chapter.type === 'back_matter';
+}
+
+/** Get the display label for a chapter */
+export function getChapterLabel(chapter: { type?: string; number: number; title?: string }): string {
+  if (chapter.type === 'front_matter') return FRONT_MATTER_LABEL;
+  if (chapter.type === 'back_matter') return BACK_MATTER_LABEL;
+  return `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`;
+}
+
+/** Get a short display label for a chapter (used in breadcrumbs) */
+export function getChapterShortLabel(chapter: { type?: string; number: number; title?: string }): string {
+  if (chapter.type === 'front_matter') return FRONT_MATTER_LABEL;
+  if (chapter.type === 'back_matter') return BACK_MATTER_LABEL;
+  return `Ch. ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`;
+}

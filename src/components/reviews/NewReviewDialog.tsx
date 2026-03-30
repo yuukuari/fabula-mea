@@ -4,7 +4,7 @@ import { useBookStore } from '@/store/useBookStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
-import { cn } from '@/lib/utils';
+import { cn, isSpecialChapter, getChapterLabel } from '@/lib/utils';
 import type { ReviewSession, Chapter, Scene } from '@/types';
 
 interface Props {
@@ -87,6 +87,7 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
           id: c.id,
           title: c.title,
           number: c.number,
+          type: c.type,
           synopsis: c.synopsis,
           color: c.color,
           sceneIds: c.sceneIds.filter((sid) => selectedSceneIds.has(sid)),
@@ -198,6 +199,10 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
                     const isExpanded = expandedChapters.has(chapter.id);
                     const allSelected = chapterScenes.length > 0 && chapterScenes.every((s) => selectedSceneIds.has(s.id));
                     const someSelected = chapterScenes.some((s) => selectedSceneIds.has(s.id));
+                    const isSpecial = isSpecialChapter(chapter);
+
+                    // Hide special chapters that have no scenes
+                    if (isSpecial && chapterScenes.length === 0) return null;
 
                     return (
                       <div key={chapter.id} className="border-b border-parchment-100 last:border-0">
@@ -222,13 +227,14 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
                               onChange={() => toggleChapter(chapter)}
                               className="accent-bordeaux-500"
                             />
-                            <div
-                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: chapter.color }}
-                            />
-                            <span className="text-sm font-medium text-ink-400">
-                              Chapitre {chapter.number}
-                              {chapter.title ? ` — ${chapter.title}` : ''}
+                            {!isSpecial && (
+                              <div
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: chapter.color }}
+                              />
+                            )}
+                            <span className={cn('text-sm font-medium', isSpecial ? 'text-ink-300 italic' : 'text-ink-400')}>
+                              {getChapterLabel(chapter)}
                             </span>
                             <span className="text-xs text-ink-200 ml-auto">
                               {chapterScenes.length} scène{chapterScenes.length !== 1 ? 's' : ''}
