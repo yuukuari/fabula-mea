@@ -12,6 +12,7 @@ interface User {
   email: string;
   name: string;
   passwordHash: string;
+  isAdmin: boolean;
   createdAt: string;
 }
 
@@ -45,14 +46,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     email: normalized,
     name: name?.trim() || normalized.split('@')[0],
     passwordHash,
+    isAdmin: false,
     createdAt: new Date().toISOString(),
   };
+
+  // Maintain a member index for admin listing
+  const memberIdsJson = await redis.get('emlb:member-ids');
+  const memberIds: string[] = memberIdsJson ? JSON.parse(memberIdsJson) : [];
+  memberIds.push(id);
 
   await Promise.all([
     redis.set(`emlb:user:${id}`, JSON.stringify(user)),
     redis.set(`emlb:email:${normalized}`, id),
+    redis.set('emlb:member-ids', JSON.stringify(memberIds)),
   ]);
 
   const token = signToken({ userId: id, email: normalized });
-  return res.json({ token, user: { id, email: normalized, name: user.name } });
+  return res.json({ token, user: { id, email: normalized, name: user.name, isAdmin: false } });
 }

@@ -11,7 +11,12 @@ import { WorldPage } from '@/pages/WorldPage';
 import { MapsPage } from '@/pages/MapsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AuthPage } from '@/pages/AuthPage';
+import { TicketsPage } from '@/pages/TicketsPage';
+import { ReleaseNotesPage } from '@/pages/ReleaseNotesPage';
+import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
+import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useLibraryStore } from '@/store/useLibraryStore';
 
 const router = createBrowserRouter([
   { path: '/', element: <HomePage /> },
@@ -27,24 +32,32 @@ const router = createBrowserRouter([
       { path: 'world', element: <WorldPage /> },
       { path: 'maps', element: <MapsPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'tickets', element: <TicketsPage /> },
+      { path: 'releases', element: <ReleaseNotesPage /> },
+      { path: 'admin/members', element: <AdminMembersPage /> },
+      { path: 'admin/tickets', element: <TicketsPage /> },
+      { path: 'admin/releases', element: <AdminReleasesPage /> },
     ],
   },
 ]);
 
-const DEV_MODE = import.meta.env.DEV;
-
 export default function App() {
   const { user, checkAuth } = useAuthStore();
+  const loadFromCloud = useLibraryStore((s) => s.loadFromCloud);
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    // In dev mode (npm run dev / Vite only), skip auth — use localStorage directly
-    if (DEV_MODE) {
-      setAuthChecked(true);
-      return;
-    }
-    checkAuth().finally(() => setAuthChecked(true));
+    checkAuth()
+      .then(() => loadFromCloud())
+      .finally(() => setAuthChecked(true));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After login (user goes from null → object), load the library
+  useEffect(() => {
+    if (user && authChecked) {
+      loadFromCloud();
+    }
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!authChecked) {
     return (
@@ -54,10 +67,7 @@ export default function App() {
     );
   }
 
-  // Dev mode: bypass auth entirely, localStorage only
-  if (DEV_MODE) return <RouterProvider router={router} />;
-
-  // Production: auth required
+  // Auth required (both dev and production)
   if (!user) return <AuthPage />;
 
   return <RouterProvider router={router} />;

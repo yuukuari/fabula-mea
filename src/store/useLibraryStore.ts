@@ -4,8 +4,8 @@ import type { BookMeta, WritingMode } from '@/types';
 import { generateId, now } from '@/lib/utils';
 import { api } from '@/lib/api';
 
-// Sync to cloud only in production (logged in) — in dev mode the API isn't available
-const shouldSync = () => !import.meta.env.DEV && !!localStorage.getItem('emlb-token');
+// Sync to cloud (or dev-db in dev mode) when logged in
+const shouldSync = () => !!localStorage.getItem('emlb-token');
 
 interface LibraryStore {
   books: BookMeta[];

@@ -282,7 +282,6 @@ Puis l'avancement
 
 
 Connecteur avec Wattpad ?
-/ Infos supplémentaires sur les scènes pendant l'écriture + enlever le i + ajouter dates
 + détail sur arc narratif et chemin initiatique
 Mise en page livre (dédicace, prologue, remerciements, 1ère et 4eme de couv, image)
 Suivi des intrigues
@@ -291,27 +290,15 @@ Pouvoir noter ses idées en vrac, des passages qu'on aime bien
 Recherche dans le livre, avec résultats
 chronologie compliquée par date exacte, Simplifier chronologie dates
 découper une scène en 2
-/ Ajouter image dans fiches univers
 Générer un wiki, réorganiser les fiches
 Evolution des scènes sur la carte
-/ Fiches liées ?
 Mettre les commentaires pour soi-même également
 
 Traits superposés encore
 tooltip pas aligné avec le personnage
-/ modifier un lieu sur la carte (changer icone)
-/ Créerer un lieu à partir d'un marqueur de la carte
-/ Lien sur la carte pas fonctionnel
-/ Explication sous lieux connectés (ou masquer) lieux connectés pas clair
-/ afficher les lieux connectés dans le parent
 accents
-/ pomodoro au-dessus de mode écriture
 Musiques associées à des personnages (pour s'imprégner du personnage)
-/ changer icone + couleur verte pour pause pomodoro
-/ Formattage nom des chapitres/scène dans avancement
-Pareil dans titre chronologie
-/ npmbre de mot modifiable dans avancement alors qu'on est en mode écriture
 Pourquoi un jour de décalage dans avancement ?
 En plus des mots, indiquer partout le nombre de signes (espace compris)
 On sait pas si on a atteint notre objectif journalier
-/ séparateur doit etre visible dans export pdf, nom scène doit pas être visible si pas renseigné
+Dans la crhonologie, il faudrait voir la description de la scène

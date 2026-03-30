@@ -215,6 +215,71 @@ export interface BookMeta {
   updatedAt: string;
 }
 
+// ─── Tickets ───
+export type TicketType = 'bug' | 'question' | 'improvement';
+export type TicketVisibility = 'public' | 'private';
+export type TicketStatus = 'open' | 'closed_done' | 'closed_duplicate';
+
+export interface Ticket {
+  id: EntityId;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  type: TicketType;
+  title: string;
+  description: string; // HTML from TipTap
+  visibility: TicketVisibility;
+  status: TicketStatus;
+  releaseId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketComment {
+  id: EntityId;
+  ticketId: string;
+  userId: string;
+  userName: string;
+  isAdmin: boolean;
+  content: string;
+  reactions: Record<string, string[]>; // emoji → userId[]
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketStatusChange {
+  id: EntityId;
+  ticketId: string;
+  userId: string;
+  userName: string;
+  fromStatus: TicketStatus;
+  toStatus: TicketStatus;
+  createdAt: string;
+}
+
+// ─── Releases ───
+export type ReleaseStatus = 'planned' | 'current' | 'released';
+export type ReleaseItemType = 'bugfix' | 'improvement' | 'feature';
+
+export interface ReleaseItem {
+  id: EntityId;
+  type: ReleaseItemType;
+  description: string;
+}
+
+export interface Release {
+  id: EntityId;
+  version: string; // x.y.z
+  title: string;
+  description: string; // HTML
+  status: ReleaseStatus;
+  items: ReleaseItem[];
+  ticketIds: string[];
+  releasedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Root Store ───
 export interface BookProject {
   id: EntityId;

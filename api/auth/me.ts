@@ -8,6 +8,7 @@ interface User {
   email: string;
   name: string;
   passwordHash: string;
+  isAdmin?: boolean;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -21,5 +22,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!userJson) return res.status(404).json({ error: 'Utilisateur introuvable' });
 
   const user = JSON.parse(userJson) as User;
-  return res.json({ id: user.id, email: user.email, name: user.name });
+  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false });
 }

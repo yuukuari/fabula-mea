@@ -10,7 +10,7 @@ import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
 
-const shouldSync = () => !import.meta.env.DEV && !!localStorage.getItem('emlb-token');
+const shouldSync = () => !!localStorage.getItem('emlb-token');
 
 interface BookStore extends BookProject {
   lastSavedAt: string | null;
