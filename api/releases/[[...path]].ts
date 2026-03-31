@@ -6,7 +6,10 @@ import { cors } from '../_lib/cors';
 function getPathSegments(req: VercelRequest, base: string): string[] {
   const url = (req.url || '').split('?')[0];
   const after = url.startsWith(base) ? url.slice(base.length) : '';
-  return after.split('/').filter(Boolean);
+  const segments = after.split('/').filter(Boolean);
+  // __index is a sentinel from vercel.json rewrites for bare routes
+  if (segments.length === 1 && segments[0] === '__index') return [];
+  return segments;
 }
 
 function generateId(): string {

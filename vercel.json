@@ -2,6 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/releases", "destination": "/api/releases/__index" },
+    { "source": "/api/reviews", "destination": "/api/reviews/__index" },
+    { "source": "/api/tickets", "destination": "/api/tickets/__index" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
