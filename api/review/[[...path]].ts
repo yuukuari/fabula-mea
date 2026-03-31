@@ -206,7 +206,8 @@ async function handleCommentById(req: VercelRequest, res: VercelResponse, token:
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
-  const pathSegments = (req.query.path as string[] | undefined) ?? [];
+  const raw = req.query.path;
+  const pathSegments: string[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
 
   if (pathSegments.length === 0) {
     return res.status(404).json({ error: 'Token requis' });

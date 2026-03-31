@@ -114,7 +114,8 @@ async function handleById(req: VercelRequest, res: VercelResponse, id: string) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
-  const pathSegments = (req.query.path as string[] | undefined) ?? [];
+  const raw = req.query.path;
+  const pathSegments: string[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
 
   if (pathSegments.length === 0) {
     return handleIndex(req, res);

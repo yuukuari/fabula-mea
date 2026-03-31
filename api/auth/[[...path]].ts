@@ -112,7 +112,8 @@ async function handleMe(req: VercelRequest, res: VercelResponse) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
-  const pathSegments = (req.query.path as string[] | undefined) ?? [];
+  const raw = req.query.path;
+  const pathSegments: string[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
   const route = pathSegments[0] ?? '';
 
   switch (route) {
