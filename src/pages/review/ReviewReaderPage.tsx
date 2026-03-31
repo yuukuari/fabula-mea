@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { Feather, BookOpen, ChevronDown, ChevronRight, Send, CheckCircle2, LogIn, PanelLeft, MessageSquare, Lock, X, Menu } from 'lucide-react';
+import { Feather, BookOpen, BookText, ChevronDown, ChevronRight, Send, CheckCircle2, LogIn, PanelLeft, MessageSquare, Lock, X, Menu } from 'lucide-react';
 import { useReviewStore } from '@/store/useReviewStore';
 import { ReviewCommentPanel } from '@/components/reviews/ReviewCommentPanel';
 import { ReviewContentViewer } from '@/components/reviews/ReviewContentViewer';
@@ -258,7 +258,8 @@ export function ReviewReaderPage() {
 
   // Main review interface (in_progress or completed)
   const sortedChapters = [...readerSession.snapshot.chapters].sort((a, b) => a.number - b.number);
-  const activeScene = readerSession.snapshot.scenes.find((s) => s.id === activeSceneId) || null;
+  const activeScene = activeSceneId !== '__glossary__' ? (readerSession.snapshot.scenes.find((s) => s.id === activeSceneId) || null) : null;
+  const hasGlossary = (readerSession.snapshot.glossary?.length ?? 0) > 0;
 
   const sceneCommentCounts = (sceneId: string) =>
     readerComments.filter((c) => c.sceneId === sceneId && !c.parentId).length;
@@ -313,6 +314,24 @@ export function ReviewReaderPage() {
             </div>
           );
         })}
+
+        {/* Glossary nav entry */}
+        {hasGlossary && (
+          <>
+            <div className="border-t border-parchment-200 my-2" />
+            <button
+              onClick={() => { setActiveSceneId('__glossary__'); setMobileNavOpen(false); }}
+              className={cn(
+                'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded transition-colors',
+                activeSceneId === '__glossary__' ? 'bg-bordeaux-100 text-bordeaux-600 font-medium' : 'text-ink-300 hover:bg-parchment-100'
+              )}
+            >
+              <BookText className="w-3 h-3" />
+              <span>Glossaire</span>
+              <span className="ml-auto text-[10px] text-ink-200">{readerSession.snapshot.glossary!.length}</span>
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -381,7 +400,31 @@ export function ReviewReaderPage() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-            {activeScene ? (
+            {activeSceneId === '__glossary__' && hasGlossary ? (
+              <div>
+                <h1 className="font-display text-2xl font-bold text-ink-500 mb-6">Glossaire</h1>
+                <div className="space-y-4">
+                  {readerSession.snapshot.glossary!.map((entry) => (
+                    <div key={entry.id} className="border-b border-parchment-200 pb-4 last:border-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-ink-500">{entry.name}</h3>
+                        <span className={cn(
+                          'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                          entry.type === 'character' ? 'bg-blue-50 text-blue-600' :
+                          entry.type === 'place' ? 'bg-emerald-50 text-emerald-600' :
+                          'bg-purple-50 text-purple-600'
+                        )}>
+                          {entry.type === 'character' ? 'Personnage' : entry.type === 'place' ? 'Lieu' : 'Univers'}
+                        </span>
+                      </div>
+                      {entry.description && (
+                        <p className="text-sm text-ink-300 whitespace-pre-wrap">{entry.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : activeScene ? (
               <ReviewContentViewer
                 scene={activeScene}
                 comments={readerComments}

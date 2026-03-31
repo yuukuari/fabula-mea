@@ -27,6 +27,7 @@ interface ExportBook {
   genre: string;
   synopsis: string;
   chapters: ExportChapter[];
+  glossary?: { name: string; type: string; description: string }[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -246,6 +247,31 @@ ${body}
         ? (chapter.scenes.length === 1 && chapter.scenes[0].title ? chapter.scenes[0].title : (chapter.type === 'front_matter' ? 'Avant l\'histoire' : 'Après l\'histoire'))
         : `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`,
     });
+  }
+
+  // 5b. Glossaire (optionnel)
+  if (book.glossary && book.glossary.length > 0) {
+    const typeLabels: Record<string, string> = { character: 'Personnage', place: 'Lieu', worldNote: 'Univers' };
+    let glossaryBody = '<h1>Glossaire</h1>\n';
+    for (const entry of book.glossary) {
+      glossaryBody += `<h2>${escapeXml(entry.name)}</h2>\n`;
+      glossaryBody += `<p><em>${escapeXml(typeLabels[entry.type] || entry.type)}</em></p>\n`;
+      if (entry.description) {
+        glossaryBody += `<p>${escapeXml(entry.description)}</p>\n`;
+      }
+    }
+    zip.file(
+      'OEBPS/glossary.xhtml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr" lang="fr">
+<head><title>Glossaire</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body>
+${glossaryBody}
+</body>
+</html>`
+    );
+    chapterFiles.push({ id: 'glossary', filename: 'glossary.xhtml', title: 'Glossaire' });
   }
 
   // 6. Table of Contents (XHTML - EPUB 3)

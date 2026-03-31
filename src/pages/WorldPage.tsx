@@ -159,6 +159,7 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
   const [title, setTitle] = useState(existing?.title ?? '');
   const [category, setCategory] = useState<WorldNoteCategory>(existing?.category ?? 'custom');
   const [content, setContent] = useState(existing?.content ?? '');
+  const [inGlossary, setInGlossary] = useState(existing?.inGlossary ?? false);
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl);
   const [linkedNoteIds, setLinkedNoteIds] = useState<string[]>(existing?.linkedNoteIds ?? []);
 
@@ -168,7 +169,7 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
     e.preventDefault();
     if (!title.trim()) return;
 
-    const data = { title, category, content, imageUrl, linkedNoteIds };
+    const data = { title, category, content, inGlossary, imageUrl, linkedNoteIds };
 
     if (existing) {
       updateWorldNote(existing.id, data);
@@ -205,6 +206,16 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
             <label className="label-field">Contenu</label>
             <textarea value={content} onChange={(e) => setContent(e.target.value)} className="textarea-field" rows={8} />
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={inGlossary}
+              onChange={(e) => setInGlossary(e.target.checked)}
+              className="rounded border-parchment-300 accent-bordeaux-500"
+            />
+            Inclure dans le glossaire du livre
+          </label>
 
           {otherNotes.length > 0 && (
             <div>

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Minus, X, User, MapPin, ChevronRight, BookOpen, PanelLeft, PanelRight, Menu, Calendar, MessageCircle } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Minus, X, User, MapPin, ChevronRight, BookOpen, PanelLeft, PanelRight, Menu, Calendar, MessageCircle, BookText } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { SceneInlineEditor, countWords } from './SceneInlineEditor';
@@ -7,7 +7,7 @@ import { SelfCommentPanel } from './SelfCommentPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
 import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel } from '@/lib/utils';
 import { getTodayProgress } from '@/lib/calculations';
-import type { Scene, Chapter } from '@/types';
+import type { Scene, Chapter, GlossaryEntry } from '@/types';
 
 const STATUS_DOT: Record<string, string> = {
   outline:  'bg-ink-200',
@@ -25,6 +25,10 @@ export function SceneEditor() {
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const bookId = useBookStore((s) => s.id);
   const dailyGoal = useBookStore((s) => s.goals?.dailyGoal);
+  const glossaryEnabled = useBookStore((s) => s.glossaryEnabled ?? false);
+  const allCharacters = useBookStore((s) => s.characters);
+  const allPlaces = useBookStore((s) => s.places);
+  const allWorldNotes = useBookStore((s) => s.worldNotes);
 
   const [visibleSceneId, setVisibleSceneId] = useState<string | null>(entrySceneId);
 
@@ -42,6 +46,24 @@ export function SceneEditor() {
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
 
   const selfComments = useBookStore((s) => s.selfComments ?? []);
+
+  const glossaryEntries = useMemo<GlossaryEntry[]>(() => {
+    if (!glossaryEnabled) return [];
+    return [
+      ...allCharacters.filter((c) => c.inGlossary).map((c) => ({
+        id: c.id, type: 'character' as const,
+        name: c.name + (c.surname ? ` ${c.surname}` : ''), description: c.description,
+      })),
+      ...allPlaces.filter((p) => p.inGlossary).map((p) => ({
+        id: p.id, type: 'place' as const, name: p.name, description: p.description,
+      })),
+      ...allWorldNotes.filter((w) => w.inGlossary).map((w) => ({
+        id: w.id, type: 'worldNote' as const, name: w.title, description: w.content,
+      })),
+    ].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [glossaryEnabled, allCharacters, allPlaces, allWorldNotes]);
+
+  const glossaryRef = useRef<HTMLDivElement | null>(null);
 
   const sceneRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const rightPanelRef = useRef<HTMLDivElement>(null);
@@ -244,6 +266,28 @@ export function SceneEditor() {
 
         {sortedChapters.length === 0 && (
           <p className="text-xs text-ink-200 italic px-3 py-4">Aucun chapitre créé</p>
+        )}
+
+        {/* Glossary entry in nav */}
+        {glossaryEntries.length > 0 && (
+          <div className="mb-1 mt-2 border-t border-parchment-200 pt-2">
+            <button
+              onClick={() => {
+                const el = glossaryRef.current;
+                const panel = rightPanelRef.current;
+                if (el && panel) {
+                  panel.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' });
+                }
+                if (window.innerWidth < 640) setNavOpen(false);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left
+                         hover:bg-parchment-200/60 transition-colors group"
+            >
+              <BookText className="w-3.5 h-3.5 text-ink-300 shrink-0" />
+              <span className="text-xs font-semibold text-ink-400 truncate">Glossaire</span>
+              <span className="text-[10px] text-ink-200 ml-auto">{glossaryEntries.length}</span>
+            </button>
+          </div>
         )}
       </div>
     </>
@@ -481,6 +525,32 @@ export function SceneEditor() {
               <div className="text-center py-20 text-ink-200">
                 <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="font-display text-lg">Commencez par créer des chapitres et des scènes</p>
+              </div>
+            )}
+
+            {/* Glossary section (read-only) */}
+            {glossaryEntries.length > 0 && (
+              <div ref={glossaryRef} className="mb-12 border-t-2 border-parchment-300 pt-12">
+                <div className="flex items-center gap-3 mb-8">
+                  <BookText className="w-5 h-5 text-ink-300 shrink-0" />
+                  <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">Glossaire</h2>
+                </div>
+                <div className="space-y-6">
+                  {glossaryEntries.map((entry) => {
+                    const typeLabel = entry.type === 'character' ? 'Personnage' : entry.type === 'place' ? 'Lieu' : 'Univers';
+                    return (
+                      <div key={`${entry.type}-${entry.id}`} className="border-b border-parchment-200 pb-4 last:border-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-display text-lg font-semibold text-ink-500">{entry.name}</h3>
+                          <span className="text-xs text-ink-200 bg-parchment-200 rounded px-1.5 py-0.5">{typeLabel}</span>
+                        </div>
+                        {entry.description && (
+                          <p className="text-sm text-ink-300 font-serif whitespace-pre-wrap leading-relaxed">{entry.description}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

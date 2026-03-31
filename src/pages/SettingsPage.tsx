@@ -130,26 +130,42 @@ export function SettingsPage() {
 
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
+  const glossaryEnabled = useBookStore((s) => s.glossaryEnabled);
+  const allCharacters = useBookStore((s) => s.characters);
+  const allPlaces = useBookStore((s) => s.places);
+  const allWorldNotes = useBookStore((s) => s.worldNotes);
 
-  const buildExportBook = () => ({
-    title,
-    author,
-    genre: genre ?? '',
-    synopsis: synopsis ?? '',
-    chapters: [...chapters]
-      .sort((a, b) => a.number - b.number)
-      .map((ch) => ({
-        id: ch.id,
-        number: ch.number,
-        title: ch.title ?? '',
-        type: ch.type,
-        scenes: ch.sceneIds
-          .map((sid) => scenes.find((s) => s.id === sid))
-          .filter(Boolean)
-          .sort((a, b) => a!.orderInChapter - b!.orderInChapter)
-          .map((s, idx) => ({ title: s!.title ?? '', content: s!.content ?? '' })),
-      })),
-  });
+  const buildExportBook = () => {
+    // Build glossary entries from entities marked inGlossary
+    const glossary = glossaryEnabled
+      ? [
+          ...allCharacters.filter((c) => c.inGlossary).map((c) => ({ name: c.name, type: 'character', description: c.description || '' })),
+          ...allPlaces.filter((p) => p.inGlossary).map((p) => ({ name: p.name, type: 'place', description: p.description || '' })),
+          ...allWorldNotes.filter((w) => w.inGlossary).map((w) => ({ name: w.title, type: 'worldNote', description: w.content || '' })),
+        ].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+      : [];
+
+    return {
+      title,
+      author,
+      genre: genre ?? '',
+      synopsis: synopsis ?? '',
+      chapters: [...chapters]
+        .sort((a, b) => a.number - b.number)
+        .map((ch) => ({
+          id: ch.id,
+          number: ch.number,
+          title: ch.title ?? '',
+          type: ch.type,
+          scenes: ch.sceneIds
+            .map((sid) => scenes.find((s) => s.id === sid))
+            .filter(Boolean)
+            .sort((a, b) => a!.orderInChapter - b!.orderInChapter)
+            .map((s, idx) => ({ title: s!.title ?? '', content: s!.content ?? '' })),
+        })),
+      ...(glossary.length > 0 ? { glossary } : {}),
+    };
+  };
 
   const handleExportEpub = async () => {
     try {

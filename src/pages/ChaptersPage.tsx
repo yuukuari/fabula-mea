@@ -1,22 +1,28 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine } from 'lucide-react';
+import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, WORLD_NOTE_CATEGORY_LABELS, PLACE_TYPE_LABELS } from '@/lib/utils';
 import { getSceneProgress } from '@/lib/calculations';
-import type { Scene, SceneStatus, Chapter } from '@/types';
+import type { Scene, SceneStatus, Chapter, GlossaryEntry } from '@/types';
 
 export function ChaptersPage() {
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const characters = useBookStore((s) => s.characters);
   const places = useBookStore((s) => s.places);
+  const worldNotes = useBookStore((s) => s.worldNotes);
   const maps = useBookStore((s) => s.maps ?? []);
   const writingMode = useBookStore((s) => s.writingMode);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
+  const glossaryEnabled = useBookStore((s) => s.glossaryEnabled ?? false);
+  const setGlossaryEnabled = useBookStore((s) => s.setGlossaryEnabled);
+  const updateCharacter = useBookStore((s) => s.updateCharacter);
+  const updatePlace = useBookStore((s) => s.updatePlace);
+  const updateWorldNote = useBookStore((s) => s.updateWorldNote);
   const addChapter = useBookStore((s) => s.addChapter);
   const deleteChapter = useBookStore((s) => s.deleteChapter);
   const addScene = useBookStore((s) => s.addScene);
@@ -43,7 +49,7 @@ export function ChaptersPage() {
     const chapterScenes = chapter.sceneIds
       .map((sid) => scenes.find((s) => s.id === sid))
       .filter(Boolean) as Scene[];
-    const isExpanded = expanded[chapter.id] !== false;
+    const isExpanded = expanded[chapter.id] === true;
 
     if (!isExpanded) return null;
 
@@ -154,7 +160,7 @@ export function ChaptersPage() {
     const chapterScenes = chapter.sceneIds
       .map((sid) => scenes.find((s) => s.id === sid))
       .filter(Boolean) as Scene[];
-    const isExpanded = expanded[chapter.id] !== false;
+    const isExpanded = expanded[chapter.id] === true;
     const label = chapter.type === 'front_matter' ? FRONT_MATTER_LABEL : BACK_MATTER_LABEL;
 
     return (
@@ -203,7 +209,7 @@ export function ChaptersPage() {
             const chapterScenes = chapter.sceneIds
               .map((sid) => scenes.find((s) => s.id === sid))
               .filter(Boolean) as Scene[];
-            const isExpanded = expanded[chapter.id] !== false;
+            const isExpanded = expanded[chapter.id] === true;
             const completedScenes = chapterScenes.filter((s) => getSceneProgress(s) >= 1).length;
 
             return (
@@ -248,6 +254,117 @@ export function ChaptersPage() {
 
         {/* Back matter */}
         {renderSpecialSection(backMatter)}
+
+        {/* Glossary section */}
+        {(() => {
+          const glossaryEntries: GlossaryEntry[] = [
+            ...characters.filter((c) => c.inGlossary).map((c) => ({
+              id: c.id,
+              type: 'character' as const,
+              name: c.name + (c.surname ? ` ${c.surname}` : ''),
+              description: c.description,
+            })),
+            ...places.filter((p) => p.inGlossary).map((p) => ({
+              id: p.id,
+              type: 'place' as const,
+              name: p.name,
+              description: p.description,
+            })),
+            ...worldNotes.filter((w) => w.inGlossary).map((w) => ({
+              id: w.id,
+              type: 'worldNote' as const,
+              name: w.title,
+              description: w.content,
+            })),
+          ].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+
+          const isGlossaryExpanded = expanded['__glossary__'] === true;
+
+          const typeLabels: Record<string, string> = {
+            character: 'Personnage',
+            place: 'Lieu',
+            worldNote: 'Univers',
+          };
+
+          const handleRemoveFromGlossary = (entry: GlossaryEntry) => {
+            if (entry.type === 'character') updateCharacter(entry.id, { inGlossary: false });
+            else if (entry.type === 'place') updatePlace(entry.id, { inGlossary: false });
+            else if (entry.type === 'worldNote') updateWorldNote(entry.id, { inGlossary: false });
+          };
+
+          return (
+            <div className="card-fantasy overflow-hidden border-dashed">
+              <div
+                className="flex items-center gap-3 p-4 cursor-pointer hover:bg-parchment-100 transition-colors"
+                onClick={() => toggleExpand('__glossary__')}
+              >
+                {isGlossaryExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
+                <div className="flex-1">
+                  <h3 className="font-display font-bold text-ink-400 italic">Glossaire</h3>
+                  <p className="text-xs text-ink-200 mt-0.5">
+                    Fiches de personnages, lieux et univers ajoutées au glossaire.
+                  </p>
+                </div>
+                <label
+                  className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={glossaryEnabled}
+                    onChange={(e) => setGlossaryEnabled(e.target.checked)}
+                    className="rounded border-parchment-300 accent-bordeaux-500"
+                  />
+                  <span className="text-xs">Activer</span>
+                </label>
+              </div>
+
+              {isGlossaryExpanded && (
+                <div className="px-4 pb-4">
+                  {!glossaryEnabled && (
+                    <p className="text-xs text-ink-200 italic mb-2">
+                      Le glossaire est désactivé. Activez-le pour l'inclure dans votre livre.
+                    </p>
+                  )}
+
+                  {glossaryEnabled && glossaryEntries.length === 0 ? (
+                    <p className="text-xs text-ink-200 italic py-2">
+                      Aucune fiche n'a été ajoutée au glossaire. Cochez « Inclure dans le glossaire » sur les fiches de personnages, lieux ou univers.
+                    </p>
+                  ) : glossaryEntries.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {glossaryEntries.map((entry) => (
+                        <div
+                          key={`${entry.type}-${entry.id}`}
+                          className="flex items-center gap-3 bg-parchment-100 rounded-lg px-3 py-2 group"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-ink-500 truncate">{entry.name}</span>
+                              <span className="badge bg-parchment-200 text-ink-300 text-xs flex-shrink-0">
+                                {typeLabels[entry.type]}
+                              </span>
+                            </div>
+                            {entry.description && (
+                              <p className="text-xs text-ink-200 mt-0.5 line-clamp-1">{entry.description}</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleRemoveFromGlossary(entry)}
+                            className="btn-ghost p-1 text-ink-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            title="Retirer du glossaire"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {showChapterForm && (

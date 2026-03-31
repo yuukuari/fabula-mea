@@ -18,6 +18,7 @@ interface ExportBook {
   genre: string;
   synopsis: string;
   chapters: ExportChapter[];
+  glossary?: { name: string; type: string; description: string }[];
 }
 
 function cleanHtml(html: string): string {
@@ -187,6 +188,20 @@ export function exportPdf(book: ExportBook): void {
     }
   }
 
+  // Glossaire (optionnel)
+  let glossaryHtml = '';
+  if (book.glossary && book.glossary.length > 0) {
+    const typeLabels: Record<string, string> = { character: 'Personnage', place: 'Lieu', worldNote: 'Univers' };
+    glossaryHtml += '<h1>Glossaire</h1>\n';
+    for (const entry of book.glossary) {
+      glossaryHtml += `<h2>${entry.name}</h2>\n`;
+      glossaryHtml += `<p><em>${typeLabels[entry.type] || entry.type}</em></p>\n`;
+      if (entry.description) {
+        glossaryHtml += `<p>${entry.description}</p>\n`;
+      }
+    }
+  }
+
   const tocHtml = book.chapters
     .filter((ch) => !((ch.type === 'front_matter' || ch.type === 'back_matter') && ch.scenes.length === 0))
     .map((ch) => {
@@ -197,6 +212,9 @@ export function exportPdf(book: ExportBook): void {
       return `<li><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title || ''}</li>`;
     })
     .join('\n');
+
+  // Add glossary to TOC if present
+  const glossaryTocEntry = book.glossary && book.glossary.length > 0 ? '\n<li>Glossaire</li>' : '';
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -216,10 +234,11 @@ export function exportPdf(book: ExportBook): void {
 
   <div class="toc">
     <h2>Table des matières</h2>
-    <ul>${tocHtml}</ul>
+    <ul>${tocHtml}${glossaryTocEntry}</ul>
   </div>
 
   ${chaptersHtml}
+  ${glossaryHtml}
 </body>
 </html>`;
 

@@ -25,6 +25,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl);
   const [imageOffsetY, setImageOffsetY] = useState(existing?.imageOffsetY ?? 50);
   const [description, setDescription] = useState(existing?.description ?? '');
+  const [inGlossary, setInGlossary] = useState(existing?.inGlossary ?? false);
   const [personality, setPersonality] = useState(existing?.personality ?? '');
   const [qualities, setQualities] = useState(existing?.qualities?.join(', ') ?? '');
   const [flaws, setFlaws] = useState(existing?.flaws?.join(', ') ?? '');
@@ -43,7 +44,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
   const isDirty = useCallback(() => {
     if (!existing) {
       // New character: dirty if anything has been filled
-      return !!(name || surname || nickname || sex || age || imageUrl || description || personality || qualities || flaws || skills || profession || lifeGoal || likes || dislikes || notes || evolution.beforeStory || evolution.duringStory || evolution.endOfStory || evolution.initiationJourney);
+      return !!(name || surname || nickname || sex || age || imageUrl || description || inGlossary || personality || qualities || flaws || skills || profession || lifeGoal || likes || dislikes || notes || evolution.beforeStory || evolution.duringStory || evolution.endOfStory || evolution.initiationJourney);
     }
     // Existing: compare against original values
     return (
@@ -55,6 +56,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
       imageUrl !== existing.imageUrl ||
       imageOffsetY !== (existing.imageOffsetY ?? 50) ||
       description !== (existing.description ?? '') ||
+      inGlossary !== (existing.inGlossary ?? false) ||
       personality !== (existing.personality ?? '') ||
       qualities !== (existing.qualities?.join(', ') ?? '') ||
       flaws !== (existing.flaws?.join(', ') ?? '') ||
@@ -69,7 +71,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
       evolution.endOfStory !== (existing.evolution?.endOfStory ?? '') ||
       evolution.initiationJourney !== (existing.evolution?.initiationJourney ?? '')
     );
-  }, [name, surname, nickname, sex, age, imageUrl, imageOffsetY, description, personality, qualities, flaws, skills, profession, lifeGoal, likes, dislikes, notes, evolution, existing]);
+  }, [name, surname, nickname, sex, age, imageUrl, imageOffsetY, description, inGlossary, personality, qualities, flaws, skills, profession, lifeGoal, likes, dislikes, notes, evolution, existing]);
 
   const splitList = (str: string) => str.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -85,6 +87,7 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
       imageUrl,
       imageOffsetY,
       description,
+      inGlossary,
       personality,
       qualities: splitList(qualities),
       flaws: splitList(flaws),
@@ -186,6 +189,16 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
             <label className="label-field">Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="textarea-field" rows={3} />
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={inGlossary}
+              onChange={(e) => setInGlossary(e.target.checked)}
+              className="rounded border-parchment-300 accent-bordeaux-500"
+            />
+            Inclure dans le glossaire du livre
+          </label>
 
           <div>
             <label className="label-field">Personnalité / Caractère</label>

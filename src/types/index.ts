@@ -20,6 +20,7 @@ export interface Character {
   imageUrl?: string;
   imageOffsetY?: number; // percentage offset for avatar centering (0 = top, 50 = center, 100 = bottom)
   description: string;
+  inGlossary?: boolean; // include in book glossary
   personality: string;
   qualities: string[];
   flaws: string[];
@@ -78,6 +79,7 @@ export interface Place {
   name: string;
   type: PlaceType;
   description: string;
+  inGlossary?: boolean; // include in book glossary
   imageUrl?: string;
   inspirations: string[];
   connectedPlaceIds: EntityId[];
@@ -164,6 +166,7 @@ export interface WorldNote {
   title: string;
   category: WorldNoteCategory;
   content: string;
+  inGlossary?: boolean; // include in book glossary
   imageUrl?: string;
   linkedNoteIds: EntityId[];
   tags: EntityId[];
@@ -344,6 +347,15 @@ export interface ReviewSnapshotScene {
   placeId?: EntityId;
 }
 
+export type GlossaryEntryType = 'character' | 'place' | 'worldNote';
+
+export interface GlossaryEntry {
+  id: EntityId;
+  type: GlossaryEntryType;
+  name: string;
+  description: string;
+}
+
 export interface ReviewSession {
   id: EntityId;
   bookId: EntityId;
@@ -358,6 +370,7 @@ export interface ReviewSession {
   snapshot: {
     chapters: ReviewSnapshotChapter[];
     scenes: ReviewSnapshotScene[];
+    glossary?: GlossaryEntry[];
   };
   commentsCount: number;
   pendingCommentsCount: number;
@@ -405,6 +418,7 @@ export interface BookProject {
   synopsis?: string;
   writingMode: WritingMode;
   countUnit?: CountUnit;
+  glossaryEnabled?: boolean;
   characters: Character[];
   places: Place[];
   chapters: Chapter[];

@@ -255,6 +255,7 @@ Un livre contient :
 - **ProjectGoals** — Objectifs (date cible, mots/scène, objectif journalier, périodes exclues)
 - **WritingSessions** — Historique des sessions d'écriture
 - **CountUnit** — Unité de comptage choisie (`'words'` ou `'characters'`), configurable à la création du livre ou dans les paramètres
+- **GlossaryEnabled** — Booléen activant le glossaire pour le livre. Quand activé, les entités (personnages, lieux, notes univers) marquées `inGlossary: true` apparaissent dans une section « Glossaire » dans le manuscrit, l'éditeur de scènes, les relectures et les exports (EPUB/PDF).
 
 ### Modes d'écriture (`WritingMode`)
 
@@ -418,3 +419,4 @@ npm run preview  # Preview du build en local
 17. **ImageUpload rond** : le composant `ImageUpload` supporte un mode `round` avec un bouton « Recadrer » pour entrer en mode crop (drag-to-pan vertical, `offsetY`) et un bouton « Valider » pour confirmer. Utilisé pour les avatars de personnages. Un composant `CharacterAvatar` (`src/components/characters/CharacterAvatar.tsx`) affiche l'avatar rond avec `imageOffsetY` en différentes tailles (8/10/12/16/32), utilisé dans CharacterDetail, CharacterCard et RelationshipGraph.
 18. **Confirmation modifications non sauvegardées** : le formulaire de personnage (CharacterForm) affiche une modale à 3 boutons (Annuler/Quitter/Enregistrer) si l'utilisateur tente de fermer avec des modifications non sauvegardées.
 19. **Mettre à jour ce fichier** : après toute modification du code (nouvelle fonctionnalité, changement d'architecture, nouveau type, nouvel endpoint…), vérifier si des informations de ce `CLAUDE.md` (et `api/CLAUDE.md`) doivent être mises à jour pour rester en phase avec le code (structure des fichiers, modèle de données, clés de stockage, points d'attention, etc.).
+20. **Glossaire** : le glossaire est une fonctionnalité transversale activable par livre (`glossaryEnabled` dans `BookProject`). Les entités (Character, Place, WorldNote) ont un champ `inGlossary?: boolean`. Le glossaire est affiché dans : ChaptersPage (section collapsible après « Après l'histoire »), SceneEditor (entrée nav + section read-only en bas), relectures (nav + contenu via `snapshot.glossary`), et exports EPUB/PDF. Les entrées sont de type `GlossaryEntry` (id, type, name, description) et sont calculées dynamiquement à partir des entités marquées.

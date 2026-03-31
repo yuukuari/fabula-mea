@@ -227,6 +227,7 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
   const [name, setName] = useState(existing?.name ?? '');
   const [type, setType] = useState<PlaceType>(existing?.type ?? 'other');
   const [description, setDescription] = useState(existing?.description ?? '');
+  const [inGlossary, setInGlossary] = useState(existing?.inGlossary ?? false);
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl);
   const [inspirations, setInspirations] = useState(existing?.inspirations?.join(', ') ?? '');
   const [connectedIds, setConnectedIds] = useState<string[]>(existing?.connectedPlaceIds ?? []);
@@ -242,6 +243,7 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
       name: name.trim(),
       type,
       description,
+      inGlossary,
       imageUrl,
       inspirations: inspirations.split(',').map((s) => s.trim()).filter(Boolean),
       connectedPlaceIds: connectedIds,
@@ -288,6 +290,16 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
             <label className="label-field">Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="textarea-field" rows={3} />
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={inGlossary}
+              onChange={(e) => setInGlossary(e.target.checked)}
+              className="rounded border-parchment-300 accent-bordeaux-500"
+            />
+            Inclure dans le glossaire du livre
+          </label>
 
           <div>
             <label className="label-field">Inspirations (separees par des virgules)</label>

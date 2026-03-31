@@ -27,6 +27,7 @@ interface BookStore extends BookProject {
   updateProject: (data: Partial<Pick<BookProject, 'title' | 'author' | 'genre' | 'synopsis'>>) => void;
   updateWritingMode: (mode: import('@/types').WritingMode, deleteContent: boolean) => void;
   updateCountUnit: (unit: import('@/types').CountUnit) => void;
+  setGlossaryEnabled: (enabled: boolean) => void;
 
   // Characters
   addCharacter: (char: Partial<Character> & { name: string }) => string;
@@ -124,6 +125,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     noteIdeas: [],
     selfComments: [],
     graphNodePositions: {},
+    glossaryEnabled: false,
   };
 }
 
@@ -148,6 +150,7 @@ function extractProjectData(state: BookStore): BookProject {
     noteIdeas: state.noteIdeas,
     selfComments: state.selfComments,
     graphNodePositions: state.graphNodePositions,
+    glossaryEnabled: state.glossaryEnabled,
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
   };
@@ -367,6 +370,12 @@ export const useBookStore = create<BookStore>()(
       updateCountUnit: (unit) =>
         set((s) => ({
           countUnit: unit,
+          ...touchSave(),
+        })),
+
+      setGlossaryEnabled: (enabled) =>
+        set((s) => ({
+          glossaryEnabled: enabled,
           ...touchSave(),
         })),
 

@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { cn, isSpecialChapter, getChapterLabel } from '@/lib/utils';
-import type { ReviewSession, Chapter, Scene } from '@/types';
+import type { ReviewSession, Chapter, Scene, GlossaryEntry } from '@/types';
 
 interface Props {
   onClose: () => void;
@@ -18,6 +18,10 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const bookTitle = useBookStore((s) => s.title);
+  const glossaryEnabled = useBookStore((s) => s.glossaryEnabled);
+  const allCharacters = useBookStore((s) => s.characters);
+  const allPlaces = useBookStore((s) => s.places);
+  const allWorldNotes = useBookStore((s) => s.worldNotes);
   const bookId = useLibraryStore((s) => s.currentBookId);
   const user = useAuthStore((s) => s.user);
   const createSession = useReviewStore((s) => s.createSession);
@@ -29,6 +33,17 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
   const [step, setStep] = useState<'select' | 'share'>('select');
   const [createdSessions, setCreatedSessions] = useState<ReviewSession[]>([]);
   const [linkCopied, setLinkCopied] = useState<string | null>(null);
+  const [includeGlossary, setIncludeGlossary] = useState(glossaryEnabled);
+
+  // Build glossary entries from entities marked inGlossary
+  const glossaryEntries: GlossaryEntry[] = (() => {
+    if (!glossaryEnabled) return [];
+    const entries: GlossaryEntry[] = [];
+    allCharacters.filter((c) => c.inGlossary).forEach((c) => entries.push({ id: c.id, type: 'character', name: c.name, description: c.description || '' }));
+    allPlaces.filter((p) => p.inGlossary).forEach((p) => entries.push({ id: p.id, type: 'place', name: p.name, description: p.description || '' }));
+    allWorldNotes.filter((w) => w.inGlossary).forEach((w) => entries.push({ id: w.id, type: 'worldNote', name: w.title, description: w.content || '' }));
+    return entries.sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  })();
 
   const sortedChapters = [...chapters].sort((a, b) => a.number - b.number);
 
@@ -123,6 +138,7 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
           snapshot: {
             chapters: selectedChapters,
             scenes: snapshotScenes,
+            ...(includeGlossary && glossaryEntries.length > 0 ? { glossary: glossaryEntries } : {}),
           },
         });
         results.push(session);
@@ -267,6 +283,21 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
                   })}
                 </div>
               </div>
+
+              {/* Glossary option */}
+              {glossaryEnabled && glossaryEntries.length > 0 && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeGlossary}
+                    onChange={(e) => setIncludeGlossary(e.target.checked)}
+                    className="accent-bordeaux-500"
+                  />
+                  <span className="text-sm text-ink-400">
+                    Inclure le glossaire ({glossaryEntries.length} entrée{glossaryEntries.length > 1 ? 's' : ''})
+                  </span>
+                </label>
+              )}
 
               {/* Reader email(s) (optional) */}
               <div>
