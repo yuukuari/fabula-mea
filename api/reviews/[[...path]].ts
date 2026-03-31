@@ -4,6 +4,12 @@ import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { sendReviewInviteEmail, sendAuthorRepliedEmail } from '../_lib/email';
 
+function getPathSegments(req: VercelRequest, base: string): string[] {
+  const url = (req.url || '').split('?')[0];
+  const after = url.startsWith(base) ? url.slice(base.length) : '';
+  return after.split('/').filter(Boolean);
+}
+
 function generateId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 }
@@ -296,8 +302,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const auth = requireAuth(req, res);
   if (!auth) return;
 
-  const raw = req.query.path;
-  const pathSegments: string[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
+  const pathSegments = getPathSegments(req, '/api/reviews');
 
   // /api/reviews
   if (pathSegments.length === 0) {

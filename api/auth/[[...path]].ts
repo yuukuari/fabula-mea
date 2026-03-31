@@ -3,6 +3,12 @@ import { redis } from '../_lib/redis';
 import { hashPassword, comparePassword, signToken, requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 
+function getPathSegments(req: VercelRequest, base: string): string[] {
+  const url = (req.url || '').split('?')[0];
+  const after = url.startsWith(base) ? url.slice(base.length) : '';
+  return after.split('/').filter(Boolean);
+}
+
 function generateId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 }
@@ -112,8 +118,7 @@ async function handleMe(req: VercelRequest, res: VercelResponse) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
-  const raw = req.query.path;
-  const pathSegments: string[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
+  const pathSegments = getPathSegments(req, '/api/auth');
   const route = pathSegments[0] ?? '';
 
   switch (route) {
