@@ -151,17 +151,17 @@ Choisir le layout adapté :
 ├── vercel.json                  ← SPA rewrite, buildCommand, outputDirectory
 ├── tsconfig.json
 │
-├── api/                         ← Serverless functions (Vercel) — CommonJS
+├── api/                         ← Serverless functions (Vercel) — CommonJS, catch-all routes
 │   ├── CLAUDE.md                ← Doc spécifique API
 │   ├── package.json             ← { "type": "commonjs" }
 │   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis, email)
-│   ├── auth/                    ← signup, login, me
-│   ├── book/                    ← CRUD livre par utilisateur
-│   ├── tickets/                 ← CRUD tickets + commentaires + réactions
-│   ├── releases/                ← CRUD releases
-│   ├── admin/                   ← Endpoints admin (membres)
-│   ├── review/                  ← Endpoints lecteur (accès par token, pas d'auth)
-│   ├── reviews/                 ← Endpoints auteur (CRUD sessions + commentaires)
+│   ├── auth/[[...path]].ts      ← signup, login, me (catch-all)
+│   ├── book/[bookId].ts         ← CRUD livre par utilisateur
+│   ├── tickets/[[...path]].ts   ← CRUD tickets + commentaires + réactions (catch-all)
+│   ├── releases/[[...path]].ts  ← CRUD releases (catch-all)
+│   ├── admin/members.ts         ← Endpoints admin (membres)
+│   ├── review/[[...path]].ts    ← Endpoints lecteur token (catch-all, pas d'auth)
+│   ├── reviews/[[...path]].ts   ← Endpoints auteur sessions + commentaires (catch-all)
 │   ├── library.ts               ← GET/POST bibliothèque utilisateur
 │   └── migrate.ts               ← Migration de données
 │
@@ -403,7 +403,7 @@ npm run preview  # Preview du build en local
 1. **Toujours modifier les deux côtés** : `dev-db.ts` ET le endpoint `api/` correspondant pour toute fonctionnalité data.
 2. **La façade `api.ts`** doit avoir le ternaire `IS_DEV` pour chaque nouvelle méthode.
 3. **Les clés Redis** en prod n'ont PAS le préfixe `dev:` — voir `api/_lib/redis.ts` vs `src/lib/dev-db.ts`.
-4. **Les serverless functions** sont en **CommonJS** (`module.exports`, pas `export default`). Le `tsconfig.json` dans `api/` gère ça.
+4. **Les serverless functions** sont en **CommonJS** (`module.exports`, pas `export default`). Le `tsconfig.json` dans `api/` gère ça. Les endpoints sont regroupés en **catch-all routes** (`[[...path]].ts`) pour respecter la limite de 12 fonctions du plan Hobby Vercel (9 fonctions actuellement). Voir `api/CLAUDE.md` pour le détail du routing interne.
 5. **CORS** : chaque endpoint prod doit appeler `handleCors(req, res)` en premier.
 6. **Auth** : chaque endpoint protégé doit appeler `requireAuth(req, res)` qui retourne `{ userId }` ou `null`.
 7. **Le `useBookStore`** est le store le plus complexe (~965 lignes). Il gère tout le contenu d'un livre et auto-save en local + cloud.

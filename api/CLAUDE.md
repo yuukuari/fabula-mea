@@ -193,18 +193,50 @@ sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → re
 
 ---
 
-## Comment créer un nouvel endpoint
+## Architecture : Catch-all routes
 
-### 1. Créer le fichier
+Pour respecter la **limite de 12 serverless functions** du plan Hobby Vercel, les endpoints sont regroupés par domaine via des **catch-all routes** (`[[...path]].ts`). Chaque fichier catch-all route en interne selon les segments d'URL via `req.query.path` (array de strings).
+
+### Fichiers actuels (9 fonctions)
 
 ```
-api/mon-endpoint.ts           → /api/mon-endpoint
-api/mon-endpoint/index.ts     → /api/mon-endpoint
-api/mon-endpoint/[id].ts      → /api/mon-endpoint/{id}
-api/mon-endpoint/[id]/sub.ts  → /api/mon-endpoint/{id}/sub
+api/library.ts                → /api/library
+api/migrate.ts                → /api/migrate
+api/admin/members.ts          → /api/admin/members
+api/book/[bookId].ts          → /api/book/{bookId}
+api/auth/[[...path]].ts       → /api/auth/login, /api/auth/signup, /api/auth/me
+api/releases/[[...path]].ts   → /api/releases, /api/releases/{id}
+api/review/[[...path]].ts     → /api/review/{token}, /api/review/{token}/start, etc.
+api/reviews/[[...path]].ts    → /api/reviews, /api/reviews/{id}, /api/reviews/{id}/comments, etc.
+api/tickets/[[...path]].ts    → /api/tickets, /api/tickets/{id}, /api/tickets/{id}/comments, etc.
 ```
 
-### 2. Structure type
+### Comment fonctionne le routing interne
+
+```typescript
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (cors(req, res)) return;
+
+  const pathSegments = (req.query.path as string[] | undefined) ?? [];
+  // /api/tickets         → pathSegments = []
+  // /api/tickets/123     → pathSegments = ['123']
+  // /api/tickets/123/comments → pathSegments = ['123', 'comments']
+
+  if (pathSegments.length === 0) return handleIndex(req, res);
+  if (pathSegments.length === 1) return handleById(req, res, pathSegments[0]);
+  // etc.
+}
+```
+
+## Comment ajouter un nouvel endpoint
+
+### Option A : Ajouter une route dans un catch-all existant
+
+Si le nouvel endpoint est dans un domaine existant (ex: `/api/tickets/...`), ajouter un handler dans le fichier catch-all correspondant et étendre le switch/if de routing.
+
+### Option B : Créer un nouveau fichier
+
+Pour un domaine isolé avec une seule route (ex: `/api/mon-truc`), créer un fichier dédié :
 
 ```typescript
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -213,14 +245,11 @@ import { requireAuth } from './_lib/auth';
 import { cors } from './_lib/cors';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // 1. CORS (obligatoire)
   if (cors(req, res)) return;
 
-  // 2. Auth (si nécessaire)
   const auth = requireAuth(req, res);
   if (!auth) return;
 
-  // 3. Routing par méthode HTTP
   if (req.method === 'GET') {
     const data = await redis.get(`emlb:ma-cle:${auth.userId}`);
     return res.json(data ? JSON.parse(data) : []);
