@@ -58,12 +58,12 @@ async function handleIndex(req: VercelRequest, res: VercelResponse) {
     if (!admin) return res.status(403).json({ error: 'Réservé aux administrateurs' });
 
     const { version, title, description, status, items, ticketIds, releasedAt } = req.body;
-    if (!version || !title) return res.status(400).json({ error: 'Version et titre requis' });
+    if (!version) return res.status(400).json({ error: 'Version requise' });
 
     const release: Release = {
       id: generateId(),
       version,
-      title,
+      title: title ?? '',
       description: description ?? '',
       status: status ?? 'planned',
       items: items ?? [],
