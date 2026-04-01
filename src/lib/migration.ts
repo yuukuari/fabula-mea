@@ -2,8 +2,9 @@ import { getBookStorageKey } from '@/store/useLibraryStore';
 import type { BookMeta, BookProject } from '@/types';
 
 const OLD_STORAGE_KEY = 'ecrire-mon-livre-storage';
-const LIBRARY_KEY = 'ecrire-mon-livre-library';
+const LIBRARY_KEY = 'fabula-mea-library';
 const MIGRATION_DONE_KEY = 'ecrire-mon-livre-migrated-v2';
+const RENAME_MIGRATION_KEY = 'fabula-mea-migrated-keys-v1';
 
 /**
  * One-time migration: if the old single-book storage exists and
@@ -90,4 +91,36 @@ export function migrateFromSingleBook() {
     console.error('Migration failed:', e);
     localStorage.setItem(MIGRATION_DONE_KEY, '1');
   }
+}
+
+/**
+ * One-time migration: rename localStorage keys from "ecrire-mon-livre-*"
+ * to "fabula-mea-*" following the app rename.
+ */
+export function migrateStorageKeys() {
+  if (localStorage.getItem(RENAME_MIGRATION_KEY)) return;
+
+  // Migrate library key
+  const oldLibrary = localStorage.getItem('ecrire-mon-livre-library');
+  if (oldLibrary && !localStorage.getItem('fabula-mea-library')) {
+    localStorage.setItem('fabula-mea-library', oldLibrary);
+    localStorage.removeItem('ecrire-mon-livre-library');
+  }
+
+  // Migrate book keys
+  const keysToRename: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith('ecrire-mon-livre-book-')) keysToRename.push(key);
+  }
+  keysToRename.forEach((oldKey) => {
+    const newKey = oldKey.replace('ecrire-mon-livre-book-', 'fabula-mea-book-');
+    const data = localStorage.getItem(oldKey);
+    if (data) {
+      localStorage.setItem(newKey, data);
+      localStorage.removeItem(oldKey);
+    }
+  });
+
+  localStorage.setItem(RENAME_MIGRATION_KEY, '1');
 }

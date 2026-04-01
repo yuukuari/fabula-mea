@@ -4,7 +4,7 @@ import { useBookStore } from '@/store/useBookStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
-import { cn, isSpecialChapter, getChapterLabel } from '@/lib/utils';
+import { cn, isSpecialChapter, getChapterLabel, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS } from '@/lib/utils';
 import type { ReviewSession, Chapter, Scene, GlossaryEntry } from '@/types';
 
 interface Props {
@@ -18,7 +18,9 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const bookTitle = useBookStore((s) => s.title);
+  const bookAuthor = useBookStore((s) => s.author);
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled);
+  const bookLayout = useBookStore((s) => s.layout);
   const allCharacters = useBookStore((s) => s.characters);
   const allPlaces = useBookStore((s) => s.places);
   const allWorldNotes = useBookStore((s) => s.worldNotes);
@@ -56,7 +58,12 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
     });
   };
 
+  const isSceneSelectable = (scene: Scene) =>
+    scene.status !== 'outline' && scene.status !== 'draft';
+
   const toggleScene = (sceneId: string) => {
+    const scene = scenes.find((s) => s.id === sceneId);
+    if (!scene || !isSceneSelectable(scene)) return;
     setSelectedSceneIds((prev) => {
       const next = new Set(prev);
       if (next.has(sceneId)) next.delete(sceneId);
@@ -66,21 +73,24 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
   };
 
   const toggleChapter = (chapter: Chapter) => {
-    const chapterSceneIds = chapter.sceneIds;
-    const allSelected = chapterSceneIds.every((id) => selectedSceneIds.has(id));
+    const selectableIds = chapter.sceneIds.filter((id) => {
+      const scene = scenes.find((s) => s.id === id);
+      return scene && isSceneSelectable(scene);
+    });
+    const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedSceneIds.has(id));
     setSelectedSceneIds((prev) => {
       const next = new Set(prev);
       if (allSelected) {
-        chapterSceneIds.forEach((id) => next.delete(id));
+        selectableIds.forEach((id) => next.delete(id));
       } else {
-        chapterSceneIds.forEach((id) => next.add(id));
+        selectableIds.forEach((id) => next.add(id));
       }
       return next;
     });
   };
 
   const selectAll = () => {
-    const allIds = scenes.map((s) => s.id);
+    const allIds = scenes.filter(isSceneSelectable).map((s) => s.id);
     setSelectedSceneIds(new Set(allIds));
   };
 
@@ -139,6 +149,8 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
             chapters: selectedChapters,
             scenes: snapshotScenes,
             ...(includeGlossary && glossaryEntries.length > 0 ? { glossary: glossaryEntries } : {}),
+            ...(bookLayout ? { layout: bookLayout } : {}),
+            ...(bookAuthor ? { bookAuthor } : {}),
           },
         });
         results.push(session);
@@ -260,22 +272,33 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
 
                         {isExpanded && chapterScenes.length > 0 && (
                           <div className="pl-10 pb-2 space-y-0.5">
-                            {chapterScenes.map((scene) => (
-                              <label
-                                key={scene.id}
-                                className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-parchment-50 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedSceneIds.has(scene.id)}
-                                  onChange={() => toggleScene(scene.id)}
-                                  className="accent-bordeaux-500"
-                                />
-                                <span className="text-sm text-ink-300">
-                                  {scene.title || scene.description || 'Scène sans titre'}
-                                </span>
-                              </label>
-                            ))}
+                            {chapterScenes.map((scene) => {
+                              const selectable = isSceneSelectable(scene);
+                              return (
+                                <label
+                                  key={scene.id}
+                                  className={cn(
+                                    'flex items-center gap-2 px-3 py-1.5 rounded',
+                                    selectable ? 'cursor-pointer hover:bg-parchment-50' : 'opacity-50 cursor-not-allowed'
+                                  )}
+                                  title={!selectable ? 'Les scènes en plan ou brouillon ne peuvent pas être partagées' : undefined}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedSceneIds.has(scene.id)}
+                                    onChange={() => toggleScene(scene.id)}
+                                    disabled={!selectable}
+                                    className="accent-bordeaux-500"
+                                  />
+                                  <span className="text-sm text-ink-300 flex-1 truncate">
+                                    {scene.title || scene.description || 'Sans titre'}
+                                  </span>
+                                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0', SCENE_STATUS_COLORS[scene.status])}>
+                                    {SCENE_STATUS_LABELS[scene.status]}
+                                  </span>
+                                </label>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

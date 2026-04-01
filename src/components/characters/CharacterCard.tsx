@@ -1,5 +1,6 @@
 import type { Character } from '@/types';
 import { CharacterAvatar } from './CharacterAvatar';
+import { BookText } from 'lucide-react';
 
 interface CharacterCardProps {
   character: Character;
@@ -19,9 +20,14 @@ export function CharacterCard({ character, onClick }: CharacterCardProps) {
           />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-display font-bold text-ink-500 truncate">
-            {character.name} {character.surname}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-display font-bold text-ink-500 truncate">
+              {character.name} {character.surname}
+            </h3>
+            {character.inGlossary && (
+              <BookText className="w-3.5 h-3.5 text-bordeaux-400 flex-shrink-0" />
+            )}
+          </div>
           {character.nickname && (
             <p className="text-xs text-ink-300 italic">"{character.nickname}"</p>
           )}

@@ -18,7 +18,7 @@ interface LibraryStore {
   loadFromCloud: () => Promise<void>;
 }
 
-const BOOK_STORAGE_PREFIX = 'ecrire-mon-livre-book-';
+const BOOK_STORAGE_PREFIX = 'fabula-mea-book-';
 
 export function getBookStorageKey(bookId: string): string {
   return `${BOOK_STORAGE_PREFIX}${bookId}`;
@@ -94,7 +94,7 @@ export const useLibraryStore = create<LibraryStore>()(
       },
     }),
     {
-      name: 'ecrire-mon-livre-library',
+      name: 'fabula-mea-library',
       version: 1,
     }
   )

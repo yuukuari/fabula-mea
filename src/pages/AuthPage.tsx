@@ -13,7 +13,7 @@ function getLocalLibrary(): BookMeta[] | null {
   // Already synced once → no need to migrate again
   if (localStorage.getItem(LOCAL_SYNCED_KEY)) return null;
   try {
-    const raw = localStorage.getItem('ecrire-mon-livre-library');
+    const raw = localStorage.getItem('fabula-mea-library');
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { state?: { books?: BookMeta[] } };
     const books = parsed?.state?.books ?? [];
@@ -25,7 +25,7 @@ function getLocalLibrary(): BookMeta[] | null {
 
 function getLocalBookData(bookIds: string[]): { id: string; data: unknown }[] {
   return bookIds.flatMap((id) => {
-    const raw = localStorage.getItem(`ecrire-mon-livre-book-${id}`);
+    const raw = localStorage.getItem(`fabula-mea-book-${id}`);
     if (!raw) return [];
     try {
       return [{ id, data: JSON.parse(raw) }];

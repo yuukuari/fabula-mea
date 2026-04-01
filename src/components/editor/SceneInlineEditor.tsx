@@ -1,4 +1,4 @@
-import { useRef, useCallback, memo } from 'react';
+import { useRef, useCallback, memo, useMemo, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
@@ -6,13 +6,17 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
 import Image from '@tiptap/extension-image';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { FontFamily } from '@tiptap/extension-font-family';
 import { SpellCheckExtension } from '@/lib/spellcheck-extension';
+import { FontSize } from '@/lib/font-size-extension';
 import { useBookStore } from '@/store/useBookStore';
-import type { Scene } from '@/types';
+import { FONT_STACKS, AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, DEFAULT_LAYOUT } from '@/lib/fonts';
+import type { Scene, BookFont, BookFontSize } from '@/types';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Heading1, Heading2, Heading3, Quote, List, ListOrdered,
+  Quote, List, ListOrdered,
   ImagePlus, Link as LinkIcon, Unlink, Undo2, Redo2,
   RemoveFormatting,
 } from 'lucide-react';
@@ -56,10 +60,35 @@ function Sep() {
   return <div className="w-px h-5 bg-parchment-300 mx-0.5" />;
 }
 
+/** Strip all inline styles from pasted HTML, keep semantic elements */
+function cleanPastedHtml(html: string): string {
+  return html
+    .replace(/\s+style="[^"]*"/g, '')
+    .replace(/\s+class="[^"]*"/g, '')
+    .replace(/\s+id="[^"]*"/g, '')
+    .replace(/\s+data-[a-z-]+="[^"]*"/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#160;/g, ' ');
+}
+
 // ── Main component ───────────────────────────────────────────────
 export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocus }: Props) {
   const updateSceneContent = useBookStore((s) => s.updateSceneContent);
+  const layout = useBookStore((s) => s.layout);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Force re-render on selection change so font/size selectors reflect the selection
+  const [, forceUpdate] = useState(0);
+
+  const fontFamily = layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily;
+  const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
+  const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
+  const fontStack = FONT_STACKS[fontFamily];
+
+  const editorStyle = useMemo(() => ({
+    fontFamily: fontStack,
+    fontSize: `${fontSize}pt`,
+    lineHeight: `${lineHeight}`,
+  }), [fontStack, fontSize, lineHeight]);
 
   const handleUpdate = useCallback(
     (html: string) => {
@@ -103,16 +132,21 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
           class: 'max-w-full h-auto rounded-lg my-4 mx-auto block',
         },
       }),
+      TextStyle,
+      FontFamily,
+      FontSize,
       SpellCheckExtension.configure({ language: 'fr', debounceMs: 800 }),
     ],
     content: scene.content ?? '',
     onUpdate: ({ editor: e }) => handleUpdate(e.getHTML()),
     onFocus: () => onFocus(scene.id),
+    onSelectionUpdate: () => forceUpdate((n) => n + 1),
     editorProps: {
       attributes: {
-        class: 'outline-none font-serif text-ink-500 text-lg leading-relaxed min-h-[8rem] text-justify',
+        class: 'outline-none text-ink-500 min-h-[8rem] text-justify',
         spellcheck: 'false',
       },
+      transformPastedHTML: (html) => cleanPastedHtml(html),
     },
   });
 
@@ -151,6 +185,10 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
 
   const s = 16; // icon size
 
+  // Current font: read from textStyle attributes (updates on selection via forceUpdate)
+  const currentFontFamily = editor.getAttributes('textStyle').fontFamily || '';
+  const currentFontSize = editor.getAttributes('textStyle').fontSize || '';
+
   return (
     <div>
       {/* ── Toolbar fixe au-dessus de chaque scène ── */}
@@ -165,16 +203,45 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
 
         <Sep />
 
-        {/* Headings */}
-        <TBtn active={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Titre 1">
-          <Heading1 size={s} />
-        </TBtn>
-        <TBtn active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Titre 2">
-          <Heading2 size={s} />
-        </TBtn>
-        <TBtn active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Titre 3">
-          <Heading3 size={s} />
-        </TBtn>
+        {/* Font family selector */}
+        <select
+          value={currentFontFamily}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val) {
+              editor.chain().focus().setFontFamily(val).run();
+            } else {
+              editor.chain().focus().unsetFontFamily().run();
+            }
+          }}
+          className="h-7 text-xs bg-white border border-parchment-200 rounded px-1 text-ink-400 cursor-pointer hover:border-parchment-400"
+          title="Police du texte sélectionné"
+        >
+          <option value="">Par défaut</option>
+          {AVAILABLE_FONTS.map((f) => (
+            <option key={f} value={FONT_STACKS[f]} style={{ fontFamily: FONT_STACKS[f] }}>{f}</option>
+          ))}
+        </select>
+
+        {/* Font size selector */}
+        <select
+          value={currentFontSize}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val) {
+              editor.chain().focus().setFontSize(val).run();
+            } else {
+              editor.chain().focus().unsetFontSize().run();
+            }
+          }}
+          className="h-7 text-xs bg-white border border-parchment-200 rounded px-1 text-ink-400 cursor-pointer hover:border-parchment-400"
+          title="Taille du texte sélectionné"
+        >
+          <option value="">Défaut</option>
+          {AVAILABLE_FONT_SIZES.map((sz) => (
+            <option key={sz} value={`${sz}pt`}>{sz} pt</option>
+          ))}
+        </select>
 
         <Sep />
 
@@ -259,7 +326,9 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
       </BubbleMenu>
 
       {/* ── Editor content ── */}
-      <EditorContent editor={editor} />
+      <div style={editorStyle}>
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 });

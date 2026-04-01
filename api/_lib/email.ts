@@ -4,7 +4,7 @@
  */
 import { Resend } from 'resend';
 
-const FROM_EMAIL = 'Ecrire Mon Livre <noreply@ecrire-mon-livre.fr>';
+const FROM_EMAIL = 'Fabula Mea <noreply@fabula-mea.com>';
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;

@@ -201,18 +201,21 @@ export function TimelinePage() {
             </button>
           </div>
 
-          {/* Chapter filter */}
+          {/* Chapter filter — only chapters that have dated scenes */}
           <select
             value={highlightChapterId ?? ''}
             onChange={(e) => setHighlightChapterId(e.target.value || null)}
             className="input-field w-44 text-sm py-1"
           >
             <option value="">Tous les chapitres</option>
-            {chapters.map((c) => (
-              <option key={c.id} value={c.id}>
-                Ch. {c.number}{c.title ? ` — ${c.title}` : ''}
-              </option>
-            ))}
+            {chapters
+              .filter((c) => datedScenes.some((s) => s.chapterId === c.id))
+              .sort((a, b) => a.number - b.number)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {getChapterShortLabel(c)}
+                </option>
+              ))}
           </select>
 
           {/* Cross filter: place when viewing by character */}
@@ -245,14 +248,17 @@ export function TimelinePage() {
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Legend — only chapters with dated scenes */}
       <div className="flex flex-wrap gap-3 mb-4">
-        {chapters.map((ch) => (
-          <div key={ch.id} className="flex items-center gap-1.5 text-xs text-ink-300">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: ch.color }} />
-            Chapitre {ch.number}{ch.title ? ` — ${ch.title}` : ''}
-          </div>
-        ))}
+        {chapters
+          .filter((ch) => datedScenes.some((s) => s.chapterId === ch.id))
+          .sort((a, b) => a.number - b.number)
+          .map((ch) => (
+            <div key={ch.id} className="flex items-center gap-1.5 text-xs text-ink-300">
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: ch.color }} />
+              {getChapterShortLabel(ch)}
+            </div>
+          ))}
       </div>
 
       {datedScenes.length > 0 && (

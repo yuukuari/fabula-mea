@@ -4,6 +4,8 @@
  * puis déclenche le dialogue d'impression du navigateur (qui permet
  * d'enregistrer en PDF).
  */
+import type { BookLayout } from '@/types';
+import { FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
 
 interface ExportChapter {
   number: number;
@@ -19,6 +21,8 @@ interface ExportBook {
   synopsis: string;
   chapters: ExportChapter[];
   glossary?: { name: string; type: string; description: string }[];
+  layout?: BookLayout;
+  tableOfContents?: boolean;
 }
 
 function cleanHtml(html: string): string {
@@ -29,24 +33,61 @@ function cleanHtml(html: string): string {
     .replace(/<span>\s*<\/span>/g, '');
 }
 
-const PDF_STYLES = `
+function buildPdfStyles(layout?: BookLayout): string {
+  const fontStack = FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily];
+  const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
+  const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
+
+  return `
   @page {
     size: A5;
-    margin: 1.2cm 1cm;
+    margin: 1.2cm 1.5cm 1.8cm;
+    @bottom-center {
+      content: counter(page);
+      font-family: ${fontStack};
+      font-size: 9pt;
+      color: #666;
+    }
   }
   @media print {
     .no-print { display: none !important; }
-    h1 { page-break-before: always; }
-    h1:first-of-type { page-break-before: auto; }
+    .chapter-break { page-break-before: always; }
+    .special-scene-break { page-break-before: always; }
   }
   * { box-sizing: border-box; }
   body {
-    font-family: "Georgia", "Times New Roman", serif;
-    font-size: 11pt;
-    line-height: 1.6;
+    font-family: ${fontStack};
+    font-size: ${fontSize}pt;
+    line-height: ${lineHeight};
     color: #1a1a1a;
     margin: 0;
-    padding: 1.2cm;
+    padding: 1.2cm 1.5cm;
+  }
+  .cover-page {
+    page-break-after: always;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+  }
+  .cover-page img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+  }
+  .back-cover-page {
+    page-break-before: always;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+  }
+  .back-cover-page img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
   }
   .title-page {
     text-align: center;
@@ -56,7 +97,6 @@ const PDF_STYLES = `
   .title-page h1 {
     font-size: 28pt;
     margin: 0;
-    page-break-before: auto;
   }
   .title-page .author {
     font-size: 16pt;
@@ -85,16 +125,37 @@ const PDF_STYLES = `
     padding: 0.3em 0;
     border-bottom: 1px dotted #ccc;
     font-size: 11pt;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .toc li a {
+    color: inherit;
+    text-decoration: none;
+    flex: 1;
+  }
+  .toc li a::after {
+    content: target-counter(attr(href url), page);
+    float: right;
+    color: #666;
   }
   .toc li .ch-num {
     font-weight: bold;
     margin-right: 0.5em;
   }
-  h1 {
+  .chapter-break {
     font-size: 18pt;
     text-align: center;
     margin: 0 0 1em;
     padding-top: 2em;
+    font-weight: bold;
+  }
+  .special-scene-break {
+    font-size: 18pt;
+    text-align: center;
+    margin: 0 0 1em;
+    padding-top: 2em;
+    font-weight: bold;
   }
   h2 { font-size: 14pt; margin: 1.5em 0 0.5em; }
   h3 { font-size: 12pt; margin: 1em 0 0.4em; }
@@ -103,15 +164,8 @@ const PDF_STYLES = `
     text-align: justify;
     text-indent: 1.5em;
   }
-  p:first-child, h1 + p, h2 + p, h3 + p, hr + p, .scene-title + p {
+  p:first-child, .chapter-break + p, .special-scene-break + p, h2 + p, h3 + p, hr + p {
     text-indent: 0;
-  }
-  .scene-title {
-    font-weight: bold;
-    font-size: 11pt;
-    margin: 1.5em 0 0.5em;
-    text-indent: 0;
-    text-align: left;
   }
   blockquote {
     margin: 1em 2em;
@@ -158,6 +212,7 @@ const PDF_STYLES = `
   }
   .print-btn:hover { background: #5a1329; }
 `;
+}
 
 export function exportPdf(book: ExportBook): void {
   const win = window.open('', '_blank');
@@ -170,61 +225,102 @@ export function exportPdf(book: ExportBook): void {
 
   for (const chapter of book.chapters) {
     const isSpecial = chapter.type === 'front_matter' || chapter.type === 'back_matter';
-    // Skip front/back matter with no scenes
     if (isSpecial && chapter.scenes.length === 0) continue;
 
     if (!isSpecial) {
-      chaptersHtml += `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}</h1>\n`;
-    }
-    for (let i = 0; i < chapter.scenes.length; i++) {
-      const scene = chapter.scenes[i];
-      if (i > 0) {
-        chaptersHtml += `<hr />\n`;
+      const chapterId = `chapter-${chapter.number}`;
+      chaptersHtml += `<h2 id="${chapterId}" class="chapter-break">Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}</h2>\n`;
+      for (let i = 0; i < chapter.scenes.length; i++) {
+        const scene = chapter.scenes[i];
+        if (i > 0) {
+          chaptersHtml += `<hr />\n`;
+        }
+        if (scene.title && chapter.scenes.length > 1) {
+          chaptersHtml += `<p class="scene-title">${scene.title}</p>\n`;
+        }
+        chaptersHtml += cleanHtml(scene.content || '<p></p>') + '\n';
       }
-      if (scene.title && (isSpecial || chapter.scenes.length > 1)) {
-        chaptersHtml += `<p class="scene-title">${scene.title}</p>\n`;
+    } else {
+      // Special chapters: each scene gets its own page break
+      for (let i = 0; i < chapter.scenes.length; i++) {
+        const scene = chapter.scenes[i];
+        const sceneId = `special-${chapter.type}-${i}`;
+        if (scene.title) {
+          chaptersHtml += `<h2 id="${sceneId}" class="special-scene-break">${scene.title}</h2>\n`;
+        } else {
+          chaptersHtml += `<div id="${sceneId}" class="special-scene-break" style="display:none;"></div>`;
+          if (i > 0) {
+            // Force page break even without title
+            chaptersHtml += `<div style="page-break-before:always;"></div>`;
+          }
+        }
+        chaptersHtml += cleanHtml(scene.content || '<p></p>') + '\n';
       }
-      chaptersHtml += cleanHtml(scene.content || '<p></p>') + '\n';
     }
   }
 
-  // Glossaire (optionnel)
+  // Glossaire (optionnel) — without type label
   let glossaryHtml = '';
   if (book.glossary && book.glossary.length > 0) {
-    const typeLabels: Record<string, string> = { character: 'Personnage', place: 'Lieu', worldNote: 'Univers' };
-    glossaryHtml += '<h1>Glossaire</h1>\n';
+    glossaryHtml += '<h2 id="glossaire" class="chapter-break">Glossaire</h2>\n';
     for (const entry of book.glossary) {
-      glossaryHtml += `<h2>${entry.name}</h2>\n`;
-      glossaryHtml += `<p><em>${typeLabels[entry.type] || entry.type}</em></p>\n`;
+      glossaryHtml += `<h3>${entry.name}</h3>\n`;
       if (entry.description) {
         glossaryHtml += `<p>${entry.description}</p>\n`;
       }
     }
   }
 
-  const tocHtml = book.chapters
-    .filter((ch) => !((ch.type === 'front_matter' || ch.type === 'back_matter') && ch.scenes.length === 0))
-    .map((ch) => {
+  // Table des matières
+  let tocHtml = '';
+  if (book.tableOfContents) {
+    const tocItems: string[] = [];
+    for (const ch of book.chapters) {
+      if ((ch.type === 'front_matter' || ch.type === 'back_matter') && ch.scenes.length === 0) continue;
       if (ch.type === 'front_matter' || ch.type === 'back_matter') {
-        const label = ch.scenes.length === 1 && ch.scenes[0].title ? ch.scenes[0].title : (ch.type === 'front_matter' ? 'Avant l\'histoire' : 'Après l\'histoire');
-        return `<li>${label}</li>`;
+        // Show individual scenes (only if they have a title)
+        ch.scenes.forEach((scene, i) => {
+          if (scene.title) {
+            const sceneId = `special-${ch.type}-${i}`;
+            tocItems.push(`<li><a href="#${sceneId}">${scene.title}</a></li>`);
+          }
+        });
+      } else {
+        const chapterId = `chapter-${ch.number}`;
+        tocItems.push(`<li><a href="#${chapterId}"><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title || ''}</a></li>`);
       }
-      return `<li><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title || ''}</li>`;
-    })
-    .join('\n');
+    }
+    if (book.glossary && book.glossary.length > 0) {
+      tocItems.push(`<li><a href="#glossaire">Glossaire</a></li>`);
+    }
+    if (tocItems.length > 0) {
+      tocHtml = `<div class="toc">
+  <h2>Table des matières</h2>
+  <ul>${tocItems.join('\n')}</ul>
+</div>`;
+    }
+  }
 
-  // Add glossary to TOC if present
-  const glossaryTocEntry = book.glossary && book.glossary.length > 0 ? '\n<li>Glossaire</li>' : '';
+  // Cover pages
+  const frontCoverHtml = book.layout?.coverFront
+    ? `<div class="cover-page"><img src="${book.layout.coverFront}" alt="Couverture" /></div>`
+    : '';
+  const backCoverHtml = book.layout?.coverBack
+    ? `<div class="back-cover-page"><img src="${book.layout.coverBack}" alt="4ème de couverture" /></div>`
+    : '';
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
   <title>${book.title} — PDF</title>
-  <style>${PDF_STYLES}</style>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <style>${buildPdfStyles(book.layout)}</style>
 </head>
 <body>
   <button class="print-btn no-print" onclick="window.print()">Imprimer / Enregistrer en PDF</button>
+
+  ${frontCoverHtml}
 
   <div class="title-page">
     <h1>${book.title}</h1>
@@ -232,13 +328,12 @@ export function exportPdf(book: ExportBook): void {
     ${book.genre ? `<p class="genre">${book.genre}</p>` : ''}
   </div>
 
-  <div class="toc">
-    <h2>Table des matières</h2>
-    <ul>${tocHtml}${glossaryTocEntry}</ul>
-  </div>
+  ${tocHtml}
 
   ${chaptersHtml}
   ${glossaryHtml}
+
+  ${backCoverHtml}
 </body>
 </html>`;
 

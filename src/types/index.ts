@@ -371,6 +371,8 @@ export interface ReviewSession {
     chapters: ReviewSnapshotChapter[];
     scenes: ReviewSnapshotScene[];
     glossary?: GlossaryEntry[];
+    layout?: BookLayout;
+    bookAuthor?: string;
   };
   commentsCount: number;
   pendingCommentsCount: number;
@@ -409,6 +411,20 @@ export interface SelfComment {
   updatedAt: string;
 }
 
+// ─── Book Layout ───
+export type BookFont = 'Times New Roman' | 'Georgia' | 'Crimson Text' | 'Lora' | 'Merriweather' | 'EB Garamond' | 'Libre Baskerville' | 'Garamond';
+export type BookFontSize = 10 | 11 | 12 | 13 | 14 | 16 | 18;
+export type BookLineHeight = 1.0 | 1.15 | 1.25 | 1.5 | 1.75 | 2.0;
+
+export interface BookLayout {
+  fontFamily: BookFont;
+  fontSize: BookFontSize;
+  lineHeight: BookLineHeight;
+  coverFront?: string;   // base64 image
+  coverBack?: string;    // base64 image
+  coverSpine?: string;   // base64 image
+}
+
 // ─── Root Store ───
 export interface BookProject {
   id: EntityId;
@@ -419,6 +435,8 @@ export interface BookProject {
   writingMode: WritingMode;
   countUnit?: CountUnit;
   glossaryEnabled?: boolean;
+  tableOfContents?: boolean;
+  layout?: BookLayout;
   characters: Character[];
   places: Place[];
   chapters: Chapter[];

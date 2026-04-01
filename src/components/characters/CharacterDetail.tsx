@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, BookText } from 'lucide-react';
 import type { Character, Relationship } from '@/types';
 import { useBookStore } from '@/store/useBookStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
@@ -83,9 +83,14 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
             size={32}
           />
           <div className="flex-1">
-            <h2 className="font-display text-3xl font-bold text-ink-500">
-              {character.name} {character.surname}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-3xl font-bold text-ink-500">
+                {character.name} {character.surname}
+              </h2>
+              {character.inGlossary && (
+                <BookText className="w-5 h-5 text-bordeaux-400 flex-shrink-0" />
+              )}
+            </div>
             {character.nickname && (
               <p className="text-lg text-ink-300 italic mt-1">"{character.nickname}"</p>
             )}

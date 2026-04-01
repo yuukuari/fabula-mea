@@ -2,7 +2,8 @@ import { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { MessageSquarePlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { injectHighlights, getSelectionOffsets } from '@/lib/review-highlights';
-import type { ReviewComment, ReviewSnapshotScene } from '@/types';
+import { FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
+import type { ReviewComment, ReviewSnapshotScene, BookLayout } from '@/types';
 
 interface Props {
   scene: ReviewSnapshotScene;
@@ -11,9 +12,10 @@ interface Props {
   onHoverComment: (id: string | null) => void;
   /** If undefined, text selection for commenting is disabled (readOnly mode) */
   onSelectText?: (data: { sceneId: string; text: string; startOffset: number; endOffset: number }) => void;
+  layout?: BookLayout;
 }
 
-export function ReviewContentViewer({ scene, comments, activeCommentId, onHoverComment, onSelectText }: Props) {
+export function ReviewContentViewer({ scene, comments, activeCommentId, onHoverComment, onSelectText, layout }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -114,7 +116,12 @@ export function ReviewContentViewer({ scene, comments, activeCommentId, onHoverC
       {/* Content */}
       <div
         ref={contentRef}
-        className="prose prose-sm max-w-none text-ink-400 review-content"
+        className="max-w-none text-ink-400 review-content text-justify"
+        style={{
+          fontFamily: FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily],
+          fontSize: `${layout?.fontSize ?? DEFAULT_LAYOUT.fontSize}pt`,
+          lineHeight: `${layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight}`,
+        }}
         dangerouslySetInnerHTML={{ __html: highlightedHtml || '<p class="text-ink-200 italic">Pas de contenu</p>' }}
         onMouseUp={handleMouseUp}
         onClick={handleClick}

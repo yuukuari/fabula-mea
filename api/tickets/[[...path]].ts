@@ -115,7 +115,7 @@ async function handleIndex(req: VercelRequest, res: VercelResponse, auth: { user
     tickets.push(ticket);
     await redis.set('emlb:tickets', JSON.stringify(tickets));
 
-    const baseUrl = req.headers.origin || 'https://ecrire-mon-livre.fr';
+    const baseUrl = req.headers.origin || 'https://fabula-mea.com';
     const ticketUrl = `${baseUrl}/tickets?id=${ticket.id}`;
     const memberIdsJson = await redis.get('emlb:member-ids');
     const memberIds: string[] = memberIdsJson ? JSON.parse(memberIdsJson) : [];

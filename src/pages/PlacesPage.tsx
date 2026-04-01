@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map } from 'lucide-react';
+import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map, BookText } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
@@ -59,9 +59,14 @@ export function PlacesPage() {
           {selectedPlace.imageUrl && (
             <img src={selectedPlace.imageUrl} alt={selectedPlace.name} className="w-full h-64 object-cover rounded-lg mb-4" />
           )}
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h2 className="font-display text-3xl font-bold text-ink-500">{selectedPlace.name}</h2>
             <span className="badge bg-parchment-200 text-ink-400">{PLACE_TYPE_LABELS[selectedPlace.type]}</span>
+            {selectedPlace.inGlossary && (
+              <span className="flex items-center gap-1 text-xs text-bordeaux-500">
+                <BookText className="w-3.5 h-3.5" /> Glossaire
+              </span>
+            )}
           </div>
           {selectedPlace.description && (
             <p className="text-ink-300 font-serif whitespace-pre-wrap mb-4">{selectedPlace.description}</p>
@@ -199,9 +204,12 @@ export function PlacesPage() {
                 </div>
               )}
               <div className="p-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-display font-bold text-ink-500">{place.name}</h3>
                   <span className="badge bg-parchment-200 text-ink-300 text-xs">{PLACE_TYPE_LABELS[place.type]}</span>
+                  {place.inGlossary && (
+                    <BookText className="w-3.5 h-3.5 text-bordeaux-400" />
+                  )}
                 </div>
                 {place.description && (
                   <p className="text-sm text-ink-300 mt-1 line-clamp-2">{place.description}</p>

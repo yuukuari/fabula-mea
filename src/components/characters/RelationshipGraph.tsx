@@ -66,10 +66,12 @@ function getEdgeOffset(index: number, total: number): number {
   return (index - (total - 1) / 2) * spread;
 }
 
-// Tooltip data
+// Tooltip data — nodeX/nodeY are the node's position on the canvas
 interface TooltipData {
   x: number;
   y: number;
+  nodeX: number;
+  nodeY: number;
   character: Character;
   relationships: { rel: Relationship; target: Character | undefined }[];
 }
@@ -88,6 +90,7 @@ export function RelationshipGraph() {
   const [dragNode, setDragNode] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const sizeRef = useRef({ w: 800, h: 500 });
+  const mouseDraggedRef = useRef(false);
 
   // Load images for characters with avatars
   useEffect(() => {
@@ -452,6 +455,7 @@ export function RelationshipGraph() {
     const y = e.clientY - rect.top;
 
     if (dragNode) {
+      mouseDraggedRef.current = true;
       const node = nodesRef.current.find((n) => n.id === dragNode);
       if (node) {
         node.x = x;
@@ -473,7 +477,10 @@ export function RelationshipGraph() {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const found = findNodeAt(e.clientX - rect.left, e.clientY - rect.top);
-    if (found) setDragNode(found.id);
+    if (found) {
+      setDragNode(found.id);
+      mouseDraggedRef.current = false;
+    }
   };
 
   const handleMouseUp = () => {
@@ -488,7 +495,31 @@ export function RelationshipGraph() {
     setDragNode(null);
   };
 
+  const buildTooltip = (found: Node): TooltipData | null => {
+    const char = characters.find((c) => c.id === found.id);
+    if (!char) return null;
+    const rels = char.relationships.map((rel) => ({
+      rel,
+      target: characters.find((c) => c.id === rel.targetCharacterId),
+    }));
+    // x/y are the node's position on the canvas — the tooltip is absolutely positioned
+    // inside the same div.relative that contains the canvas, so coordinates match directly
+    return {
+      x: found.x,
+      y: found.y,
+      nodeX: found.x,
+      nodeY: found.y,
+      character: char,
+      relationships: rels,
+    };
+  };
+
   const handleClick = (e: React.MouseEvent) => {
+    // Skip click if we just finished dragging a node
+    if (mouseDraggedRef.current) {
+      mouseDraggedRef.current = false;
+      return;
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -497,18 +528,7 @@ export function RelationshipGraph() {
     const found = findNodeAt(x, y);
 
     if (found) {
-      const char = characters.find((c) => c.id === found.id);
-      if (char) {
-        const rels = char.relationships.map((rel) => ({
-          rel,
-          target: characters.find((c) => c.id === rel.targetCharacterId),
-        }));
-        // Position tooltip relative to container
-        const containerRect = containerRef.current?.getBoundingClientRect();
-        const tooltipX = e.clientX - (containerRect?.left ?? 0);
-        const tooltipY = e.clientY - (containerRect?.top ?? 0);
-        setTooltip({ x: tooltipX, y: tooltipY, character: char, relationships: rels });
-      }
+      setTooltip(buildTooltip(found));
     } else {
       setTooltip(null);
     }
@@ -524,6 +544,112 @@ export function RelationshipGraph() {
       navigate(`/characters/${found.id}`);
     }
   };
+
+  // ── Touch events for mobile ──
+  // Registered via addEventListener with { passive: false } so preventDefault() works
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const lastTapRef = useRef<number>(0);
+  const touchMovedRef = useRef(false);
+  const dragNodeRef = useRef<string | null>(null);
+
+  // Keep dragNodeRef in sync with state
+  useEffect(() => { dragNodeRef.current = dragNode; }, [dragNode]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      touchStartRef.current = { x, y, time: Date.now() };
+      touchMovedRef.current = false;
+
+      const found = findNodeAt(x, y);
+      if (found) {
+        e.preventDefault();
+        setDragNode(found.id);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      touchMovedRef.current = true;
+
+      if (dragNodeRef.current) {
+        e.preventDefault();
+        const node = nodesRef.current.find((n) => n.id === dragNodeRef.current);
+        if (node) {
+          node.x = x;
+          node.y = y;
+          node.vx = 0;
+          node.vy = 0;
+        }
+        setTooltip(null);
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (dragNodeRef.current) {
+        const positions: Record<string, { x: number; y: number }> = {};
+        for (const node of nodesRef.current) {
+          positions[node.id] = { x: node.x, y: node.y };
+        }
+        saveGraphNodePositions(positions);
+        setDragNode(null);
+      }
+
+      if (!touchMovedRef.current && touchStartRef.current) {
+        const { x, y } = touchStartRef.current;
+        const now = Date.now();
+
+        if (now - lastTapRef.current < 300) {
+          const found = findNodeAt(x, y);
+          if (found) {
+            setTooltip(null);
+            navigate(`/characters/${found.id}`);
+          }
+          lastTapRef.current = 0;
+        } else {
+          lastTapRef.current = now;
+          const found = findNodeAt(x, y);
+          if (found) {
+            setTooltip(buildTooltip(found));
+          } else {
+            setTooltip(null);
+          }
+        }
+      }
+
+      touchStartRef.current = null;
+    };
+
+    const onTouchCancel = () => {
+      setDragNode(null);
+      setTooltip(null);
+    };
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchcancel', onTouchCancel);
+
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchCancel);
+    };
+  }, [characters, navigate, saveGraphNodePositions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (characters.length === 0) return null;
 
@@ -595,12 +721,19 @@ export function RelationshipGraph() {
         />
 
         {/* Tooltip overlay */}
-        {tooltip && (
+        {tooltip && (() => {
+          const tooltipWidth = 240;
+          const gap = NODE_RADIUS + 12;
+          // Center horizontally below the node, clamped to canvas bounds
+          const left = Math.max(4, Math.min(tooltip.nodeX - tooltipWidth / 2, sizeRef.current.w - tooltipWidth - 4));
+          const top = tooltip.nodeY + gap;
+          return (
           <div
-            className="absolute z-10 bg-white rounded-xl shadow-lg border border-parchment-200 p-3 max-w-xs pointer-events-none"
+            className="absolute z-10 bg-white rounded-xl shadow-lg border border-parchment-200 p-3 pointer-events-none"
             style={{
-              left: Math.min(tooltip.x + 10, (sizeRef.current.w - 260)),
-              top: Math.min(tooltip.y + 10, 400),
+              left,
+              top,
+              width: tooltipWidth,
             }}
           >
             <p className="font-display font-bold text-ink-500 text-sm mb-1">
@@ -625,7 +758,8 @@ export function RelationshipGraph() {
               </ul>
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
   Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
+  BookLayout,
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
@@ -28,6 +29,8 @@ interface BookStore extends BookProject {
   updateWritingMode: (mode: import('@/types').WritingMode, deleteContent: boolean) => void;
   updateCountUnit: (unit: import('@/types').CountUnit) => void;
   setGlossaryEnabled: (enabled: boolean) => void;
+  setTableOfContents: (enabled: boolean) => void;
+  updateLayout: (data: Partial<BookLayout>) => void;
 
   // Characters
   addCharacter: (char: Partial<Character> & { name: string }) => string;
@@ -126,6 +129,11 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     selfComments: [],
     graphNodePositions: {},
     glossaryEnabled: false,
+    layout: {
+      fontFamily: 'Times New Roman',
+      fontSize: 12,
+      lineHeight: 1.5,
+    },
   };
 }
 
@@ -151,6 +159,8 @@ function extractProjectData(state: BookStore): BookProject {
     selfComments: state.selfComments,
     graphNodePositions: state.graphNodePositions,
     glossaryEnabled: state.glossaryEnabled,
+    tableOfContents: state.tableOfContents,
+    layout: state.layout,
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
   };
@@ -376,6 +386,18 @@ export const useBookStore = create<BookStore>()(
       setGlossaryEnabled: (enabled) =>
         set((s) => ({
           glossaryEnabled: enabled,
+          ...touchSave(),
+        })),
+
+      setTableOfContents: (enabled) =>
+        set((s) => ({
+          tableOfContents: enabled,
+          ...touchSave(),
+        })),
+
+      updateLayout: (data) =>
+        set((s) => ({
+          layout: { ...(s.layout ?? { fontFamily: 'Times New Roman', fontSize: 12, lineHeight: 1.5 }), ...data },
           ...touchSave(),
         })),
 

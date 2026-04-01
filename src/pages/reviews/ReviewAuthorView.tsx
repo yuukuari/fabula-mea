@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { Feather, BookOpen, BookText, ChevronDown, ChevronRight, ChevronLeft, Clock, PlayCircle, CheckCircle2, Lock, PanelLeft, MessageSquare, X, Menu, Archive, Send } from 'lucide-react';
+import { Feather, BookOpen, BookText, ChevronDown, ChevronRight, ChevronLeft, Clock, PlayCircle, CheckCircle2, Lock, PanelLeft, MessageSquare, X, Menu, Archive, Send, Image } from 'lucide-react';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ReviewCommentPanel } from '@/components/reviews/ReviewCommentPanel';
@@ -167,8 +167,10 @@ export function ReviewAuthorView() {
   }
 
   const sortedChapters = [...currentSession.snapshot.chapters].sort((a, b) => a.number - b.number);
-  const activeScene = activeSceneId !== '__glossary__' ? (currentSession.snapshot.scenes.find((s) => s.id === activeSceneId) || null) : null;
+  const activeScene = activeSceneId && !activeSceneId.startsWith('__') ? (currentSession.snapshot.scenes.find((s) => s.id === activeSceneId) || null) : null;
   const hasGlossary = (currentSession.snapshot.glossary?.length ?? 0) > 0;
+  const hasCoverOrTitle = !!(currentSession.snapshot.layout?.coverFront || currentSession.bookTitle);
+  const hasBackCover = !!currentSession.snapshot.layout?.coverBack;
   const statusConfig = STATUS_CONFIG[currentSession.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.pending;
   const StatusIcon = statusConfig.icon;
 
@@ -213,6 +215,23 @@ export function ReviewAuthorView() {
         </button>
       </div>
       <div className="space-y-1">
+        {/* Title page nav entry */}
+        {hasCoverOrTitle && (
+          <>
+            <button
+              onClick={() => { setActiveSceneId('__titlepage__'); setMobileNavOpen(false); }}
+              className={cn(
+                'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded transition-colors',
+                activeSceneId === '__titlepage__' ? 'bg-bordeaux-100 text-bordeaux-600 font-medium' : 'text-ink-300 hover:bg-parchment-100'
+              )}
+            >
+              <Image className="w-3 h-3" />
+              <span>Page de titre</span>
+            </button>
+            <div className="border-t border-parchment-200 my-2" />
+          </>
+        )}
+
         {sortedChapters.map((chapter) => {
           const chapterScenes = chapter.sceneIds
             .map((sid) => currentSession.snapshot.scenes.find((s) => s.id === sid))
@@ -269,6 +288,23 @@ export function ReviewAuthorView() {
               <BookText className="w-3 h-3" />
               <span>Glossaire</span>
               <span className="ml-auto text-[10px] text-ink-200">{currentSession.snapshot.glossary!.length}</span>
+            </button>
+          </>
+        )}
+
+        {/* Back cover nav entry */}
+        {hasBackCover && (
+          <>
+            <div className="border-t border-parchment-200 my-2" />
+            <button
+              onClick={() => { setActiveSceneId('__backcover__'); setMobileNavOpen(false); }}
+              className={cn(
+                'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded transition-colors',
+                activeSceneId === '__backcover__' ? 'bg-bordeaux-100 text-bordeaux-600 font-medium' : 'text-ink-300 hover:bg-parchment-100'
+              )}
+            >
+              <Image className="w-3 h-3" />
+              <span>4ème de couverture</span>
             </button>
           </>
         )}
@@ -359,23 +395,28 @@ export function ReviewAuthorView() {
         {/* Center panel: Content viewer */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-            {activeSceneId === '__glossary__' && hasGlossary ? (
+            {activeSceneId === '__titlepage__' && hasCoverOrTitle ? (
+              <div className="text-center py-8 space-y-6">
+                {currentSession.snapshot.layout?.coverFront && (
+                  <img src={currentSession.snapshot.layout.coverFront} alt="1ère de couverture" className="max-h-80 mx-auto rounded-lg shadow-sm" />
+                )}
+                <div>
+                  <h1 className="font-display text-3xl font-bold text-ink-500">{currentSession.bookTitle}</h1>
+                  {currentSession.snapshot.bookAuthor && <p className="text-lg text-ink-300 mt-2">{currentSession.snapshot.bookAuthor}</p>}
+                </div>
+              </div>
+            ) : activeSceneId === '__backcover__' && hasBackCover ? (
+              <div className="text-center py-8">
+                <img src={currentSession.snapshot.layout!.coverBack!} alt="4ème de couverture" className="max-h-96 mx-auto rounded-lg shadow-sm" />
+                <p className="text-sm text-ink-200 mt-4">4ème de couverture</p>
+              </div>
+            ) : activeSceneId === '__glossary__' && hasGlossary ? (
               <div>
                 <h1 className="font-display text-2xl font-bold text-ink-500 mb-6">Glossaire</h1>
                 <div className="space-y-4">
                   {currentSession.snapshot.glossary!.map((entry) => (
                     <div key={entry.id} className="border-b border-parchment-200 pb-4 last:border-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-ink-500">{entry.name}</h3>
-                        <span className={cn(
-                          'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                          entry.type === 'character' ? 'bg-blue-50 text-blue-600' :
-                          entry.type === 'place' ? 'bg-emerald-50 text-emerald-600' :
-                          'bg-purple-50 text-purple-600'
-                        )}>
-                          {entry.type === 'character' ? 'Personnage' : entry.type === 'place' ? 'Lieu' : 'Univers'}
-                        </span>
-                      </div>
+                      <h3 className="font-semibold text-ink-500 mb-1">{entry.name}</h3>
                       {entry.description && (
                         <p className="text-sm text-ink-300 whitespace-pre-wrap">{entry.description}</p>
                       )}
@@ -390,6 +431,7 @@ export function ReviewAuthorView() {
                 activeCommentId={activeCommentId}
                 onHoverComment={handleCommentClick}
                 onSelectText={isClosed ? undefined : (data) => setPendingSelection(data)}
+                layout={currentSession.snapshot.layout}
               />
             ) : (
               <div className="text-center py-20">

@@ -8,10 +8,13 @@
  *  - OEBPS/toc.ncx           (table of contents NCX - EPUB 2 compat)
  *  - OEBPS/toc.xhtml         (table of contents EPUB 3)
  *  - OEBPS/style.css
+ *  - OEBPS/title.xhtml
  *  - OEBPS/chapter-N.xhtml   (un fichier par chapitre)
  */
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import type { BookLayout } from '@/types';
+import { FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
 
 interface ExportChapter {
   id: string;
@@ -21,6 +24,12 @@ interface ExportChapter {
   scenes: { title: string; content: string }[];
 }
 
+interface ExportMap {
+  id: string;
+  name: string;
+  imageUrl: string; // base64 data URL
+}
+
 interface ExportBook {
   title: string;
   author: string;
@@ -28,6 +37,9 @@ interface ExportBook {
   synopsis: string;
   chapters: ExportChapter[];
   glossary?: { name: string; type: string; description: string }[];
+  maps?: ExportMap[];
+  layout?: BookLayout;
+  tableOfContents?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -56,7 +68,16 @@ function cleanHtml(html: string): string {
     // Nettoyer les spans vides laissés par TipTap
     .replace(/<span>\s*<\/span>/g, '')
     // Convertir text-align en attribut style
-    .replace(/style="text-align:\s*(center|right|justify|left)"/g, 'style="text-align: $1"');
+    .replace(/style="text-align:\s*(center|right|justify|left)"/g, 'style="text-align: $1"')
+    // Convertir &nbsp; en espace insécable XHTML valide
+    .replace(/&nbsp;/g, '&#160;')
+    // Nettoyer d'autres entités HTML qui ne sont pas valides en XHTML
+    .replace(/&mdash;/g, '&#8212;')
+    .replace(/&ndash;/g, '&#8211;')
+    .replace(/&laquo;/g, '&#171;')
+    .replace(/&raquo;/g, '&#187;')
+    .replace(/&hellip;/g, '&#8230;')
+    .replace(/&amp;nbsp;/g, '&#160;');
 }
 
 function generateUUID(): string {
@@ -66,12 +87,28 @@ function generateUUID(): string {
   });
 }
 
+/** Extrait le type MIME et les données base64 d'un data URL */
+function parseDataUrl(dataUrl: string): { mimeType: string; ext: string; base64: string } | null {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const mimeType = match[1];
+  const base64 = match[2];
+  const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : 'jpg';
+  return { mimeType, ext, base64 };
+}
+
 // ── CSS du livre ─────────────────────────────────────────────────
 
-const BOOK_CSS = `
+function buildBookCss(layout?: BookLayout): string {
+  const fontStack = FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily];
+  const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
+  const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
+
+  return `
 body {
-  font-family: "Georgia", "Times New Roman", serif;
-  line-height: 1.6;
+  font-family: ${fontStack};
+  line-height: ${lineHeight};
+  font-size: ${fontSize}pt;
   margin: 1em;
   color: #1a1a1a;
 }
@@ -149,13 +186,21 @@ a {
   margin-top: 0.5em;
   color: #666;
 }
-.scene-title {
+.special-scene-title {
+  font-size: 1.8em;
   font-weight: bold;
-  font-size: 1.05em;
-  margin: 1.5em 0 0.5em;
-  text-indent: 0;
+  text-align: center;
+  margin: 2em 0 1em;
+  page-break-before: always;
+}
+.map-image {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em auto;
 }
 `;
+}
 
 // ── Génération EPUB ──────────────────────────────────────────────
 
@@ -179,9 +224,24 @@ export async function exportEpub(book: ExportBook): Promise<void> {
   );
 
   // 3. Style
-  zip.file('OEBPS/style.css', BOOK_CSS);
+  zip.file('OEBPS/style.css', buildBookCss(book.layout));
 
-  // 4. Page de titre
+  // 4. Couverture (si disponible)
+  let coverImageId = '';
+  let coverImageFilename = '';
+  let coverImageMimeType = '';
+  if (book.layout?.coverFront) {
+    const parsed = parseDataUrl(book.layout.coverFront);
+    if (parsed) {
+      coverImageFilename = `cover.${parsed.ext}`;
+      coverImageMimeType = parsed.mimeType;
+      coverImageId = 'cover-image';
+      // Stocker l'image en base64 dans le zip
+      zip.file(`OEBPS/${coverImageFilename}`, parsed.base64, { base64: true });
+    }
+  }
+
+  // 5. Page de titre
   zip.file(
     'OEBPS/title.xhtml',
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -198,7 +258,7 @@ export async function exportEpub(book: ExportBook): Promise<void> {
 </html>`
   );
 
-  // 5. Chapitres
+  // 6. Chapitres
   const chapterFiles: { id: string; filename: string; title: string }[] = [];
 
   for (const chapter of book.chapters) {
@@ -206,56 +266,79 @@ export async function exportEpub(book: ExportBook): Promise<void> {
     if ((chapter.type === 'front_matter' || chapter.type === 'back_matter') && chapter.scenes.length === 0) continue;
 
     const isSpecial = chapter.type === 'front_matter' || chapter.type === 'back_matter';
-    const filename = isSpecial
-      ? `${chapter.type}.xhtml`
-      : `chapter-${chapter.number}.xhtml`;
-    const chId = isSpecial ? chapter.type! : `ch-${chapter.number}`;
 
-    let body = '';
     if (!isSpecial) {
-      body += `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${escapeXml(chapter.title)}` : ''}</h1>\n`;
-    }
+      const filename = `chapter-${chapter.number}.xhtml`;
+      const chId = `ch-${chapter.number}`;
+      let body = `<h1>Chapitre ${chapter.number}${chapter.title ? ` — ${escapeXml(chapter.title)}` : ''}</h1>\n`;
 
-    for (let i = 0; i < chapter.scenes.length; i++) {
-      const scene = chapter.scenes[i];
-      if (i > 0) {
-        body += `<hr />\n`;
+      for (let i = 0; i < chapter.scenes.length; i++) {
+        const scene = chapter.scenes[i];
+        if (i > 0) {
+          body += `<hr />\n`;
+        }
+        if (scene.title && chapter.scenes.length > 1) {
+          body += `<p class="scene-title">${escapeXml(scene.title)}</p>\n`;
+        }
+        body += cleanHtml(scene.content || '<p></p>') + '\n';
       }
-      // For special chapters, always show scene title; for regular, only if multiple scenes
-      if (scene.title && (isSpecial || chapter.scenes.length > 1)) {
-        body += `<p class="scene-title">${escapeXml(scene.title)}</p>\n`;
-      }
-      body += cleanHtml(scene.content || '<p></p>') + '\n';
-    }
 
-    zip.file(
-      `OEBPS/${filename}`,
-      `<?xml version="1.0" encoding="UTF-8"?>
+      zip.file(
+        `OEBPS/${filename}`,
+        `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr" lang="fr">
-<head><title>${escapeXml(chapter.title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<head><title>${escapeXml(chapter.title || `Chapitre ${chapter.number}`)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body>
 ${body}
 </body>
 </html>`
-    );
+      );
 
-    chapterFiles.push({
-      id: chId,
-      filename,
-      title: isSpecial
-        ? (chapter.scenes.length === 1 && chapter.scenes[0].title ? chapter.scenes[0].title : (chapter.type === 'front_matter' ? 'Avant l\'histoire' : 'Après l\'histoire'))
-        : `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`,
-    });
+      chapterFiles.push({
+        id: chId,
+        filename,
+        title: `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`,
+      });
+    } else {
+      // Special chapters: each scene gets its own file (page break effect)
+      for (let i = 0; i < chapter.scenes.length; i++) {
+        const scene = chapter.scenes[i];
+        const fileId = `${chapter.type}-${i}`;
+        const filename = `${chapter.type}-${i}.xhtml`;
+
+        let body = '';
+        if (scene.title) {
+          body += `<h1 class="special-scene-title">${escapeXml(scene.title)}</h1>\n`;
+        }
+        body += cleanHtml(scene.content || '<p></p>') + '\n';
+
+        zip.file(
+          `OEBPS/${filename}`,
+          `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr" lang="fr">
+<head><title>${escapeXml(scene.title || 'Sans titre')}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body>
+${body}
+</body>
+</html>`
+        );
+
+        chapterFiles.push({
+          id: fileId,
+          filename,
+          title: scene.title || '',
+        });
+      }
+    }
   }
 
-  // 5b. Glossaire (optionnel)
+  // 6b. Glossaire (optionnel) — sans label de type
   if (book.glossary && book.glossary.length > 0) {
-    const typeLabels: Record<string, string> = { character: 'Personnage', place: 'Lieu', worldNote: 'Univers' };
     let glossaryBody = '<h1>Glossaire</h1>\n';
     for (const entry of book.glossary) {
       glossaryBody += `<h2>${escapeXml(entry.name)}</h2>\n`;
-      glossaryBody += `<p><em>${escapeXml(typeLabels[entry.type] || entry.type)}</em></p>\n`;
       if (entry.description) {
         glossaryBody += `<p>${escapeXml(entry.description)}</p>\n`;
       }
@@ -274,7 +357,62 @@ ${glossaryBody}
     chapterFiles.push({ id: 'glossary', filename: 'glossary.xhtml', title: 'Glossaire' });
   }
 
-  // 6. Table of Contents (XHTML - EPUB 3)
+  // 6c. Cartes (optionnel)
+  const mapFiles: { id: string; filename: string; title: string; imageFilename: string; imageMimeType: string }[] = [];
+  if (book.maps && book.maps.length > 0) {
+    for (const map of book.maps) {
+      if (!map.imageUrl) continue;
+      const parsed = parseDataUrl(map.imageUrl);
+      if (!parsed) continue;
+
+      const imageFilename = `map-${map.id}.${parsed.ext}`;
+      const mapFilename = `map-${map.id}.xhtml`;
+      const mapId = `map-${map.id}`;
+
+      zip.file(`OEBPS/${imageFilename}`, parsed.base64, { base64: true });
+      zip.file(
+        `OEBPS/${mapFilename}`,
+        `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr" lang="fr">
+<head><title>${escapeXml(map.name)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body>
+<h1>${escapeXml(map.name)}</h1>
+<img src="${imageFilename}" alt="${escapeXml(map.name)}" class="map-image"/>
+</body>
+</html>`
+      );
+
+      chapterFiles.push({ id: mapId, filename: mapFilename, title: map.name });
+      mapFiles.push({ id: mapId, filename: mapFilename, title: map.name, imageFilename, imageMimeType: parsed.mimeType });
+    }
+  }
+
+  // 7. Table of Contents (XHTML - EPUB 3)
+  // Build TOC entries — special chapters show individual scenes
+  const tocEntries: { filename: string; title: string }[] = [];
+  for (const ch of book.chapters) {
+    if ((ch.type === 'front_matter' || ch.type === 'back_matter') && ch.scenes.length === 0) continue;
+    const isSpecial = ch.type === 'front_matter' || ch.type === 'back_matter';
+    if (!isSpecial) {
+      const filename = `chapter-${ch.number}.xhtml`;
+      tocEntries.push({ filename, title: `Chapitre ${ch.number}${ch.title ? ` — ${ch.title}` : ''}` });
+    } else {
+      ch.scenes.forEach((scene, i) => {
+        if (scene.title) {
+          tocEntries.push({ filename: `${ch.type}-${i}.xhtml`, title: scene.title });
+        }
+      });
+    }
+  }
+  if (book.glossary && book.glossary.length > 0) {
+    tocEntries.push({ filename: 'glossary.xhtml', title: 'Glossaire' });
+  }
+  for (const m of mapFiles) {
+    tocEntries.push({ filename: m.filename, title: m.title });
+  }
+
+  // TOC navigation file (always included for EPUB readers)
   zip.file(
     'OEBPS/toc.xhtml',
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -285,14 +423,14 @@ ${glossaryBody}
   <nav epub:type="toc">
     <h1>Table des matières</h1>
     <ol>
-${chapterFiles.map((ch) => `      <li><a href="${ch.filename}">${escapeXml(ch.title)}</a></li>`).join('\n')}
+${tocEntries.map((ch) => `      <li><a href="${ch.filename}">${escapeXml(ch.title)}</a></li>`).join('\n')}
     </ol>
   </nav>
 </body>
 </html>`
   );
 
-  // 7. toc.ncx (EPUB 2 compat)
+  // 8. toc.ncx (EPUB 2 compat)
   zip.file(
     'OEBPS/toc.ncx',
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -306,9 +444,9 @@ ${chapterFiles.map((ch) => `      <li><a href="${ch.filename}">${escapeXml(ch.ti
       <navLabel><text>Page de titre</text></navLabel>
       <content src="title.xhtml"/>
     </navPoint>
-${chapterFiles
+${tocEntries
   .map(
-    (ch, i) => `    <navPoint id="${ch.id}" playOrder="${i + 2}">
+    (ch, i) => `    <navPoint id="nav-${i}" playOrder="${i + 2}">
       <navLabel><text>${escapeXml(ch.title)}</text></navLabel>
       <content src="${ch.filename}"/>
     </navPoint>`
@@ -318,7 +456,8 @@ ${chapterFiles
 </ncx>`
   );
 
-  // 8. content.opf (Package Document)
+  // 9. content.opf (Package Document)
+  const allContentFiles = chapterFiles;
   zip.file(
     'OEBPS/content.opf',
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -326,29 +465,33 @@ ${chapterFiles
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="bookid">urn:uuid:${uuid}</dc:identifier>
     <dc:title>${escapeXml(book.title)}</dc:title>
-    <dc:creator>${escapeXml(book.author)}</dc:creator>
+    <dc:creator id="creator">${escapeXml(book.author || 'Auteur')}</dc:creator>
+    <meta refines="#creator" property="role" scheme="marc:relators">aut</meta>
     <dc:language>fr</dc:language>
     <dc:date>${now}</dc:date>
     ${book.synopsis ? `<dc:description>${escapeXml(book.synopsis)}</dc:description>` : ''}
     ${book.genre ? `<dc:subject>${escapeXml(book.genre)}</dc:subject>` : ''}
     <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d{3}Z/, 'Z')}</meta>
+    ${coverImageId ? `<meta name="cover" content="${coverImageId}"/>` : ''}
   </metadata>
   <manifest>
     <item id="style" href="style.css" media-type="text/css"/>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="toc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="title-page" href="title.xhtml" media-type="application/xhtml+xml"/>
-${chapterFiles.map((ch) => `    <item id="${ch.id}" href="${ch.filename}" media-type="application/xhtml+xml"/>`).join('\n')}
+    ${coverImageId ? `<item id="${coverImageId}" href="${coverImageFilename}" media-type="${coverImageMimeType}" properties="cover-image"/>` : ''}
+${allContentFiles.map((ch) => `    <item id="${ch.id}" href="${ch.filename}" media-type="application/xhtml+xml"/>`).join('\n')}
+${mapFiles.map((m) => `    <item id="${m.id}-img" href="${m.imageFilename}" media-type="${m.imageMimeType}"/>`).join('\n')}
   </manifest>
   <spine toc="ncx">
     <itemref idref="title-page"/>
     <itemref idref="toc"/>
-${chapterFiles.map((ch) => `    <itemref idref="${ch.id}"/>`).join('\n')}
+${allContentFiles.map((ch) => `    <itemref idref="${ch.id}"/>`).join('\n')}
   </spine>
 </package>`
   );
 
-  // 9. Générer le ZIP et télécharger
+  // 10. Générer le ZIP et télécharger
   const blob = await zip.generateAsync({
     type: 'blob',
     mimeType: 'application/epub+zip',

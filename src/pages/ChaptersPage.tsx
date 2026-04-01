@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle } from 'lucide-react';
+import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -20,6 +20,9 @@ export function ChaptersPage() {
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled ?? false);
   const setGlossaryEnabled = useBookStore((s) => s.setGlossaryEnabled);
+  const tableOfContents = useBookStore((s) => s.tableOfContents ?? false);
+  const setTableOfContents = useBookStore((s) => s.setTableOfContents);
+  const layout = useBookStore((s) => s.layout);
   const updateCharacter = useBookStore((s) => s.updateCharacter);
   const updatePlace = useBookStore((s) => s.updatePlace);
   const updateWorldNote = useBookStore((s) => s.updateWorldNote);
@@ -50,6 +53,7 @@ export function ChaptersPage() {
       .map((sid) => scenes.find((s) => s.id === sid))
       .filter(Boolean) as Scene[];
     const isExpanded = expanded[chapter.id] === true;
+    const isSpecial = chapter.type === 'front_matter' || chapter.type === 'back_matter';
 
     if (!isExpanded) return null;
 
@@ -70,11 +74,20 @@ export function ChaptersPage() {
               <div className="flex items-start gap-3">
                 <GripVertical className="w-4 h-4 text-ink-100 mt-1 opacity-0 group-hover:opacity-100 cursor-grab" />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium text-ink-500 text-sm">{scene.title || `Scène ${sceneIdx + 1}`}</h4>
-                    <span className={cn('badge text-xs', SCENE_STATUS_COLORS[scene.status])}>
-                      {SCENE_STATUS_LABELS[scene.status]}
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-medium text-ink-500 text-sm">
+                      {scene.title || (isSpecial ? 'Sans titre' : `Scène ${sceneIdx + 1}`)}
+                    </h4>
+                    <select
+                      value={scene.status}
+                      onChange={(e) => updateScene(scene.id, { status: e.target.value as SceneStatus })}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn('text-xs px-1.5 py-0.5 rounded-full border-0 cursor-pointer font-medium', SCENE_STATUS_COLORS[scene.status])}
+                    >
+                      {Object.entries(SCENE_STATUS_LABELS).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
                   </div>
                   {scene.description && (
                     <p className="text-xs text-ink-300 mt-1 line-clamp-2">{scene.description}</p>
@@ -193,6 +206,31 @@ export function ChaptersPage() {
       </div>
 
       <div className="space-y-3">
+        {/* Table of contents section */}
+        <div className="card-fantasy overflow-hidden border-dashed">
+          <div className="flex items-center gap-3 p-4">
+            <List className="w-4 h-4 text-ink-300 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-display font-bold text-ink-400 italic">Table des matières</h3>
+              <p className="text-xs text-ink-200 mt-0.5">
+                Inclure une table des matières dans les exports PDF et EPUB.
+                N'apparaît pas dans le mode d'écriture.
+              </p>
+            </div>
+            <label
+              className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer flex-shrink-0"
+            >
+              <input
+                type="checkbox"
+                checked={tableOfContents}
+                onChange={(e) => setTableOfContents(e.target.checked)}
+                className="rounded border-parchment-300 accent-bordeaux-500"
+              />
+              <span className="text-xs">Activer</span>
+            </label>
+          </div>
+        </div>
+
         {/* Front matter */}
         {renderSpecialSection(frontMatter)}
 
@@ -280,12 +318,6 @@ export function ChaptersPage() {
 
           const isGlossaryExpanded = expanded['__glossary__'] === true;
 
-          const typeLabels: Record<string, string> = {
-            character: 'Personnage',
-            place: 'Lieu',
-            worldNote: 'Univers',
-          };
-
           const handleRemoveFromGlossary = (entry: GlossaryEntry) => {
             if (entry.type === 'character') updateCharacter(entry.id, { inGlossary: false });
             else if (entry.type === 'place') updatePlace(entry.id, { inGlossary: false });
@@ -339,12 +371,7 @@ export function ChaptersPage() {
                           className="flex items-center gap-3 bg-parchment-100 rounded-lg px-3 py-2 group"
                         >
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-ink-500 truncate">{entry.name}</span>
-                              <span className="badge bg-parchment-200 text-ink-300 text-xs flex-shrink-0">
-                                {typeLabels[entry.type]}
-                              </span>
-                            </div>
+                            <span className="text-sm font-medium text-ink-500 truncate block">{entry.name}</span>
                             {entry.description && (
                               <p className="text-xs text-ink-200 mt-0.5 line-clamp-1">{entry.description}</p>
                             )}
@@ -365,6 +392,16 @@ export function ChaptersPage() {
             </div>
           );
         })()}
+
+        {/* 4ème de couverture */}
+        {layout?.coverBack && (
+          <div className="card-fantasy overflow-hidden border-dashed">
+            <div className="p-6 text-center">
+              <img src={layout.coverBack} alt="4ème de couverture" className="max-h-64 mx-auto rounded-lg shadow-sm" />
+              <p className="text-xs text-ink-200 mt-2">4ème de couverture</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {showChapterForm && (

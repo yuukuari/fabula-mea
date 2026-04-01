@@ -103,7 +103,7 @@ async function handleIndex(req: VercelRequest, res: VercelResponse, auth: { user
     await redis.set(`emlb:u:${auth.userId}:reviews`, JSON.stringify(ids));
 
     if (readerEmail) {
-      const baseUrl = req.headers.origin || 'https://ecrire-mon-livre.fr';
+      const baseUrl = req.headers.origin || 'https://fabula-mea.com';
       await sendReviewInviteEmail({
         to: readerEmail,
         authorName: session.authorName,
@@ -284,7 +284,7 @@ async function handleSend(req: VercelRequest, res: VercelResponse, auth: { userI
   await redis.set(`emlb:review:${id}:comments`, JSON.stringify(comments));
 
   if (sent > 0 && session.readerEmail) {
-    const baseUrl = req.headers.origin || 'https://ecrire-mon-livre.fr';
+    const baseUrl = req.headers.origin || 'https://fabula-mea.com';
     await sendAuthorRepliedEmail({
       to: session.readerEmail,
       authorName: session.authorName,

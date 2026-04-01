@@ -31,7 +31,7 @@ export function AdminShell() {
           </div>
           <div className="text-left">
             <h1 className="font-display text-lg font-bold text-ink-500 leading-tight">Admin</h1>
-            <p className="text-xs text-ink-300">Ecrire Mon Livre</p>
+            <p className="text-xs text-ink-300">Fabula Mea</p>
           </div>
           <VersionBadge />
         </div>

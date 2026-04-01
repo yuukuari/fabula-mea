@@ -46,12 +46,12 @@ export const useAuthStore = create<AuthStore>()((set) => ({
   logout: () => {
     localStorage.removeItem('emlb-token');
     // Clear Zustand persisted data so next user starts clean
-    localStorage.removeItem('ecrire-mon-livre-library');
+    localStorage.removeItem('fabula-mea-library');
     // Clear all cached book data
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('ecrire-mon-livre-book-')) keysToRemove.push(key);
+      if (key?.startsWith('fabula-mea-book-')) keysToRemove.push(key);
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
     set({ user: null });

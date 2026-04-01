@@ -26,6 +26,9 @@ export function SceneEditor() {
   const bookId = useBookStore((s) => s.id);
   const dailyGoal = useBookStore((s) => s.goals?.dailyGoal);
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled ?? false);
+  const bookTitle = useBookStore((s) => s.title);
+  const bookAuthor = useBookStore((s) => s.author);
+  const layout = useBookStore((s) => s.layout);
   const allCharacters = useBookStore((s) => s.characters);
   const allPlaces = useBookStore((s) => s.places);
   const allWorldNotes = useBookStore((s) => s.worldNotes);
@@ -423,6 +426,18 @@ export function SceneEditor() {
         {/* ── RIGHT: Livre continu ── */}
         <div ref={rightPanelRef} className="flex-1 overflow-y-auto" onMouseUp={handleTextSelection}>
           <div className="max-w-3xl mx-auto px-6 sm:px-14 py-10 sm:py-12 pb-32">
+            {/* Cover + Title page */}
+            {(layout?.coverFront || bookTitle) && (
+              <div className="mb-16 text-center">
+                {layout?.coverFront && (
+                  <img src={layout.coverFront} alt="1ère de couverture" className="max-h-72 mx-auto rounded-lg shadow-sm mb-8" />
+                )}
+                <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink-500">{bookTitle}</h1>
+                {bookAuthor && <p className="text-lg text-ink-300 mt-2">{bookAuthor}</p>}
+                <div className="border-b border-parchment-300 mt-12" />
+              </div>
+            )}
+
             {sortedChapters.map((chapter) => {
               const chScenes = getChapterScenes(chapter.id);
               const isSpecial = isSpecialChapter(chapter);
@@ -536,21 +551,23 @@ export function SceneEditor() {
                   <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">Glossaire</h2>
                 </div>
                 <div className="space-y-6">
-                  {glossaryEntries.map((entry) => {
-                    const typeLabel = entry.type === 'character' ? 'Personnage' : entry.type === 'place' ? 'Lieu' : 'Univers';
-                    return (
-                      <div key={`${entry.type}-${entry.id}`} className="border-b border-parchment-200 pb-4 last:border-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-display text-lg font-semibold text-ink-500">{entry.name}</h3>
-                          <span className="text-xs text-ink-200 bg-parchment-200 rounded px-1.5 py-0.5">{typeLabel}</span>
-                        </div>
-                        {entry.description && (
-                          <p className="text-sm text-ink-300 font-serif whitespace-pre-wrap leading-relaxed">{entry.description}</p>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {glossaryEntries.map((entry) => (
+                    <div key={`${entry.type}-${entry.id}`} className="border-b border-parchment-200 pb-4 last:border-0">
+                      <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">{entry.name}</h3>
+                      {entry.description && (
+                        <p className="text-sm text-ink-300 font-serif whitespace-pre-wrap leading-relaxed">{entry.description}</p>
+                      )}
+                    </div>
+                  ))}
                 </div>
+              </div>
+            )}
+
+            {/* 4ème de couverture */}
+            {layout?.coverBack && (
+              <div className="mb-12 border-t-2 border-parchment-300 pt-12 text-center">
+                <img src={layout.coverBack} alt="4ème de couverture" className="max-h-72 mx-auto rounded-lg shadow-sm" />
+                <p className="text-xs text-ink-200 mt-3">4ème de couverture</p>
               </div>
             )}
           </div>

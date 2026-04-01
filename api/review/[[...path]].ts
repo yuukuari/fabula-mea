@@ -77,7 +77,7 @@ async function handleComplete(req: VercelRequest, res: VercelResponse, token: st
   await redis.set(`emlb:review:${session.id}`, JSON.stringify(session));
 
   if (session.authorEmail) {
-    const baseUrl = req.headers.origin || 'https://ecrire-mon-livre.fr';
+    const baseUrl = req.headers.origin || 'https://fabula-mea.com';
     await sendReviewCompletedEmail({
       to: session.authorEmail,
       readerName: session.readerName || 'Un relecteur',
@@ -112,7 +112,7 @@ async function handleSend(req: VercelRequest, res: VercelResponse, token: string
   await redis.set(`emlb:review:${session.id}:comments`, JSON.stringify(comments));
 
   if (sent > 0 && session.authorEmail) {
-    const baseUrl = req.headers.origin || 'https://ecrire-mon-livre.fr';
+    const baseUrl = req.headers.origin || 'https://fabula-mea.com';
     await sendCommentsNotificationEmail({
       to: session.authorEmail,
       readerName: session.readerName || 'Un relecteur',

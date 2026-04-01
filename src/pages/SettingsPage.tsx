@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { Download, Upload, Hash, PenLine, AlertTriangle, X, BookOpen, FileText } from 'lucide-react';
+import { Download, Upload, Hash, PenLine, AlertTriangle, X, BookOpen, FileText, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { exportEpub } from '@/lib/export-epub';
 import { exportPdf } from '@/lib/export-pdf';
-import type { WritingMode, CountUnit } from '@/types';
+import { AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, AVAILABLE_LINE_HEIGHTS, FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
+import type { WritingMode, CountUnit, BookFont, BookFontSize, BookLineHeight } from '@/types';
 
 /** Modale de confirmation de changement de mode */
 function WritingModeChangeDialog({
@@ -101,6 +102,91 @@ function WritingModeChangeDialog({
   );
 }
 
+/** Modale d'information sur le changement de mise en page */
+function LayoutChangeInfoDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-parchment-50 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <button onClick={onClose} className="absolute top-4 right-4 btn-ghost p-1">
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5 text-blue-500" />
+          </div>
+          <div>
+            <h3 className="font-display font-bold text-ink-500">Changement de mise en page</h3>
+            <p className="text-sm text-ink-300 mt-1">
+              Ce paramètre s'applique au texte dont la police n'a pas été modifiée manuellement dans l'éditeur (texte « par défaut »).
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-ink-300 mb-5">
+          Les passages auxquels vous avez appliqué une police spécifique dans l'éditeur conservent leur mise en forme individuelle.
+          Pour uniformiser tout le texte, utilisez le bouton « Supprimer le formatage » dans l'éditeur de scènes.
+        </p>
+        <button onClick={onClose} className="w-full btn-primary">Compris</button>
+      </div>
+    </div>
+  );
+}
+
+/** Upload d'image de couverture */
+function CoverUpload({
+  label,
+  value,
+  onChange,
+  aspectHint,
+}: {
+  label: string;
+  value?: string;
+  onChange: (img: string | undefined) => void;
+  aspectHint: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') onChange(reader.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  return (
+    <div>
+      <label className="label-field">{label}</label>
+      {value ? (
+        <div className="relative group">
+          <img src={value} alt={label} className="w-full h-40 object-contain border border-parchment-200 rounded-lg bg-white" />
+          <button
+            onClick={() => onChange(undefined)}
+            className="absolute top-1 right-1 p-1 bg-white/90 rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Supprimer"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="w-full h-40 border-2 border-dashed border-parchment-300 rounded-lg
+                     flex flex-col items-center justify-center gap-2
+                     hover:border-bordeaux-300 hover:bg-bordeaux-50/20 transition-all cursor-pointer"
+        >
+          <ImageIcon className="w-6 h-6 text-ink-200" />
+          <span className="text-xs text-ink-300">{aspectHint}</span>
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const title = useBookStore((s) => s.title);
   const author = useBookStore((s) => s.author);
@@ -116,6 +202,7 @@ export function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState('');
   const [pendingMode, setPendingMode] = useState<WritingMode | null>(null);
+  const [showLayoutInfo, setShowLayoutInfo] = useState(false);
 
   const handleExport = () => {
     const json = exportProject();
@@ -128,12 +215,16 @@ export function SettingsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const layout = useBookStore((s) => s.layout);
+  const updateLayout = useBookStore((s) => s.updateLayout);
+  const tableOfContents = useBookStore((s) => s.tableOfContents ?? false);
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled);
   const allCharacters = useBookStore((s) => s.characters);
   const allPlaces = useBookStore((s) => s.places);
   const allWorldNotes = useBookStore((s) => s.worldNotes);
+  const allMaps = useBookStore((s) => s.maps ?? []);
 
   const buildExportBook = () => {
     // Build glossary entries from entities marked inGlossary
@@ -164,6 +255,11 @@ export function SettingsPage() {
             .map((s, idx) => ({ title: s!.title ?? '', content: s!.content ?? '' })),
         })),
       ...(glossary.length > 0 ? { glossary } : {}),
+      ...(layout ? { layout } : {}),
+      tableOfContents,
+      maps: allMaps
+        .filter((m) => m.imageUrl)
+        .map((m) => ({ id: m.id, name: m.name, imageUrl: m.imageUrl })),
     };
   };
 
@@ -320,6 +416,100 @@ export function SettingsPage() {
         </div>
       </div>
 
+      {/* Mise en page */}
+      <div className="card-fantasy p-6 mb-6">
+        <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Mise en page</h3>
+        <p className="text-sm text-ink-300 mb-4">
+          Ces paramètres s'appliquent à l'éditeur, au mode relecture et aux exports (EPUB/PDF).
+        </p>
+
+        <div className="space-y-5">
+          {/* Font family */}
+          <div>
+            <label className="label-field">Police par défaut</label>
+            <select
+              value={layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily}
+              onChange={(e) => { updateLayout({ fontFamily: e.target.value as BookFont }); setShowLayoutInfo(true); }}
+              className="input-field"
+            >
+              {AVAILABLE_FONTS.map((f) => (
+                <option key={f} value={f} style={{ fontFamily: FONT_STACKS[f] }}>{f}</option>
+              ))}
+            </select>
+            <p className="text-xs text-ink-200 mt-1">
+              Vous pouvez aussi changer la police d'un texte sélectionné dans l'éditeur.
+            </p>
+          </div>
+
+          {/* Font size + line height side by side */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label-field">Taille de police</label>
+              <select
+                value={layout?.fontSize ?? DEFAULT_LAYOUT.fontSize}
+                onChange={(e) => { updateLayout({ fontSize: Number(e.target.value) as BookFontSize }); setShowLayoutInfo(true); }}
+                className="input-field"
+              >
+                {AVAILABLE_FONT_SIZES.map((s) => (
+                  <option key={s} value={s}>{s} pt</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label-field">Interligne</label>
+              <select
+                value={layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight}
+                onChange={(e) => updateLayout({ lineHeight: Number(e.target.value) as BookLineHeight })}
+                className="input-field"
+              >
+                {AVAILABLE_LINE_HEIGHTS.map((lh) => (
+                  <option key={lh} value={lh}>{lh === 1.0 ? 'Simple (1.0)' : lh === 1.5 ? 'Standard (1.5)' : lh === 2.0 ? 'Double (2.0)' : lh.toString()}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className="border border-parchment-200 rounded-lg p-4 bg-white/60">
+            <p className="text-xs text-ink-200 mb-2 font-sans">Aperçu</p>
+            <p
+              className="text-ink-500 text-justify"
+              style={{
+                fontFamily: FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily],
+                fontSize: `${layout?.fontSize ?? DEFAULT_LAYOUT.fontSize}pt`,
+                lineHeight: `${layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight}`,
+              }}
+            >
+              « Il est des lieux où souffle l'esprit, des pages où chaque mot porte le poids d'un monde. L'écrivain, tel un artisan patient, tisse ses phrases avec le soin d'un orfèvre — car chaque virgule, chaque silence, chaque élan du récit est une promesse faite au lecteur. »
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Couvertures */}
+      <div className="card-fantasy p-6 mb-6">
+        <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Couvertures</h3>
+        <p className="text-sm text-ink-300 mb-4">
+          Images utilisées pour les exports et la présentation du livre.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Front cover */}
+          <CoverUpload
+            label="1ère de couverture"
+            value={layout?.coverFront}
+            onChange={(img) => updateLayout({ coverFront: img })}
+            aspectHint="Format portrait recommandé"
+          />
+          {/* Back cover */}
+          <CoverUpload
+            label="4ème de couverture"
+            value={layout?.coverBack}
+            onChange={(img) => updateLayout({ coverBack: img })}
+            aspectHint="Format portrait recommandé"
+          />
+        </div>
+      </div>
+
       {/* Export livre */}
       <div className="card-fantasy p-6 mb-6">
         <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Exporter le livre</h3>
@@ -382,6 +572,9 @@ export function SettingsPage() {
           </p>
         )}
       </div>
+
+      {/* Layout info dialog */}
+      {showLayoutInfo && <LayoutChangeInfoDialog onClose={() => setShowLayoutInfo(false)} />}
 
       {/* Writing mode change dialog */}
       {pendingMode && (

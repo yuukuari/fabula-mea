@@ -31,7 +31,7 @@ export function StandaloneShell() {
               </div>
               <div className="text-left hidden sm:block">
                 <h1 className="font-display text-lg font-bold text-ink-500 leading-tight">
-                  Ecrire Mon Livre
+                  Fabula Mea
                 </h1>
               </div>
             </button>

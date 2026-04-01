@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Globe, Edit, Trash2, X, ArrowLeft } from 'lucide-react';
+import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -51,7 +51,14 @@ export function WorldPage() {
           {selectedNote.imageUrl && (
             <img src={selectedNote.imageUrl} alt="" className="w-full h-48 object-cover rounded-lg mb-4" />
           )}
-          <span className="badge bg-parchment-200 text-ink-400 mb-2">{WORLD_NOTE_CATEGORY_LABELS[selectedNote.category]}</span>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <span className="badge bg-parchment-200 text-ink-400">{WORLD_NOTE_CATEGORY_LABELS[selectedNote.category]}</span>
+            {selectedNote.inGlossary && (
+              <span className="flex items-center gap-1 text-xs text-bordeaux-500">
+                <BookText className="w-3.5 h-3.5" /> Glossaire
+              </span>
+            )}
+          </div>
           <h2 className="font-display text-2xl font-bold text-ink-500 mt-2 mb-4">{selectedNote.title}</h2>
           <div className="text-ink-300 font-serif whitespace-pre-wrap leading-relaxed">{selectedNote.content}</div>
 
@@ -136,8 +143,13 @@ export function WorldPage() {
                 </div>
               )}
               <div className="p-4">
-                <span className="badge bg-parchment-200 text-ink-300 text-xs mb-2">{WORLD_NOTE_CATEGORY_LABELS[note.category]}</span>
-                <h3 className="font-display font-bold text-ink-500 mt-1">{note.title}</h3>
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="badge bg-parchment-200 text-ink-300 text-xs">{WORLD_NOTE_CATEGORY_LABELS[note.category]}</span>
+                  {note.inGlossary && (
+                    <BookText className="w-3.5 h-3.5 text-bordeaux-400" />
+                  )}
+                </div>
+                <h3 className="font-display font-bold text-ink-500">{note.title}</h3>
                 <p className="text-sm text-ink-300 mt-1 line-clamp-2">{note.content}</p>
               </div>
             </div>
