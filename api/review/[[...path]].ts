@@ -3,8 +3,10 @@ import { redis } from '../_lib/redis';
 import { cors } from '../_lib/cors';
 import { sendCommentsNotificationEmail, sendReviewCompletedEmail } from '../_lib/email';
 
-function getPathSegments(req: VercelRequest): string[] {
-  return (req.query.path as string[] | undefined) ?? [];
+function getPathSegments(req: VercelRequest, base: string): string[] {
+  const url = (req.url || '').split('?')[0];
+  const after = url.startsWith(base) ? url.slice(base.length) : '';
+  return after.split('/').filter(Boolean);
 }
 
 function generateId(): string {
@@ -210,7 +212,7 @@ async function handleCommentById(req: VercelRequest, res: VercelResponse, token:
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
-  const pathSegments = getPathSegments(req);
+  const pathSegments = getPathSegments(req, '/api/review');
 
   if (pathSegments.length === 0) {
     return res.status(404).json({ error: 'Token requis' });
