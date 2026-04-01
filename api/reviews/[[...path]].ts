@@ -487,57 +487,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
   const pathSegments = getPathSegments(req, '/api/reviews');
+  const route = pathSegments[0] ?? '';
 
-  // ── Reader routes: /api/reviews/reader/:token/... (NO AUTH) ──
-  if (pathSegments[0] === 'reader') {
-    const token = pathSegments[1];
-    if (!token) return res.status(400).json({ error: 'Token requis' });
+  // ── Reader routes (NO AUTH) — flat: /api/reviews/reader-xxx/:token ──
 
-    // /api/reviews/reader/:token
-    if (pathSegments.length === 2) {
-      return handleReaderGetSession(req, res, token);
-    }
-
-    const action = pathSegments[2];
-
-    if (action === 'start' && pathSegments.length === 3) return handleReaderStart(req, res, token);
-    if (action === 'complete' && pathSegments.length === 3) return handleReaderComplete(req, res, token);
-    if (action === 'send' && pathSegments.length === 3) return handleReaderSend(req, res, token);
-    if (action === 'comments' && pathSegments.length === 3) return handleReaderComments(req, res, token);
-    if (action === 'comments' && pathSegments.length === 4) return handleReaderCommentById(req, res, token, pathSegments[3]);
-
-    return res.status(404).json({ error: 'Route introuvable' });
+  // GET /api/reviews/reader/:token
+  if (route === 'reader' && pathSegments.length === 2) {
+    return handleReaderGetSession(req, res, pathSegments[1]);
+  }
+  // POST /api/reviews/reader-start/:token
+  if (route === 'reader-start' && pathSegments.length === 2) {
+    return handleReaderStart(req, res, pathSegments[1]);
+  }
+  // POST /api/reviews/reader-complete/:token
+  if (route === 'reader-complete' && pathSegments.length === 2) {
+    return handleReaderComplete(req, res, pathSegments[1]);
+  }
+  // POST /api/reviews/reader-send/:token
+  if (route === 'reader-send' && pathSegments.length === 2) {
+    return handleReaderSend(req, res, pathSegments[1]);
+  }
+  // GET|POST /api/reviews/reader-comments/:token
+  if (route === 'reader-comments' && pathSegments.length === 2) {
+    return handleReaderComments(req, res, pathSegments[1]);
+  }
+  // PATCH|DELETE /api/reviews/reader-comment/:token/:commentId
+  if (route === 'reader-comment' && pathSegments.length === 3) {
+    return handleReaderCommentById(req, res, pathSegments[1], pathSegments[2]);
   }
 
-  // ── Author routes: /api/reviews/... (AUTH REQUIRED) ──
+  // ── Author routes (AUTH REQUIRED) ──
   const auth = requireAuth(req, res);
   if (!auth) return;
 
-  // /api/reviews
+  // GET|POST /api/reviews
   if (pathSegments.length === 0) {
     return handleIndex(req, res, auth);
   }
 
   const id = pathSegments[0];
 
-  // /api/reviews/:id
+  // GET|PATCH|DELETE /api/reviews/:id
   if (pathSegments.length === 1) {
     return handleById(req, res, auth, id);
   }
 
   const action = pathSegments[1];
 
-  // /api/reviews/:id/comments
+  // POST /api/reviews/:id/comments
   if (action === 'comments' && pathSegments.length === 2) {
     return handleAuthorComments(req, res, auth, id);
   }
-
-  // /api/reviews/:id/comments/:commentId
+  // PATCH|DELETE /api/reviews/:id/comments/:commentId
   if (action === 'comments' && pathSegments.length === 3) {
     return handleAuthorCommentById(req, res, auth, id, pathSegments[2]);
   }
-
-  // /api/reviews/:id/send
+  // POST /api/reviews/:id/send
   if (action === 'send' && pathSegments.length === 2) {
     return handleAuthorSend(req, res, auth, id);
   }

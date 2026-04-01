@@ -265,39 +265,39 @@ export const api = {
     start: (token: string, data: { readerName: string }) =>
       IS_DEV
         ? devDb.reviewPublic.start(token, data)
-        : apiFetch<{ session: ReviewSession }>(`/reviews/reader/${token}/start`, {
+        : apiFetch<{ session: ReviewSession }>(`/reviews/reader-start/${token}`, {
             method: 'POST',
             body: JSON.stringify(data),
           }),
     getComments: (token: string) =>
       IS_DEV
         ? devDb.reviewPublic.getComments(token)
-        : apiFetch<ReviewComment[]>(`/reviews/reader/${token}/comments`),
+        : apiFetch<ReviewComment[]>(`/reviews/reader-comments/${token}`),
     addComment: (token: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>) =>
       IS_DEV
         ? devDb.reviewPublic.addComment(token, comment)
-        : apiFetch<{ comment: ReviewComment }>(`/reviews/reader/${token}/comments`, {
+        : apiFetch<{ comment: ReviewComment }>(`/reviews/reader-comments/${token}`, {
             method: 'POST',
             body: JSON.stringify(comment),
           }),
     updateComment: (token: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>) =>
       IS_DEV
         ? devDb.reviewPublic.updateComment(token, commentId, data)
-        : apiFetch<{ comment: ReviewComment }>(`/reviews/reader/${token}/comments/${commentId}`, {
+        : apiFetch<{ comment: ReviewComment }>(`/reviews/reader-comment/${token}/${commentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
           }),
     deleteComment: (token: string, commentId: string) =>
       IS_DEV
         ? devDb.reviewPublic.deleteComment(token, commentId)
-        : apiFetch<{ ok: boolean }>(`/reviews/reader/${token}/comments/${commentId}`, { method: 'DELETE' }),
+        : apiFetch<{ ok: boolean }>(`/reviews/reader-comment/${token}/${commentId}`, { method: 'DELETE' }),
     sendComments: (token: string) =>
       IS_DEV
         ? devDb.reviewPublic.sendComments(token)
-        : apiFetch<{ sent: number }>(`/reviews/reader/${token}/send`, { method: 'POST' }),
+        : apiFetch<{ sent: number }>(`/reviews/reader-send/${token}`, { method: 'POST' }),
     complete: (token: string) =>
       IS_DEV
         ? devDb.reviewPublic.complete(token)
-        : apiFetch<{ session: ReviewSession }>(`/reviews/reader/${token}/complete`, { method: 'POST' }),
+        : apiFetch<{ session: ReviewSession }>(`/reviews/reader-complete/${token}`, { method: 'POST' }),
   },
 };
