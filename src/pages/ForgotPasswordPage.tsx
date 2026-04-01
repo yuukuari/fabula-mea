@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { BookOpen, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -49,13 +48,13 @@ export function ForgotPasswordPage() {
               <p className="text-ink-200 text-xs">
                 Le lien est valable 10 minutes. Pensez à vérifier vos spams.
               </p>
-              <Link
-                to="/"
+              <a
+                href="/"
                 className="inline-flex items-center gap-2 text-bordeaux-600 hover:text-bordeaux-700 text-sm font-medium mt-4"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Retour à la connexion
-              </Link>
+              </a>
             </div>
           ) : (
             <>
@@ -96,13 +95,13 @@ export function ForgotPasswordPage() {
               </form>
 
               <div className="mt-5 text-center">
-                <Link
-                  to="/"
+                <a
+                  href="/"
                   className="inline-flex items-center gap-1.5 text-ink-300 hover:text-ink-500 text-sm transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   Retour à la connexion
-                </Link>
+                </a>
               </div>
             </>
           )}

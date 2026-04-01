@@ -3,7 +3,6 @@ import { redis } from '../_lib/redis';
 import { hashPassword, comparePassword, signToken, requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { sendPasswordResetEmail } from '../_lib/email';
-import { randomUUID } from 'crypto';
 
 function getPathSegments(req: VercelRequest, base: string): string[] {
   const url = (req.url || '').split('?')[0];
@@ -126,7 +125,7 @@ async function handleForgotPassword(req: VercelRequest, res: VercelResponse) {
   // Always respond with success to avoid revealing if an email is registered
   const userId = await redis.get(`emlb:email:${normalized}`);
   if (userId) {
-    const token = randomUUID();
+    const token = generateId() + generateId();
     await redis.setex(`emlb:reset-token:${token}`, 600, JSON.stringify({ userId, email: normalized }));
 
     const baseUrl = req.headers.origin || 'https://fabula-mea.com';

@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { BookOpen, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PasswordInput } from '@/components/shared/PasswordInput';
 
 export function ResetPasswordPage() {
   const { token } = useParams<{ token: string }>();
-  const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,7 +29,7 @@ export function ResetPasswordPage() {
     try {
       await api.auth.resetPassword(token, password);
       setDone(true);
-      setTimeout(() => navigate('/'), 3000);
+      setTimeout(() => { window.location.href = '/'; }, 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
@@ -61,9 +60,9 @@ export function ResetPasswordPage() {
               <p className="text-ink-300 text-sm">
                 Votre mot de passe a été mis à jour. Vous allez être redirigé vers la connexion…
               </p>
-              <Link to="/" className="btn-primary inline-block mt-2 px-6 py-2.5 text-sm">
+              <a href="/" className="btn-primary inline-block mt-2 px-6 py-2.5 text-sm">
                 Se connecter
-              </Link>
+              </a>
             </div>
           ) : (
             <>
