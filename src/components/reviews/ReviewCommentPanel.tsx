@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { MessageSquare, Send, Trash2, X, Check, ChevronDown, Edit3, CornerDownRight } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo, Fragment } from 'react';
+import { MessageSquare, Send, Trash2, X, Check, Edit3, CornerDownRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReviewComment } from '@/types';
 
@@ -32,6 +32,10 @@ interface Props {
   onClearPendingSelection: () => void;
   /** When true, disables all editing/commenting (completed session) */
   readOnly?: boolean;
+  /** Scene IDs in document order — enables continuous scroll mode (show all comments) */
+  sceneOrder?: string[];
+  /** Map of sceneId → display label for scene separators */
+  sceneLabels?: Record<string, string>;
 }
 
 export function ReviewCommentPanel({
@@ -47,6 +51,8 @@ export function ReviewCommentPanel({
   pendingSelection,
   onClearPendingSelection,
   readOnly,
+  sceneOrder,
+  sceneLabels,
 }: Props) {
   const [newContent, setNewContent] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -55,13 +61,29 @@ export function ReviewCommentPanel({
   const [editContent, setEditContent] = useState('');
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Filter comments for current scene
+  // Filter/sort comments
   const sceneComments = useMemo(() => {
+    if (sceneOrder) {
+      // Continuous scroll mode: show all comments sorted by document order
+      const sceneIndex = new Map(sceneOrder.map((id, i) => [id, i]));
+      return comments
+        .filter((c) => !c.parentId)
+        .sort((a, b) => {
+          const orderA = sceneIndex.get(a.sceneId) ?? 999;
+          const orderB = sceneIndex.get(b.sceneId) ?? 999;
+          if (orderA !== orderB) return orderA - orderB;
+          // Structural comments (startOffset < 0) come first within a scene
+          if (a.startOffset < 0 && b.startOffset >= 0) return -1;
+          if (b.startOffset < 0 && a.startOffset >= 0) return 1;
+          return a.startOffset - b.startOffset;
+        });
+    }
+    // Single scene mode (legacy)
     if (!currentSceneId) return [];
     return comments
       .filter((c) => c.sceneId === currentSceneId && !c.parentId)
       .sort((a, b) => a.startOffset - b.startOffset);
-  }, [comments, currentSceneId]);
+  }, [comments, currentSceneId, sceneOrder]);
 
   const getReplies = (parentId: string) =>
     comments
@@ -89,7 +111,7 @@ export function ReviewCommentPanel({
   };
 
   const handleSubmitReply = (parentId: string) => {
-    if (!replyContent.trim() || !currentSceneId) return;
+    if (!replyContent.trim() || (!currentSceneId && !sceneOrder)) return;
     const parent = comments.find((c) => c.id === parentId);
     if (!parent) return;
     onAddComment({
@@ -116,13 +138,219 @@ export function ReviewCommentPanel({
     setEditContent('');
   };
 
-  const draftCount = comments.filter((c) => c.status === 'draft' && !c.isAuthor).length;
-
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) +
       ' à ' +
       d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const isStructuralComment = (comment: ReviewComment) => comment.startOffset < 0;
+
+  const renderCommentCard = (comment: ReviewComment) => {
+    const replies = getReplies(comment.id);
+    const isActive = activeCommentId === comment.id;
+
+    return (
+      <div
+        key={comment.id}
+        ref={(el) => { commentRefs.current[comment.id] = el; }}
+        className={cn(
+          'rounded-lg border transition-all',
+          isActive
+            ? 'border-bordeaux-300 bg-bordeaux-50/50 shadow-sm'
+            : 'border-parchment-200 bg-white',
+          comment.status === 'closed' && 'opacity-60'
+        )}
+        onMouseEnter={() => onHoverComment(comment.id)}
+        onMouseLeave={() => onHoverComment(null)}
+        onClick={() => onHoverComment(comment.id)}
+      >
+        {/* Main comment */}
+        <div className="p-3">
+          {/* Selected text preview or structural label */}
+          {comment.selectedText && (
+            isStructuralComment(comment) ? (
+              <div className="mb-2 px-2 py-1.5 bg-parchment-100 rounded text-xs text-ink-400 font-medium border-l-2 border-ink-200 flex items-center gap-1.5">
+                <MessageSquare className="w-3 h-3 text-ink-300" />
+                {comment.selectedText}
+              </div>
+            ) : (
+              <div className="mb-2 px-2 py-1.5 bg-parchment-100 rounded text-xs text-ink-300 italic border-l-2 border-bordeaux-300 line-clamp-2">
+                « {comment.selectedText} »
+              </div>
+            )
+          )}
+
+          <div className="flex items-start gap-2">
+            <div className={cn(
+              'w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold',
+              comment.isAuthor ? 'bg-bordeaux-100 text-bordeaux-600' : 'bg-blue-100 text-blue-600'
+            )}>
+              {comment.authorLabel.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-xs font-medium text-ink-400">{comment.authorLabel}</span>
+                <span className="text-[10px] text-ink-200">{formatDate(comment.createdAt)}</span>
+                {comment.status === 'draft' && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-600 rounded-full">Brouillon</span>
+                )}
+                {comment.status === 'closed' && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-600 rounded-full">Résolu</span>
+                )}
+              </div>
+
+              {editingId === comment.id ? (
+                <div className="mt-1">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-parchment-300 rounded resize-none
+                             focus:border-bordeaux-300 focus:ring-1 focus:ring-bordeaux-200 outline-none"
+                    rows={2}
+                    autoFocus
+                  />
+                  <div className="flex gap-1 mt-1">
+                    <button onClick={() => handleSaveEdit(comment.id)} className="text-xs text-bordeaux-500 hover:underline">
+                      Enregistrer
+                    </button>
+                    <button onClick={() => setEditingId(null)} className="text-xs text-ink-200 hover:underline">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-ink-400 whitespace-pre-wrap">{comment.content}</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            {comment.status !== 'closed' && !readOnly && (
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                {/* Author can close */}
+                {isAuthor && comment.status === 'sent' && (
+                  <button
+                    onClick={() => onUpdateComment(comment.id, { status: 'closed' })}
+                    className="p-1 rounded text-green-400 hover:text-green-500 hover:bg-green-50"
+                    title="Résoudre"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {/* Own comments can be edited/deleted */}
+                {((isAuthor && comment.isAuthor) || (!isAuthor && !comment.isAuthor)) && editingId !== comment.id && (
+                  <>
+                    <button
+                      onClick={() => handleEdit(comment)}
+                      className="p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100"
+                      title="Modifier"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onDeleteComment(comment.id)}
+                      className="p-1 rounded text-red-300 hover:text-red-500 hover:bg-red-50"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Replies */}
+        {replies.length > 0 && (
+          <div className="border-t border-parchment-100 px-3 py-2 space-y-2 bg-parchment-50/30">
+            {replies.map((reply) => (
+              <div key={reply.id} className="flex items-start gap-2 pl-2">
+                <CornerDownRight className="w-3 h-3 text-ink-200 mt-1 flex-shrink-0" />
+                <div className={cn(
+                  'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold',
+                  reply.isAuthor ? 'bg-bordeaux-100 text-bordeaux-600' : 'bg-blue-100 text-blue-600'
+                )}>
+                  {reply.authorLabel.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-medium text-ink-400">{reply.authorLabel}</span>
+                    <span className="text-[10px] text-ink-200">{formatDate(reply.createdAt)}</span>
+                  </div>
+                  {editingId === reply.id ? (
+                    <div>
+                      <textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="w-full px-2 py-1 text-xs border border-parchment-300 rounded resize-none
+                                 focus:border-bordeaux-300 outline-none"
+                        rows={2}
+                        autoFocus
+                      />
+                      <div className="flex gap-1 mt-1">
+                        <button onClick={() => handleSaveEdit(reply.id)} className="text-xs text-bordeaux-500 hover:underline">Enregistrer</button>
+                        <button onClick={() => setEditingId(null)} className="text-xs text-ink-200 hover:underline">Annuler</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-ink-400 whitespace-pre-wrap">{reply.content}</p>
+                  )}
+                </div>
+                {!readOnly && ((isAuthor && reply.isAuthor) || (!isAuthor && !reply.isAuthor)) && editingId !== reply.id && (
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <button onClick={() => handleEdit(reply)} className="p-0.5 rounded text-ink-200 hover:text-ink-400">
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => onDeleteComment(reply.id)} className="p-0.5 rounded text-red-300 hover:text-red-500">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Reply input */}
+        {comment.status !== 'closed' && !readOnly && (
+          <div className="border-t border-parchment-100 px-3 py-2">
+            {replyingTo === comment.id ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmitReply(comment.id)}
+                  placeholder="Répondre..."
+                  className="flex-1 px-2 py-1 text-xs border border-parchment-300 rounded
+                           focus:border-bordeaux-300 outline-none"
+                  autoFocus
+                />
+                <button
+                  onClick={() => handleSubmitReply(comment.id)}
+                  disabled={!replyContent.trim()}
+                  className="p-1 rounded text-bordeaux-500 hover:bg-bordeaux-50 disabled:opacity-30"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => { setReplyingTo(null); setReplyContent(''); }} className="p-1 rounded text-ink-200 hover:bg-parchment-100">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setReplyingTo(comment.id)}
+                className="text-xs text-bordeaux-500 hover:underline"
+              >
+                Répondre
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -142,13 +370,11 @@ export function ReviewCommentPanel({
 
       {/* Comments list */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {!currentSceneId ? (
+        {sceneComments.length === 0 && !pendingSelection ? (
           <p className="text-sm text-ink-200 text-center py-8">
-            Sélectionnez une scène pour voir les commentaires.
-          </p>
-        ) : sceneComments.length === 0 && !pendingSelection ? (
-          <p className="text-sm text-ink-200 text-center py-8">
-            Aucun commentaire sur cette scène.
+            {sceneOrder ? 'Aucun commentaire pour le moment.' : (
+              !currentSceneId ? 'Sélectionnez une scène pour voir les commentaires.' : 'Aucun commentaire sur cette scène.'
+            )}
             {!readOnly && (
               <>
                 <br />
@@ -157,211 +383,39 @@ export function ReviewCommentPanel({
             )}
           </p>
         ) : (
-          sceneComments.map((comment) => {
-            const replies = getReplies(comment.id);
-            const isActive = activeCommentId === comment.id;
+          sceneComments.map((comment, index) => {
+            const prevComment = index > 0 ? sceneComments[index - 1] : null;
+            const showSceneLabel = sceneOrder && sceneLabels &&
+              (!prevComment || prevComment.sceneId !== comment.sceneId);
 
             return (
-              <div
-                key={comment.id}
-                ref={(el) => { commentRefs.current[comment.id] = el; }}
-                className={cn(
-                  'rounded-lg border transition-all',
-                  isActive
-                    ? 'border-bordeaux-300 bg-bordeaux-50/50 shadow-sm'
-                    : 'border-parchment-200 bg-white',
-                  comment.status === 'closed' && 'opacity-60'
-                )}
-                onMouseEnter={() => onHoverComment(comment.id)}
-                onMouseLeave={() => onHoverComment(null)}
-              >
-                {/* Main comment */}
-                <div className="p-3">
-                  {/* Selected text preview */}
-                  {comment.selectedText && (
-                    <div className="mb-2 px-2 py-1.5 bg-parchment-100 rounded text-xs text-ink-300 italic border-l-2 border-bordeaux-300 line-clamp-2">
-                      « {comment.selectedText} »
-                    </div>
-                  )}
-
-                  <div className="flex items-start gap-2">
-                    <div className={cn(
-                      'w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold',
-                      comment.isAuthor ? 'bg-bordeaux-100 text-bordeaux-600' : 'bg-blue-100 text-blue-600'
-                    )}>
-                      {comment.authorLabel.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-medium text-ink-400">{comment.authorLabel}</span>
-                        <span className="text-[10px] text-ink-200">{formatDate(comment.createdAt)}</span>
-                        {comment.status === 'draft' && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-600 rounded-full">Brouillon</span>
-                        )}
-                        {comment.status === 'closed' && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-600 rounded-full">Résolu</span>
-                        )}
-                      </div>
-
-                      {editingId === comment.id ? (
-                        <div className="mt-1">
-                          <textarea
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm border border-parchment-300 rounded resize-none
-                                     focus:border-bordeaux-300 focus:ring-1 focus:ring-bordeaux-200 outline-none"
-                            rows={2}
-                            autoFocus
-                          />
-                          <div className="flex gap-1 mt-1">
-                            <button onClick={() => handleSaveEdit(comment.id)} className="text-xs text-bordeaux-500 hover:underline">
-                              Enregistrer
-                            </button>
-                            <button onClick={() => setEditingId(null)} className="text-xs text-ink-200 hover:underline">
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-ink-400 whitespace-pre-wrap">{comment.content}</p>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    {comment.status !== 'closed' && !readOnly && (
-                      <div className="flex items-center gap-0.5 flex-shrink-0">
-                        {/* Author can close */}
-                        {isAuthor && comment.status === 'sent' && (
-                          <button
-                            onClick={() => onUpdateComment(comment.id, { status: 'closed' })}
-                            className="p-1 rounded text-green-400 hover:text-green-500 hover:bg-green-50"
-                            title="Résoudre"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        {/* Own comments can be edited/deleted */}
-                        {((isAuthor && comment.isAuthor) || (!isAuthor && !comment.isAuthor)) && editingId !== comment.id && (
-                          <>
-                            <button
-                              onClick={() => handleEdit(comment)}
-                              className="p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100"
-                              title="Modifier"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => onDeleteComment(comment.id)}
-                              className="p-1 rounded text-red-300 hover:text-red-500 hover:bg-red-50"
-                              title="Supprimer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Replies */}
-                {replies.length > 0 && (
-                  <div className="border-t border-parchment-100 px-3 py-2 space-y-2 bg-parchment-50/30">
-                    {replies.map((reply) => (
-                      <div key={reply.id} className="flex items-start gap-2 pl-2">
-                        <CornerDownRight className="w-3 h-3 text-ink-200 mt-1 flex-shrink-0" />
-                        <div className={cn(
-                          'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold',
-                          reply.isAuthor ? 'bg-bordeaux-100 text-bordeaux-600' : 'bg-blue-100 text-blue-600'
-                        )}>
-                          {reply.authorLabel.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-medium text-ink-400">{reply.authorLabel}</span>
-                            <span className="text-[10px] text-ink-200">{formatDate(reply.createdAt)}</span>
-                          </div>
-                          {editingId === reply.id ? (
-                            <div>
-                              <textarea
-                                value={editContent}
-                                onChange={(e) => setEditContent(e.target.value)}
-                                className="w-full px-2 py-1 text-xs border border-parchment-300 rounded resize-none
-                                         focus:border-bordeaux-300 outline-none"
-                                rows={2}
-                                autoFocus
-                              />
-                              <div className="flex gap-1 mt-1">
-                                <button onClick={() => handleSaveEdit(reply.id)} className="text-xs text-bordeaux-500 hover:underline">Enregistrer</button>
-                                <button onClick={() => setEditingId(null)} className="text-xs text-ink-200 hover:underline">Annuler</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-xs text-ink-400 whitespace-pre-wrap">{reply.content}</p>
-                          )}
-                        </div>
-                        {!readOnly && ((isAuthor && reply.isAuthor) || (!isAuthor && !reply.isAuthor)) && editingId !== reply.id && (
-                          <div className="flex items-center gap-0.5 flex-shrink-0">
-                            <button onClick={() => handleEdit(reply)} className="p-0.5 rounded text-ink-200 hover:text-ink-400">
-                              <Edit3 className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => onDeleteComment(reply.id)} className="p-0.5 rounded text-red-300 hover:text-red-500">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+              <Fragment key={comment.id}>
+                {showSceneLabel && (
+                  <div className={cn('text-[11px] text-ink-300 font-medium px-1 pb-1', index > 0 && 'pt-2 mt-2 border-t border-parchment-200')}>
+                    {sceneLabels[comment.sceneId] || 'Sans titre'}
                   </div>
                 )}
-
-                {/* Reply input */}
-                {comment.status !== 'closed' && !readOnly && (
-                  <div className="border-t border-parchment-100 px-3 py-2">
-                    {replyingTo === comment.id ? (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSubmitReply(comment.id)}
-                          placeholder="Répondre..."
-                          className="flex-1 px-2 py-1 text-xs border border-parchment-300 rounded
-                                   focus:border-bordeaux-300 outline-none"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => handleSubmitReply(comment.id)}
-                          disabled={!replyContent.trim()}
-                          className="p-1 rounded text-bordeaux-500 hover:bg-bordeaux-50 disabled:opacity-30"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => { setReplyingTo(null); setReplyContent(''); }} className="p-1 rounded text-ink-200 hover:bg-parchment-100">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setReplyingTo(comment.id)}
-                        className="text-xs text-bordeaux-500 hover:underline"
-                      >
-                        Répondre
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                {renderCommentCard(comment)}
+              </Fragment>
             );
           })
         )}
 
-        {/* New comment form from text selection */}
+        {/* New comment form from text selection or structural comment */}
         {pendingSelection && !readOnly && (
           <div className="rounded-lg border border-bordeaux-300 bg-bordeaux-50/30 p-3">
-            <div className="mb-2 px-2 py-1.5 bg-parchment-100 rounded text-xs text-ink-300 italic border-l-2 border-bordeaux-300 line-clamp-2">
-              « {pendingSelection.text} »
-            </div>
+            {pendingSelection.text && (
+              pendingSelection.startOffset < 0 ? (
+                <div className="mb-2 px-2 py-1.5 bg-parchment-100 rounded text-xs text-ink-400 font-medium border-l-2 border-ink-200 flex items-center gap-1.5">
+                  <MessageSquare className="w-3 h-3 text-ink-300" />
+                  {pendingSelection.text}
+                </div>
+              ) : (
+                <div className="mb-2 px-2 py-1.5 bg-parchment-100 rounded text-xs text-ink-300 italic border-l-2 border-bordeaux-300 line-clamp-2">
+                  « {pendingSelection.text} »
+                </div>
+              )
+            )}
             <textarea
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}

@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { Feather, BookOpen, BookText, ChevronDown, ChevronRight, ChevronLeft, Clock, PlayCircle, CheckCircle2, Lock, PanelLeft, MessageSquare, X, Menu, Archive, Send, Image } from 'lucide-react';
+import { BookText, ChevronDown, ChevronRight, ChevronLeft, Clock, PlayCircle, CheckCircle2, Lock, PanelLeft, MessageSquare, MessageSquarePlus, X, Menu, Archive, Send, Image } from 'lucide-react';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ReviewCommentPanel } from '@/components/reviews/ReviewCommentPanel';
 import { ReviewContentViewer } from '@/components/reviews/ReviewContentViewer';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { cn, isSpecialChapter, getChapterShortLabel } from '@/lib/utils';
+import { cn, isSpecialChapter, getChapterShortLabel, getChapterLabel } from '@/lib/utils';
 import type { ReviewSnapshotScene } from '@/types';
 
 const STATUS_CONFIG = {
@@ -53,6 +53,8 @@ export function ReviewAuthorView() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (id) loadSession(id);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,11 +62,35 @@ export function ReviewAuthorView() {
   useEffect(() => {
     if (currentSession?.snapshot.chapters) {
       setExpandedChapters(new Set(currentSession.snapshot.chapters.map((c) => c.id)));
-      if (currentSession.snapshot.scenes.length > 0 && !activeSceneId) {
-        setActiveSceneId(currentSession.snapshot.scenes[0].id);
-      }
     }
   }, [currentSession]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // IntersectionObserver to track which section is in view
+  useEffect(() => {
+    if (!scrollContainerRef.current || !currentSession) return;
+    const container = scrollContainerRef.current;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const sectionId = entry.target.getAttribute('data-section-id');
+            if (sectionId) setActiveSceneId(sectionId);
+          }
+        }
+      },
+      { root: container, rootMargin: '-20% 0px -60% 0px', threshold: 0 }
+    );
+
+    const timer = setTimeout(() => {
+      container.querySelectorAll('[data-section-id]').forEach((el) => observer.observe(el));
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [currentSession]);
 
   const handleAddComment = useCallback(async (data: {
     sceneId: string;
@@ -100,20 +126,54 @@ export function ReviewAuthorView() {
     await deleteComment(id, commentId);
   }, [id, deleteComment]);
 
-  const handleSceneSelect = useCallback((sceneId: string) => {
-    setActiveSceneId(sceneId);
+  const handleNavClick = useCallback((sectionId: string) => {
+    setActiveSceneId(sectionId);
+    const el = scrollContainerRef.current?.querySelector(`[data-section-id="${sectionId}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setMobileNavOpen(false);
   }, []);
 
   const handleCommentClick = useCallback((commentId: string | null) => {
     setActiveCommentId(commentId);
     if (commentId) {
-      setTimeout(() => {
-        const mark = document.querySelector(`mark[data-comment-id="${commentId}"]`);
-        if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 50);
+      const comment = currentComments.find((c) => c.id === commentId);
+      if (comment && comment.startOffset === -2) {
+        // Chapter-level comment: find the chapter containing this scene and scroll to it
+        const chapter = currentSession?.snapshot.chapters.find((ch) => ch.sceneIds.includes(comment.sceneId));
+        if (chapter) {
+          const el = scrollContainerRef.current?.querySelector(`[data-chapter-id="${chapter.id}"]`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } else if (comment && comment.startOffset === -1) {
+        // Scene-level comment: scroll to the scene
+        const el = scrollContainerRef.current?.querySelector(`[data-section-id="${comment.sceneId}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        setTimeout(() => {
+          const mark = document.querySelector(`mark[data-comment-id="${commentId}"]`);
+          if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
+      }
     }
-  }, []);
+  }, [currentComments, currentSession]);
+
+  const handleStructuralComment = useCallback((type: 'chapter' | 'scene', targetId: string, label: string) => {
+    let sceneId: string;
+    if (type === 'chapter') {
+      const chapter = currentSession?.snapshot.chapters.find((ch) => ch.id === targetId);
+      if (!chapter || chapter.sceneIds.length === 0) return;
+      sceneId = chapter.sceneIds[0];
+    } else {
+      sceneId = targetId;
+    }
+    setPendingSelection({
+      sceneId,
+      text: label,
+      startOffset: type === 'chapter' ? -2 : -1,
+      endOffset: type === 'chapter' ? -2 : -1,
+    });
+    if (window.innerWidth < 1024) setMobileCommentsOpen(true);
+  }, [currentSession]);
 
   const handleCloseSession = async () => {
     if (!id) return;
@@ -158,6 +218,25 @@ export function ReviewAuthorView() {
     }
   }, [authorDraftCount]);
 
+  // Compute scene order and labels for continuous scroll comment panel
+  const { sceneOrder, sceneLabels } = useMemo(() => {
+    if (!currentSession) return { sceneOrder: [], sceneLabels: {} };
+    const order: string[] = [];
+    const labels: Record<string, string> = {};
+    const sortedCh = [...currentSession.snapshot.chapters].sort((a, b) => a.number - b.number);
+    for (const chapter of sortedCh) {
+      const chapterScenes = chapter.sceneIds
+        .map((sid) => currentSession.snapshot.scenes.find((s) => s.id === sid))
+        .filter(Boolean) as ReviewSnapshotScene[];
+      for (const scene of chapterScenes) {
+        order.push(scene.id);
+        const chLabel = isSpecialChapter(chapter) ? getChapterShortLabel(chapter) : getChapterLabel(chapter);
+        labels[scene.id] = scene.title ? `${chLabel} — ${scene.title}` : chLabel;
+      }
+    }
+    return { sceneOrder: order, sceneLabels: labels };
+  }, [currentSession]);
+
   if (isLoading || !currentSession) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -167,7 +246,6 @@ export function ReviewAuthorView() {
   }
 
   const sortedChapters = [...currentSession.snapshot.chapters].sort((a, b) => a.number - b.number);
-  const activeScene = activeSceneId && !activeSceneId.startsWith('__') ? (currentSession.snapshot.scenes.find((s) => s.id === activeSceneId) || null) : null;
   const hasGlossary = (currentSession.snapshot.glossary?.length ?? 0) > 0;
   const hasCoverOrTitle = !!(currentSession.snapshot.layout?.coverFront || currentSession.bookTitle);
   const hasBackCover = !!currentSession.snapshot.layout?.coverBack;
@@ -219,7 +297,7 @@ export function ReviewAuthorView() {
         {hasCoverOrTitle && (
           <>
             <button
-              onClick={() => { setActiveSceneId('__titlepage__'); setMobileNavOpen(false); }}
+              onClick={() => handleNavClick('__titlepage__')}
               className={cn(
                 'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded transition-colors',
                 activeSceneId === '__titlepage__' ? 'bg-bordeaux-100 text-bordeaux-600 font-medium' : 'text-ink-300 hover:bg-parchment-100'
@@ -257,7 +335,7 @@ export function ReviewAuthorView() {
                     return (
                       <button
                         key={scene.id}
-                        onClick={() => handleSceneSelect(scene.id)}
+                        onClick={() => handleNavClick(scene.id)}
                         className={cn(
                           'w-full text-left px-2 py-1 text-xs rounded truncate transition-colors flex items-center gap-1',
                           activeSceneId === scene.id ? 'bg-bordeaux-100 text-bordeaux-600 font-medium' : 'text-ink-300 hover:bg-parchment-100'
@@ -279,7 +357,7 @@ export function ReviewAuthorView() {
           <>
             <div className="border-t border-parchment-200 my-2" />
             <button
-              onClick={() => { setActiveSceneId('__glossary__'); setMobileNavOpen(false); }}
+              onClick={() => handleNavClick('__glossary__')}
               className={cn(
                 'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded transition-colors',
                 activeSceneId === '__glossary__' ? 'bg-bordeaux-100 text-bordeaux-600 font-medium' : 'text-ink-300 hover:bg-parchment-100'
@@ -297,7 +375,7 @@ export function ReviewAuthorView() {
           <>
             <div className="border-t border-parchment-200 my-2" />
             <button
-              onClick={() => { setActiveSceneId('__backcover__'); setMobileNavOpen(false); }}
+              onClick={() => handleNavClick('__backcover__')}
               className={cn(
                 'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded transition-colors',
                 activeSceneId === '__backcover__' ? 'bg-bordeaux-100 text-bordeaux-600 font-medium' : 'text-ink-300 hover:bg-parchment-100'
@@ -392,26 +470,91 @@ export function ReviewAuthorView() {
           {navContent}
         </div>
 
-        {/* Center panel: Content viewer */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-            {activeSceneId === '__titlepage__' && hasCoverOrTitle ? (
-              <div className="text-center py-8 space-y-6">
+        {/* Center panel: Content — continuous scroll */}
+        <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-32">
+            {/* Title page */}
+            {hasCoverOrTitle && (
+              <div data-section-id="__titlepage__" className="mb-16 text-center">
                 {currentSession.snapshot.layout?.coverFront && (
-                  <img src={currentSession.snapshot.layout.coverFront} alt="1ère de couverture" className="max-h-80 mx-auto rounded-lg shadow-sm" />
+                  <img src={currentSession.snapshot.layout.coverFront} alt="1ère de couverture" className="max-h-80 mx-auto rounded-lg shadow-sm mb-8" />
                 )}
-                <div>
-                  <h1 className="font-display text-3xl font-bold text-ink-500">{currentSession.bookTitle}</h1>
-                  {currentSession.snapshot.bookAuthor && <p className="text-lg text-ink-300 mt-2">{currentSession.snapshot.bookAuthor}</p>}
+                <h1 className="font-display text-3xl font-bold text-ink-500">{currentSession.bookTitle}</h1>
+                {currentSession.snapshot.bookAuthor && <p className="text-lg text-ink-300 mt-2">{currentSession.snapshot.bookAuthor}</p>}
+                <div className="border-b border-parchment-300 mt-12" />
+              </div>
+            )}
+
+            {/* Chapters & scenes */}
+            {sortedChapters.map((chapter) => {
+              const chapterScenes = chapter.sceneIds
+                .map((sid) => currentSession.snapshot.scenes.find((s) => s.id === sid))
+                .filter(Boolean) as ReviewSnapshotScene[];
+              const isSpecial = isSpecialChapter(chapter);
+              if (isSpecial && chapterScenes.length === 0) return null;
+
+              return (
+                <div key={chapter.id} data-chapter-id={chapter.id} className="mb-12">
+                  {/* Chapter heading */}
+                  {!isSpecial && (
+                    <div className="flex items-center gap-3 mb-8">
+                      <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: chapter.color }} />
+                      <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">
+                        {getChapterLabel(chapter)}
+                      </h2>
+                      {!isClosed && (
+                        <button
+                          onClick={() => handleStructuralComment('chapter', chapter.id, getChapterLabel(chapter))}
+                          className="p-1 rounded text-ink-200 hover:text-bordeaux-500 hover:bg-bordeaux-50 transition-colors"
+                          title="Commenter ce chapitre"
+                        >
+                          <MessageSquarePlus className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Scenes */}
+                  {chapterScenes.map((scene, idx) => (
+                    <div
+                      key={scene.id}
+                      data-section-id={scene.id}
+                      className={cn('mb-16', idx > 0 && 'border-t border-parchment-200 pt-12')}
+                    >
+                      {/* Scene title with comment icon */}
+                      {scene.title && (
+                        <div className="flex items-center gap-2 mb-3">
+                          <h3 className="font-display text-lg font-bold text-ink-500">{scene.title}</h3>
+                          {!isClosed && (
+                            <button
+                              onClick={() => handleStructuralComment('scene', scene.id, scene.title || 'Scène sans titre')}
+                              className="p-1 rounded text-ink-200 hover:text-bordeaux-500 hover:bg-bordeaux-50 transition-colors"
+                              title="Commenter cette scène"
+                            >
+                              <MessageSquarePlus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      <ReviewContentViewer
+                        scene={scene}
+                        comments={currentComments}
+                        activeCommentId={activeCommentId}
+                        onHoverComment={handleCommentClick}
+                        onSelectText={isClosed ? undefined : (data) => setPendingSelection(data)}
+                        layout={currentSession.snapshot.layout}
+                        hideTitle
+                      />
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ) : activeSceneId === '__backcover__' && hasBackCover ? (
-              <div className="text-center py-8">
-                <img src={currentSession.snapshot.layout!.coverBack!} alt="4ème de couverture" className="max-h-96 mx-auto rounded-lg shadow-sm" />
-                <p className="text-sm text-ink-200 mt-4">4ème de couverture</p>
-              </div>
-            ) : activeSceneId === '__glossary__' && hasGlossary ? (
-              <div>
+              );
+            })}
+
+            {/* Glossary */}
+            {hasGlossary && (
+              <div data-section-id="__glossary__" className="border-t-2 border-parchment-300 pt-12 mb-12">
                 <h1 className="font-display text-2xl font-bold text-ink-500 mb-6">Glossaire</h1>
                 <div className="space-y-4">
                   {currentSession.snapshot.glossary!.map((entry) => (
@@ -424,19 +567,13 @@ export function ReviewAuthorView() {
                   ))}
                 </div>
               </div>
-            ) : activeScene ? (
-              <ReviewContentViewer
-                scene={activeScene}
-                comments={currentComments}
-                activeCommentId={activeCommentId}
-                onHoverComment={handleCommentClick}
-                onSelectText={isClosed ? undefined : (data) => setPendingSelection(data)}
-                layout={currentSession.snapshot.layout}
-              />
-            ) : (
-              <div className="text-center py-20">
-                <BookOpen className="w-12 h-12 text-ink-200 mx-auto mb-4" />
-                <p className="text-ink-300">Sélectionnez une scène dans le plan.</p>
+            )}
+
+            {/* Back cover */}
+            {hasBackCover && (
+              <div data-section-id="__backcover__" className="border-t-2 border-parchment-300 pt-12 text-center">
+                <img src={currentSession.snapshot.layout!.coverBack!} alt="4ème de couverture" className="max-h-96 mx-auto rounded-lg shadow-sm" />
+                <p className="text-sm text-ink-200 mt-4">4ème de couverture</p>
               </div>
             )}
           </div>
@@ -459,6 +596,8 @@ export function ReviewAuthorView() {
               isAuthor={true}
               pendingSelection={pendingSelection}
               onClearPendingSelection={() => setPendingSelection(null)}
+              sceneOrder={sceneOrder}
+              sceneLabels={sceneLabels}
             />
           </div>
         </div>
@@ -482,6 +621,8 @@ export function ReviewAuthorView() {
               isAuthor={true}
               pendingSelection={pendingSelection}
               onClearPendingSelection={() => setPendingSelection(null)}
+              sceneOrder={sceneOrder}
+              sceneLabels={sceneLabels}
             />
           </div>
         </div>

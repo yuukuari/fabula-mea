@@ -13,9 +13,11 @@ interface Props {
   /** If undefined, text selection for commenting is disabled (readOnly mode) */
   onSelectText?: (data: { sceneId: string; text: string; startOffset: number; endOffset: number }) => void;
   layout?: BookLayout;
+  /** When true, the component does not render the scene title (parent handles it) */
+  hideTitle?: boolean;
 }
 
-export function ReviewContentViewer({ scene, comments, activeCommentId, onHoverComment, onSelectText, layout }: Props) {
+export function ReviewContentViewer({ scene, comments, activeCommentId, onHoverComment, onSelectText, layout, hideTitle }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -109,7 +111,7 @@ export function ReviewContentViewer({ scene, comments, activeCommentId, onHoverC
   return (
     <div className="relative">
       {/* Scene title */}
-      {scene.title && (
+      {!hideTitle && scene.title && (
         <h3 className="font-display text-lg font-bold text-ink-500 mb-3">{scene.title}</h3>
       )}
 
