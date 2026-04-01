@@ -487,36 +487,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
   const pathSegments = getPathSegments(req, '/api/reviews');
-  const route = pathSegments[0] ?? '';
+  const id = pathSegments[0] ?? '';
+  // Query params used for sub-actions (Vercel only routes 1 path segment)
+  const reader = req.query.reader as string | undefined;
+  const action = req.query.action as string | undefined;
+  const cid = req.query.cid as string | undefined;
 
-  // ── Reader routes (NO AUTH) — flat: /api/reviews/reader-xxx/:token ──
+  // ── Reader routes: /api/reviews/TOKEN?reader=... (NO AUTH) ──
+  if (reader !== undefined) {
+    if (!id) return res.status(400).json({ error: 'Token requis' });
 
-  // GET /api/reviews/reader/:token
-  if (route === 'reader' && pathSegments.length === 2) {
-    return handleReaderGetSession(req, res, pathSegments[1]);
-  }
-  // POST /api/reviews/reader-start/:token
-  if (route === 'reader-start' && pathSegments.length === 2) {
-    return handleReaderStart(req, res, pathSegments[1]);
-  }
-  // POST /api/reviews/reader-complete/:token
-  if (route === 'reader-complete' && pathSegments.length === 2) {
-    return handleReaderComplete(req, res, pathSegments[1]);
-  }
-  // POST /api/reviews/reader-send/:token
-  if (route === 'reader-send' && pathSegments.length === 2) {
-    return handleReaderSend(req, res, pathSegments[1]);
-  }
-  // GET|POST /api/reviews/reader-comments/:token
-  if (route === 'reader-comments' && pathSegments.length === 2) {
-    return handleReaderComments(req, res, pathSegments[1]);
-  }
-  // PATCH|DELETE /api/reviews/reader-comment/:token/:commentId
-  if (route === 'reader-comment' && pathSegments.length === 3) {
-    return handleReaderCommentById(req, res, pathSegments[1], pathSegments[2]);
+    // GET /api/reviews/TOKEN?reader           → get session
+    if (!reader || reader === '1') return handleReaderGetSession(req, res, id);
+    // POST /api/reviews/TOKEN?reader=start    → start session
+    if (reader === 'start') return handleReaderStart(req, res, id);
+    // POST /api/reviews/TOKEN?reader=complete → complete session
+    if (reader === 'complete') return handleReaderComplete(req, res, id);
+    // POST /api/reviews/TOKEN?reader=send     → send drafts
+    if (reader === 'send') return handleReaderSend(req, res, id);
+    // GET|POST /api/reviews/TOKEN?reader=comments         → list/add comments
+    // PATCH|DELETE /api/reviews/TOKEN?reader=comments&cid= → update/delete comment
+    if (reader === 'comments') {
+      if (cid) return handleReaderCommentById(req, res, id, cid);
+      return handleReaderComments(req, res, id);
+    }
+
+    return res.status(404).json({ error: 'Route introuvable' });
   }
 
-  // ── Author routes (AUTH REQUIRED) ──
+  // ── Author routes: /api/reviews/... (AUTH REQUIRED) ──
   const auth = requireAuth(req, res);
   if (!auth) return;
 
@@ -525,26 +524,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return handleIndex(req, res, auth);
   }
 
-  const id = pathSegments[0];
-
-  // GET|PATCH|DELETE /api/reviews/:id
+  // Routes on /api/reviews/:id
   if (pathSegments.length === 1) {
+    // POST /api/reviews/ID?action=comment         → add author comment
+    // PATCH|DELETE /api/reviews/ID?action=comment&cid= → update/delete
+    if (action === 'comment') {
+      if (cid) return handleAuthorCommentById(req, res, auth, id, cid);
+      return handleAuthorComments(req, res, auth, id);
+    }
+    // POST /api/reviews/ID?action=send → send author replies
+    if (action === 'send') return handleAuthorSend(req, res, auth, id);
+
+    // GET|PATCH|DELETE /api/reviews/ID → get/close/delete session
     return handleById(req, res, auth, id);
-  }
-
-  const action = pathSegments[1];
-
-  // POST /api/reviews/:id/comments
-  if (action === 'comments' && pathSegments.length === 2) {
-    return handleAuthorComments(req, res, auth, id);
-  }
-  // PATCH|DELETE /api/reviews/:id/comments/:commentId
-  if (action === 'comments' && pathSegments.length === 3) {
-    return handleAuthorCommentById(req, res, auth, id, pathSegments[2]);
-  }
-  // POST /api/reviews/:id/send
-  if (action === 'send' && pathSegments.length === 2) {
-    return handleAuthorSend(req, res, auth, id);
   }
 
   return res.status(404).json({ error: 'Route introuvable' });

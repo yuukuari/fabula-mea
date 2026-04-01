@@ -311,34 +311,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!auth) return;
 
   const pathSegments = getPathSegments(req, '/api/tickets');
+  // Query params for sub-actions (Vercel only routes 1 path segment)
+  const action = req.query.action as string | undefined;
+  const cid = req.query.cid as string | undefined;
 
-  // /api/tickets
+  // GET|POST /api/tickets
   if (pathSegments.length === 0) {
     return handleIndex(req, res, auth);
   }
 
   const id = pathSegments[0];
 
-  // /api/tickets/:id
   if (pathSegments.length === 1) {
+    // POST /api/tickets/ID?action=comment           → add comment
+    // PATCH|DELETE /api/tickets/ID?action=comment&cid= → update/delete comment
+    if (action === 'comment') {
+      if (cid) return handleCommentById(req, res, auth, id, cid);
+      return handleComments(req, res, auth, id);
+    }
+    // POST /api/tickets/ID?action=reaction&cid=     → toggle reaction
+    if (action === 'reaction' && cid) {
+      return handleReaction(req, res, auth, id, cid);
+    }
+
+    // GET|PATCH|DELETE /api/tickets/ID
     return handleById(req, res, auth, id);
-  }
-
-  const action = pathSegments[1];
-
-  // /api/tickets/:id/comments
-  if (action === 'comments' && pathSegments.length === 2) {
-    return handleComments(req, res, auth, id);
-  }
-
-  // /api/tickets/:id/comments/:commentId
-  if (action === 'comments' && pathSegments.length === 3) {
-    return handleCommentById(req, res, auth, id, pathSegments[2]);
-  }
-
-  // /api/tickets/:id/comments/:commentId/reaction
-  if (action === 'comments' && pathSegments.length === 4 && pathSegments[3] === 'reaction') {
-    return handleReaction(req, res, auth, id, pathSegments[2]);
   }
 
   return res.status(404).json({ error: 'Route introuvable' });
