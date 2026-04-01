@@ -168,16 +168,18 @@ sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → re
 
 ### Reviews — Côté relecteur (accès par token, pas d'auth)
 
+Les routes relecteur sont dans le **même fichier** que les routes auteur (`api/reviews/[[...path]].ts`), sous le préfixe `/api/reviews/reader/`. Elles ne nécessitent pas d'authentification.
+
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| GET | `/api/review/{token}` | Non | Récupère la session publique (snapshot + infos) |
-| POST | `/api/review/{token}/start` | Non | Démarre la session (renseigne le nom) |
-| POST | `/api/review/{token}/complete` | Non | Marque la session comme terminée |
-| GET | `/api/review/{token}/comments` | Non | Liste les commentaires |
-| POST | `/api/review/{token}/comments` | Non | Ajoute un commentaire relecteur |
-| PATCH | `/api/review/{token}/comments/{cid}` | Non | Modifie un commentaire |
-| DELETE | `/api/review/{token}/comments/{cid}` | Non | Supprime un commentaire |
-| POST | `/api/review/{token}/send` | Non | Envoie les brouillons (draft → sent) + email auteur |
+| GET | `/api/reviews/reader/{token}` | Non | Récupère la session publique (snapshot + infos) |
+| POST | `/api/reviews/reader/{token}/start` | Non | Démarre la session (renseigne le nom) |
+| POST | `/api/reviews/reader/{token}/complete` | Non | Marque la session comme terminée |
+| GET | `/api/reviews/reader/{token}/comments` | Non | Liste les commentaires |
+| POST | `/api/reviews/reader/{token}/comments` | Non | Ajoute un commentaire relecteur |
+| PATCH | `/api/reviews/reader/{token}/comments/{cid}` | Non | Modifie un commentaire |
+| DELETE | `/api/reviews/reader/{token}/comments/{cid}` | Non | Supprime un commentaire |
+| POST | `/api/reviews/reader/{token}/send` | Non | Envoie les brouillons (draft → sent) + email auteur |
 
 ### Admin
 
@@ -195,29 +197,38 @@ sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → re
 
 ## Architecture : Catch-all routes
 
-Pour respecter la **limite de 12 serverless functions** du plan Hobby Vercel, les endpoints sont regroupés par domaine via des **catch-all routes** (`[[...path]].ts`). Chaque fichier catch-all route en interne selon les segments d'URL via `req.query.path` (array de strings).
+Pour respecter la **limite de 12 serverless functions** du plan Hobby Vercel, les endpoints sont regroupés par domaine via des **catch-all routes** (`[[...path]].ts`). Chaque fichier catch-all route en interne selon les segments d'URL via parsing de `req.url`.
 
-### Fichiers actuels (9 fonctions)
+### Fichiers actuels (8 fonctions)
 
 ```
 api/library.ts                → /api/library
 api/migrate.ts                → /api/migrate
 api/admin/members.ts          → /api/admin/members
 api/book/[bookId].ts          → /api/book/{bookId}
-api/auth/[[...path]].ts       → /api/auth/login, /api/auth/signup, /api/auth/me
+api/auth/[[...path]].ts       → /api/auth/login, /api/auth/signup, /api/auth/me, /api/auth/forgot-password, /api/auth/reset-password
 api/releases/[[...path]].ts   → /api/releases, /api/releases/{id}
-api/review/[[...path]].ts     → /api/review/{token}, /api/review/{token}/start, etc.
-api/reviews/[[...path]].ts    → /api/reviews, /api/reviews/{id}, /api/reviews/{id}/comments, etc.
+api/reviews/[[...path]].ts    → /api/reviews (auteur) + /api/reviews/reader/{token} (relecteur)
 api/tickets/[[...path]].ts    → /api/tickets, /api/tickets/{id}, /api/tickets/{id}/comments, etc.
 ```
+
+> **Note** : les routes relecteur (`/api/reviews/reader/...`) et auteur (`/api/reviews/...`) sont dans le même fichier. Les routes `reader/` ne passent pas par `requireAuth` — le routeur vérifie `pathSegments[0] === 'reader'` avant d'appeler `requireAuth`.
 
 ### Comment fonctionne le routing interne
 
 ```typescript
+function getPathSegments(req: VercelRequest, base: string): string[] {
+  const url = (req.url || '').split('?')[0];
+  const after = url.startsWith(base) ? url.slice(base.length) : '';
+  const segments = after.split('/').filter(Boolean);
+  if (segments.length === 1 && segments[0] === '__index') return [];
+  return segments;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
-  const pathSegments = (req.query.path as string[] | undefined) ?? [];
+  const pathSegments = getPathSegments(req, '/api/tickets');
   // /api/tickets         → pathSegments = []
   // /api/tickets/123     → pathSegments = ['123']
   // /api/tickets/123/comments → pathSegments = ['123', 'comments']

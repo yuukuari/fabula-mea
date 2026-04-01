@@ -155,13 +155,12 @@ Choisir le layout adapté :
 │   ├── CLAUDE.md                ← Doc spécifique API
 │   ├── package.json             ← { "type": "commonjs" }
 │   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis, email)
-│   ├── auth/[[...path]].ts      ← signup, login, me (catch-all)
+│   ├── auth/[[...path]].ts      ← signup, login, me, forgot-password, reset-password (catch-all)
 │   ├── book/[bookId].ts         ← CRUD livre par utilisateur
 │   ├── tickets/[[...path]].ts   ← CRUD tickets + commentaires + réactions (catch-all)
 │   ├── releases/[[...path]].ts  ← CRUD releases (catch-all)
 │   ├── admin/members.ts         ← Endpoints admin (membres)
-│   ├── review/[[...path]].ts    ← Endpoints lecteur token (catch-all, pas d'auth)
-│   ├── reviews/[[...path]].ts   ← Endpoints auteur sessions + commentaires (catch-all)
+│   ├── reviews/[[...path]].ts   ← Auteur + relecteur (reader/) dans un seul catch-all
 │   ├── library.ts               ← GET/POST bibliothèque utilisateur
 │   └── migrate.ts               ← Migration de données
 │

@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { redis } from '../_lib/redis';
 import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
-import { sendReviewInviteEmail, sendAuthorRepliedEmail } from '../_lib/email';
+import { sendReviewInviteEmail, sendAuthorRepliedEmail, sendCommentsNotificationEmail, sendReviewCompletedEmail } from '../_lib/email';
 
 function getPathSegments(req: VercelRequest, base: string): string[] {
   const url = (req.url || '').split('?')[0];
@@ -45,7 +45,9 @@ async function getUser(userId: string): Promise<User | null> {
   return json ? JSON.parse(json) : null;
 }
 
-// --- Handlers ---
+// ============================================================
+// AUTHOR HANDLERS (require auth)
+// ============================================================
 
 /** GET/POST /api/reviews */
 async function handleIndex(req: VercelRequest, res: VercelResponse, auth: { userId: string }) {
@@ -126,7 +128,7 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
     const session = JSON.parse(sessionJson);
 
     if (session.userId !== auth.userId) {
-      return res.status(403).json({ error: 'Accès refusé' });
+      return res.status(403).json({ error: 'Acces refuse' });
     }
 
     const commentsJson = await redis.get(`emlb:review:${id}:comments`);
@@ -143,7 +145,7 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
     const session = JSON.parse(sessionJson);
 
     if (session.userId !== auth.userId) {
-      return res.status(403).json({ error: 'Accès refusé' });
+      return res.status(403).json({ error: 'Acces refuse' });
     }
 
     const { status } = req.body;
@@ -164,7 +166,7 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
     const session = JSON.parse(sessionJson);
 
     if (session.userId !== auth.userId) {
-      return res.status(403).json({ error: 'Accès refusé' });
+      return res.status(403).json({ error: 'Acces refuse' });
     }
 
     await redis.del(`emlb:review:${id}`);
@@ -181,14 +183,14 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
   return res.status(405).end();
 }
 
-/** POST /api/reviews/:id/comments */
-async function handleComments(req: VercelRequest, res: VercelResponse, auth: { userId: string }, id: string) {
+/** POST /api/reviews/:id/comments (author) */
+async function handleAuthorComments(req: VercelRequest, res: VercelResponse, auth: { userId: string }, id: string) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const sessionJson = await redis.get(`emlb:review:${id}`);
   if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
   const session = JSON.parse(sessionJson);
-  if (session.userId !== auth.userId) return res.status(403).json({ error: 'Accès refusé' });
+  if (session.userId !== auth.userId) return res.status(403).json({ error: 'Acces refuse' });
 
   const body = req.body;
   const commentsJson = await redis.get(`emlb:review:${id}:comments`);
@@ -220,12 +222,12 @@ async function handleComments(req: VercelRequest, res: VercelResponse, auth: { u
   return res.json({ comment: newComment });
 }
 
-/** PATCH/DELETE /api/reviews/:id/comments/:commentId */
-async function handleCommentById(req: VercelRequest, res: VercelResponse, auth: { userId: string }, id: string, commentId: string) {
+/** PATCH/DELETE /api/reviews/:id/comments/:commentId (author) */
+async function handleAuthorCommentById(req: VercelRequest, res: VercelResponse, auth: { userId: string }, id: string, commentId: string) {
   const sessionJson = await redis.get(`emlb:review:${id}`);
   if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
   const session = JSON.parse(sessionJson);
-  if (session.userId !== auth.userId) return res.status(403).json({ error: 'Accès refusé' });
+  if (session.userId !== auth.userId) return res.status(403).json({ error: 'Acces refuse' });
 
   const commentsJson = await redis.get(`emlb:review:${id}:comments`);
   const comments: ReviewComment[] = commentsJson ? JSON.parse(commentsJson) : [];
@@ -257,8 +259,8 @@ async function handleCommentById(req: VercelRequest, res: VercelResponse, auth: 
   return res.status(405).end();
 }
 
-/** POST /api/reviews/:id/send */
-async function handleSend(req: VercelRequest, res: VercelResponse, auth: { userId: string }, id: string) {
+/** POST /api/reviews/:id/send (author) */
+async function handleAuthorSend(req: VercelRequest, res: VercelResponse, auth: { userId: string }, id: string) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const sessionJson = await redis.get(`emlb:review:${id}`);
@@ -266,7 +268,7 @@ async function handleSend(req: VercelRequest, res: VercelResponse, auth: { userI
   const session = JSON.parse(sessionJson);
 
   if (session.userId !== auth.userId) {
-    return res.status(403).json({ error: 'Accès refusé' });
+    return res.status(403).json({ error: 'Acces refuse' });
   }
 
   const commentsJson = await redis.get(`emlb:review:${id}:comments`);
@@ -297,15 +299,219 @@ async function handleSend(req: VercelRequest, res: VercelResponse, auth: { userI
   return res.json({ sent });
 }
 
-// --- Router ---
+// ============================================================
+// READER HANDLERS (no auth — accessed by token)
+// ============================================================
+
+/** GET /api/reviews/reader/:token */
+async function handleReaderGetSession(req: VercelRequest, res: VercelResponse, token: string) {
+  if (req.method !== 'GET') return res.status(405).end();
+
+  const sessionJson = await redis.get(`emlb:review:token:${token}`);
+  if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
+  const session = JSON.parse(sessionJson);
+  return res.json({ session });
+}
+
+/** POST /api/reviews/reader/:token/start */
+async function handleReaderStart(req: VercelRequest, res: VercelResponse, token: string) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const sessionJson = await redis.get(`emlb:review:token:${token}`);
+  if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
+  const session = JSON.parse(sessionJson);
+
+  const { readerName } = (req.body || {}) as { readerName?: string };
+  if (!readerName) return res.status(400).json({ error: 'Nom du relecteur requis' });
+
+  session.readerName = readerName;
+  session.status = 'in_progress';
+  session.startedAt = new Date().toISOString();
+
+  await redis.set(`emlb:review:token:${token}`, JSON.stringify(session));
+  await redis.set(`emlb:review:${session.id}`, JSON.stringify(session));
+
+  return res.json({ session });
+}
+
+/** POST /api/reviews/reader/:token/complete */
+async function handleReaderComplete(req: VercelRequest, res: VercelResponse, token: string) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const sessionJson = await redis.get(`emlb:review:token:${token}`);
+  if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
+  const session = JSON.parse(sessionJson);
+
+  session.status = 'completed';
+  session.completedAt = new Date().toISOString();
+
+  await redis.set(`emlb:review:token:${token}`, JSON.stringify(session));
+  await redis.set(`emlb:review:${session.id}`, JSON.stringify(session));
+
+  if (session.authorEmail) {
+    const baseUrl = req.headers.origin || 'https://fabula-mea.com';
+    await sendReviewCompletedEmail({
+      to: session.authorEmail,
+      readerName: session.readerName || 'Un relecteur',
+      bookTitle: session.bookTitle,
+      reviewUrl: `${baseUrl}/reviews/${session.id}`,
+    });
+  }
+
+  return res.json({ session });
+}
+
+/** POST /api/reviews/reader/:token/send */
+async function handleReaderSend(req: VercelRequest, res: VercelResponse, token: string) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const sessionJson = await redis.get(`emlb:review:token:${token}`);
+  if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
+  const session = JSON.parse(sessionJson);
+
+  const commentsJson = await redis.get(`emlb:review:${session.id}:comments`);
+  const comments: ReviewComment[] = commentsJson ? JSON.parse(commentsJson) : [];
+
+  let sent = 0;
+  for (let i = 0; i < comments.length; i++) {
+    if (comments[i].status === 'draft') {
+      comments[i].status = 'sent';
+      comments[i].updatedAt = new Date().toISOString();
+      sent++;
+    }
+  }
+
+  await redis.set(`emlb:review:${session.id}:comments`, JSON.stringify(comments));
+
+  if (sent > 0 && session.authorEmail) {
+    const baseUrl = req.headers.origin || 'https://fabula-mea.com';
+    await sendCommentsNotificationEmail({
+      to: session.authorEmail,
+      readerName: session.readerName || 'Un relecteur',
+      bookTitle: session.bookTitle,
+      commentCount: sent,
+      reviewUrl: `${baseUrl}/reviews/${session.id}`,
+    });
+  }
+
+  return res.json({ sent });
+}
+
+/** GET/POST /api/reviews/reader/:token/comments */
+async function handleReaderComments(req: VercelRequest, res: VercelResponse, token: string) {
+  const sessionJson = await redis.get(`emlb:review:token:${token}`);
+  if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
+  const session = JSON.parse(sessionJson);
+
+  if (req.method === 'GET') {
+    const commentsJson = await redis.get(`emlb:review:${session.id}:comments`);
+    const comments = commentsJson ? JSON.parse(commentsJson) : [];
+    return res.json(comments);
+  }
+
+  if (req.method === 'POST') {
+    const body = req.body;
+    const commentsJson = await redis.get(`emlb:review:${session.id}:comments`);
+    const comments: ReviewComment[] = commentsJson ? JSON.parse(commentsJson) : [];
+
+    const newComment: ReviewComment = {
+      id: generateId(),
+      sessionId: session.id,
+      sceneId: body.sceneId,
+      isAuthor: false,
+      authorLabel: body.authorLabel || session.readerName || 'Relecteur',
+      selectedText: body.selectedText || '',
+      startOffset: body.startOffset ?? 0,
+      endOffset: body.endOffset ?? 0,
+      content: body.content,
+      status: body.status || 'draft',
+      parentId: body.parentId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    comments.push(newComment);
+    await redis.set(`emlb:review:${session.id}:comments`, JSON.stringify(comments));
+
+    session.commentsCount = comments.filter((c: ReviewComment) => !c.parentId).length;
+    await redis.set(`emlb:review:${session.id}`, JSON.stringify(session));
+    await redis.set(`emlb:review:token:${token}`, JSON.stringify(session));
+
+    return res.json({ comment: newComment });
+  }
+
+  return res.status(405).end();
+}
+
+/** PATCH/DELETE /api/reviews/reader/:token/comments/:commentId */
+async function handleReaderCommentById(req: VercelRequest, res: VercelResponse, token: string, commentId: string) {
+  const sessionJson = await redis.get(`emlb:review:token:${token}`);
+  if (!sessionJson) return res.status(404).json({ error: 'Session introuvable' });
+  const session = JSON.parse(sessionJson);
+
+  const commentsJson = await redis.get(`emlb:review:${session.id}:comments`);
+  const comments: ReviewComment[] = commentsJson ? JSON.parse(commentsJson) : [];
+
+  if (req.method === 'PATCH') {
+    const idx = comments.findIndex((c) => c.id === commentId);
+    if (idx === -1) return res.status(404).json({ error: 'Commentaire introuvable' });
+
+    const { content, status } = req.body;
+    if (content !== undefined) comments[idx].content = content;
+    if (status !== undefined) comments[idx].status = status;
+    comments[idx].updatedAt = new Date().toISOString();
+
+    await redis.set(`emlb:review:${session.id}:comments`, JSON.stringify(comments));
+    return res.json({ comment: comments[idx] });
+  }
+
+  if (req.method === 'DELETE') {
+    const filtered = comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
+    await redis.set(`emlb:review:${session.id}:comments`, JSON.stringify(filtered));
+
+    session.commentsCount = filtered.filter((c: ReviewComment) => !c.parentId).length;
+    await redis.set(`emlb:review:${session.id}`, JSON.stringify(session));
+    await redis.set(`emlb:review:token:${token}`, JSON.stringify(session));
+
+    return res.json({ ok: true });
+  }
+
+  return res.status(405).end();
+}
+
+// ============================================================
+// ROUTER
+// ============================================================
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
 
+  const pathSegments = getPathSegments(req, '/api/reviews');
+
+  // ── Reader routes: /api/reviews/reader/:token/... (NO AUTH) ──
+  if (pathSegments[0] === 'reader') {
+    const token = pathSegments[1];
+    if (!token) return res.status(400).json({ error: 'Token requis' });
+
+    // /api/reviews/reader/:token
+    if (pathSegments.length === 2) {
+      return handleReaderGetSession(req, res, token);
+    }
+
+    const action = pathSegments[2];
+
+    if (action === 'start' && pathSegments.length === 3) return handleReaderStart(req, res, token);
+    if (action === 'complete' && pathSegments.length === 3) return handleReaderComplete(req, res, token);
+    if (action === 'send' && pathSegments.length === 3) return handleReaderSend(req, res, token);
+    if (action === 'comments' && pathSegments.length === 3) return handleReaderComments(req, res, token);
+    if (action === 'comments' && pathSegments.length === 4) return handleReaderCommentById(req, res, token, pathSegments[3]);
+
+    return res.status(404).json({ error: 'Route introuvable' });
+  }
+
+  // ── Author routes: /api/reviews/... (AUTH REQUIRED) ──
   const auth = requireAuth(req, res);
   if (!auth) return;
-
-  const pathSegments = getPathSegments(req, '/api/reviews');
 
   // /api/reviews
   if (pathSegments.length === 0) {
@@ -323,17 +529,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // /api/reviews/:id/comments
   if (action === 'comments' && pathSegments.length === 2) {
-    return handleComments(req, res, auth, id);
+    return handleAuthorComments(req, res, auth, id);
   }
 
   // /api/reviews/:id/comments/:commentId
   if (action === 'comments' && pathSegments.length === 3) {
-    return handleCommentById(req, res, auth, id, pathSegments[2]);
+    return handleAuthorCommentById(req, res, auth, id, pathSegments[2]);
   }
 
   // /api/reviews/:id/send
   if (action === 'send' && pathSegments.length === 2) {
-    return handleSend(req, res, auth, id);
+    return handleAuthorSend(req, res, auth, id);
   }
 
   return res.status(404).json({ error: 'Route introuvable' });
