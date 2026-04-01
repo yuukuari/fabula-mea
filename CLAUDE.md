@@ -1,8 +1,8 @@
-# CLAUDE.md — Écrire Mon Livre
+# CLAUDE.md — Fabula Mea
 
 ## Vue d'ensemble
 
-**Écrire Mon Livre** est une application web d'aide à l'écriture de livres. Elle permet de structurer un projet de roman : personnages, lieux, chapitres, scènes, worldbuilding, cartes, timeline, objectifs de progression, export EPUB/PDF. L'application inclut aussi un système de tickets (bug/amélioration/question), de releases, et un panneau d'administration.
+**Fabula Mea** est une application web d'aide à l'écriture de livres. Elle permet de structurer un projet de roman : personnages, lieux, chapitres, scènes, worldbuilding, cartes, timeline, objectifs de progression, export EPUB/PDF. L'application inclut aussi un système de tickets (bug/amélioration/question), de releases, et un panneau d'administration.
 
 L'application est une **SPA React** déployée sur **Vercel**, avec des serverless functions pour l'API et **Upstash Redis** pour la persistance en production. En développement local, tout fonctionne en **localStorage** sans aucun backend.
 
@@ -333,8 +333,8 @@ saveBook() → localStorage.setItem(key, json)   ← toujours
 
 ### Clés localStorage (côté client, indépendant du mode dev/prod)
 
-- `ecrire-mon-livre-library` — Bibliothèque (persist Zustand, contient les BookMeta[])
-- `ecrire-mon-livre-book-{bookId}` — Données complètes d'un livre
+- `fabula-mea-library` — Bibliothèque (persist Zustand, contient les BookMeta[])
+- `fabula-mea-book-{bookId}` — Données complètes d'un livre
 - `emlb-token` — Token JWT (prod) ou token dev (dev)
 - `emlb-last-seen-version` — Dernière version vue (pour badge "Nouveau" sur releases)
 - `emlb-daily-snapshot:{bookId}` — Snapshot du total de mots/signes en début de journée (suivi progression journalière)
