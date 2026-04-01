@@ -2,6 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { redis } from '../_lib/redis';
 import { hashPassword, comparePassword, signToken, requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
+import { sendPasswordResetEmail } from '../_lib/email';
+import { randomUUID } from 'crypto';
 
 function getPathSegments(req: VercelRequest, base: string): string[] {
   const url = (req.url || '').split('?')[0];
@@ -113,6 +115,53 @@ async function handleMe(req: VercelRequest, res: VercelResponse) {
   return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false });
 }
 
+async function handleForgotPassword(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const { email } = req.body as { email?: string };
+  if (!email) return res.status(400).json({ error: 'Email requis' });
+
+  const normalized = email.toLowerCase().trim();
+
+  // Always respond with success to avoid revealing if an email is registered
+  const userId = await redis.get(`emlb:email:${normalized}`);
+  if (userId) {
+    const token = randomUUID();
+    await redis.setex(`emlb:reset-token:${token}`, 600, JSON.stringify({ userId, email: normalized }));
+
+    const baseUrl = req.headers.origin || 'https://fabula-mea.com';
+    await sendPasswordResetEmail({ to: normalized, resetUrl: `${baseUrl}/reset-password/${token}` });
+  }
+
+  return res.json({ ok: true });
+}
+
+async function handleResetPassword(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const { token, password } = req.body as { token?: string; password?: string };
+  if (!token || !password) return res.status(400).json({ error: 'Token et mot de passe requis' });
+  if (password.length < 8) return res.status(400).json({ error: 'Mot de passe trop court (min. 8 caractères)' });
+
+  const raw = await redis.get(`emlb:reset-token:${token}`);
+  if (!raw) return res.status(400).json({ error: 'Lien invalide ou expiré' });
+
+  const { userId } = JSON.parse(raw) as { userId: string; email: string };
+
+  const userJson = await redis.get(`emlb:user:${userId}`);
+  if (!userJson) return res.status(400).json({ error: 'Utilisateur introuvable' });
+
+  const user = JSON.parse(userJson) as User;
+  user.passwordHash = await hashPassword(password);
+
+  await Promise.all([
+    redis.set(`emlb:user:${userId}`, JSON.stringify(user)),
+    redis.del(`emlb:reset-token:${token}`),
+  ]);
+
+  return res.json({ ok: true });
+}
+
 // --- Router ---
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -128,6 +177,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleSignup(req, res);
     case 'me':
       return handleMe(req, res);
+    case 'forgot-password':
+      return handleForgotPassword(req, res);
+    case 'reset-password':
+      return handleResetPassword(req, res);
     default:
       return res.status(404).json({ error: 'Route introuvable' });
   }

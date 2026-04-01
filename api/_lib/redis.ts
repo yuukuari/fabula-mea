@@ -30,6 +30,8 @@ export const redis = {
     cmd<string | null>('GET', [key]).catch(() => null),
   set: (key: string, value: string): Promise<void> =>
     cmd<string>('SET', [key, value]).then(() => undefined),
+  setex: (key: string, ttlSeconds: number, value: string): Promise<void> =>
+    cmd<string>('SET', [key, value, 'EX', ttlSeconds]).then(() => undefined),
   del: (key: string): Promise<void> =>
     cmd<number>('DEL', [key]).then(() => undefined),
 };

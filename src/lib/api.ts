@@ -61,6 +61,20 @@ export const api = {
       IS_DEV
         ? devAuth.me()
         : apiFetch<AuthUser>('/auth/me'),
+    requestPasswordReset: (email: string) =>
+      IS_DEV
+        ? devAuth.requestPasswordReset(email)
+        : apiFetch<{ ok: boolean }>('/auth/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+          }),
+    resetPassword: (token: string, password: string) =>
+      IS_DEV
+        ? devAuth.resetPassword(token, password)
+        : apiFetch<{ ok: boolean }>('/auth/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token, password }),
+          }),
   },
 
   library: {

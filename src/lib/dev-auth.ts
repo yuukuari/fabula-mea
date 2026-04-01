@@ -172,4 +172,46 @@ export const devAuth = {
       saveUsers(users);
     }
   },
+
+  async requestPasswordReset(email: string): Promise<{ ok: boolean }> {
+    const normalized = email.toLowerCase().trim();
+    const emails = getEmails();
+    const userId = emails[normalized];
+
+    if (userId) {
+      const token = generateId();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      localStorage.setItem(`emlb-dev:reset-token:${token}`, JSON.stringify({ userId, email: normalized, expiresAt }));
+      console.group('📧 [DEV] Email — Réinitialisation du mot de passe');
+      console.log(`   To:      ${normalized}`);
+      console.log(`   Subject: Réinitialisation de votre mot de passe — Fabula Mea`);
+      console.log(`   Lien:    http://localhost:5174/reset-password/${token}`);
+      console.log('   (email non envoyé en mode développement)');
+      console.groupEnd();
+    }
+
+    return { ok: true };
+  },
+
+  async resetPassword(token: string, password: string): Promise<{ ok: boolean }> {
+    if (password.length < 8) throw new Error('Mot de passe trop court (min. 8 caractères)');
+
+    const raw = localStorage.getItem(`emlb-dev:reset-token:${token}`);
+    if (!raw) throw new Error('Lien invalide ou expiré');
+
+    const { userId, expiresAt } = JSON.parse(raw) as { userId: string; email: string; expiresAt: string };
+    if (new Date() > new Date(expiresAt)) {
+      localStorage.removeItem(`emlb-dev:reset-token:${token}`);
+      throw new Error('Lien invalide ou expiré');
+    }
+
+    const users = getUsers();
+    if (!users[userId]) throw new Error('Utilisateur introuvable');
+
+    users[userId].passwordHash = await bcrypt.hash(password, 10);
+    saveUsers(users);
+    localStorage.removeItem(`emlb-dev:reset-token:${token}`);
+
+    return { ok: true };
+  },
 };

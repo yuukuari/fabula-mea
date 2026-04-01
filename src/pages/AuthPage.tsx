@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, Eye, EyeOff, AlertCircle, Database } from 'lucide-react';
+import { BookOpen, AlertCircle, Database } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { api } from '@/lib/api';
+import { PasswordInput } from '@/components/shared/PasswordInput';
 import type { BookMeta } from '@/types';
 
 // ─── Detect existing anonymous local data ───────────────────────────────────
@@ -42,7 +43,6 @@ export function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [migrating, setMigrating] = useState(false);
 
   const { login, signup, isLoading, error, clearError } = useAuthStore();
@@ -176,26 +176,22 @@ export function AuthPage() {
               <label className="label-field">
                 Mot de passe{tab === 'signup' && <span className="text-ink-200 font-normal"> (min. 8 caractères)</span>}
               </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-field pr-10"
-                  required
-                  minLength={tab === 'signup' ? 8 : undefined}
-                  autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-200 hover:text-ink-400 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <PasswordInput
+                value={password}
+                onChange={setPassword}
+                required
+                minLength={tab === 'signup' ? 8 : undefined}
+                autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+              />
             </div>
+
+            {tab === 'login' && (
+              <div className="text-right -mt-1">
+                <a href="/forgot-password" className="text-xs text-bordeaux-600 hover:text-bordeaux-700 transition-colors">
+                  Mot de passe oublié ?
+                </a>
+              </div>
+            )}
 
             <button
               type="submit"

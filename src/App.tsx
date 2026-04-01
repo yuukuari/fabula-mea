@@ -15,6 +15,8 @@ import { MapsPage } from '@/pages/MapsPage';
 import { NotesIdeasPage } from '@/pages/NotesIdeasPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AuthPage } from '@/pages/AuthPage';
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { TicketsPage } from '@/pages/TicketsPage';
 import { ReleaseNotesPage } from '@/pages/ReleaseNotesPage';
 import { ReviewsPage } from '@/pages/ReviewsPage';
@@ -53,6 +55,8 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { path: '/', element: <HomePage /> },
+      { path: 'forgot-password', element: <ForgotPasswordPage /> },
+      { path: 'reset-password/:token', element: <ResetPasswordPage /> },
       { path: 'review/:token', element: <ReviewReaderPage /> },
       {
         element: <StandaloneShell />,
@@ -117,8 +121,12 @@ export default function App() {
     );
   }
 
-  // Review reader page is public (no auth needed)
-  if (!user && window.location.pathname.startsWith('/review/')) {
+  // Public pages (no auth needed)
+  if (!user && (
+    window.location.pathname.startsWith('/review/') ||
+    window.location.pathname === '/forgot-password' ||
+    window.location.pathname.startsWith('/reset-password/')
+  )) {
     return <RouterProvider router={router} />;
   }
 

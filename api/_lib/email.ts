@@ -186,6 +186,47 @@ export async function sendTicketCreatedEmail(opts: {
   }
 }
 
+export async function sendPasswordResetEmail(opts: {
+  to: string;
+  resetUrl: string;
+}): Promise<void> {
+  const resend = getResend();
+  if (!resend) return;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: opts.to,
+      subject: 'Réinitialisation de votre mot de passe — Fabula Mea',
+      html: `
+        <div style="font-family: 'Georgia', serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #8b2252; font-size: 24px;">Réinitialisation du mot de passe</h2>
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe.
+          </p>
+          <p style="font-size: 14px; color: #888; line-height: 1.6;">
+            Ce lien est valable <strong>10 minutes</strong>. Si vous n'avez pas fait cette demande, ignorez cet email — votre mot de passe reste inchangé.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${opts.resetUrl}"
+               style="background-color: #8b2252; color: white; padding: 14px 28px;
+                      text-decoration: none; border-radius: 8px; font-size: 16px;
+                      font-weight: bold; display: inline-block;">
+              Choisir un nouveau mot de passe
+            </a>
+          </div>
+          <p style="font-size: 12px; color: #aaa; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br/>
+            <span style="color: #8b2252;">${opts.resetUrl}</span>
+          </p>
+        </div>
+      `,
+    });
+  } catch (e) {
+    console.error('Failed to send password reset email:', e);
+  }
+}
+
 export async function sendAuthorRepliedEmail(opts: {
   to: string;
   authorName: string;
