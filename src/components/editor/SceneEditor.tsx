@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Minus, X, User, MapPin, ChevronRight, BookOpen, PanelLeft, PanelRight, Menu, Calendar, MessageCircle, BookText } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { SceneInlineEditor, countWords } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
@@ -20,8 +21,7 @@ export function SceneEditor() {
   const { isOpen, entrySceneId, minimize, close } = useEditorStore();
   const scenes = useBookStore((s) => s.scenes);
   const chapters = useBookStore((s) => s.chapters);
-  const characters = useBookStore((s) => s.characters);
-  const places = useBookStore((s) => s.places);
+  const { characters, places, worldNotes: allWorldNotes } = useEncyclopediaStore();
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const bookId = useBookStore((s) => s.id);
   const dailyGoal = useBookStore((s) => s.goals?.dailyGoal);
@@ -29,9 +29,6 @@ export function SceneEditor() {
   const bookTitle = useBookStore((s) => s.title);
   const bookAuthor = useBookStore((s) => s.author);
   const layout = useBookStore((s) => s.layout);
-  const allCharacters = useBookStore((s) => s.characters);
-  const allPlaces = useBookStore((s) => s.places);
-  const allWorldNotes = useBookStore((s) => s.worldNotes);
 
   const [visibleSceneId, setVisibleSceneId] = useState<string | null>(entrySceneId);
 
@@ -53,18 +50,18 @@ export function SceneEditor() {
   const glossaryEntries = useMemo<GlossaryEntry[]>(() => {
     if (!glossaryEnabled) return [];
     return [
-      ...allCharacters.filter((c) => c.inGlossary).map((c) => ({
+      ...characters.filter((c) => c.inGlossary).map((c) => ({
         id: c.id, type: 'character' as const,
         name: c.name + (c.surname ? ` ${c.surname}` : ''), description: c.description,
       })),
-      ...allPlaces.filter((p) => p.inGlossary).map((p) => ({
+      ...places.filter((p) => p.inGlossary).map((p) => ({
         id: p.id, type: 'place' as const, name: p.name, description: p.description,
       })),
       ...allWorldNotes.filter((w) => w.inGlossary).map((w) => ({
         id: w.id, type: 'worldNote' as const, name: w.title, description: w.content,
       })),
     ].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
-  }, [glossaryEnabled, allCharacters, allPlaces, allWorldNotes]);
+  }, [glossaryEnabled, characters, places, allWorldNotes]);
 
   const glossaryRef = useRef<HTMLDivElement | null>(null);
 

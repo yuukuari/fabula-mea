@@ -7,11 +7,14 @@ interface AuthStore {
   error: string | null;
 
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name?: string) => Promise<void>;
+  signup: (email: string, password: string, name?: string, captchaToken?: string) => Promise<void>;
   logout: () => void;
   /** Called on app startup — validates stored JWT and restores the session. */
   checkAuth: () => Promise<void>;
   clearError: () => void;
+  updateProfile: (data: { name?: string; email?: string; avatarUrl?: string; avatarOffsetY?: number }) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>()((set) => ({
@@ -31,10 +34,10 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     }
   },
 
-  signup: async (email, password, name) => {
+  signup: async (email, password, name, captchaToken) => {
     set({ isLoading: true, error: null });
     try {
-      const { token, user } = await api.auth.signup({ email, password, name });
+      const { token, user } = await api.auth.signup({ email, password, name, captchaToken });
       localStorage.setItem('emlb-token', token);
       set({ user, isLoading: false });
     } catch (err) {
@@ -72,4 +75,27 @@ export const useAuthStore = create<AuthStore>()((set) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  updateProfile: async (data) => {
+    const user = await api.auth.updateProfile(data);
+    set({ user });
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    await api.auth.changePassword({ currentPassword, newPassword });
+  },
+
+  deleteAccount: async () => {
+    await api.auth.deleteAccount();
+    localStorage.removeItem('emlb-token');
+    localStorage.removeItem('fabula-mea-library');
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('fabula-mea-book-')) keysToRemove.push(key);
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    set({ user: null });
+    window.location.href = '/';
+  },
 }));

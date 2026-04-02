@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map, BookText } from 'lucide-react';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -10,11 +10,8 @@ import { PLACE_TYPE_LABELS } from '@/lib/utils';
 import type { Place, PlaceType } from '@/types';
 
 export function PlacesPage() {
-  const places = useBookStore((s) => s.places);
-  const maps = useBookStore((s) => s.maps ?? []);
-  const addPlace = useBookStore((s) => s.addPlace);
-  const updatePlace = useBookStore((s) => s.updatePlace);
-  const deletePlace = useBookStore((s) => s.deletePlace);
+  const { places, maps: rawMaps, addPlace, updatePlace, deletePlace } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -226,9 +223,7 @@ export function PlacesPage() {
 }
 
 function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () => void }) {
-  const places = useBookStore((s) => s.places);
-  const addPlace = useBookStore((s) => s.addPlace);
-  const updatePlace = useBookStore((s) => s.updatePlace);
+  const { places, addPlace, updatePlace } = useEncyclopediaStore();
 
   const existing = placeId ? places.find((p) => p.id === placeId) : null;
 

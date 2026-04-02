@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import type { CharacterEvolution, CharacterSex } from '@/types';
@@ -11,9 +11,7 @@ interface CharacterFormProps {
 }
 
 export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
-  const characters = useBookStore((s) => s.characters);
-  const addCharacter = useBookStore((s) => s.addCharacter);
-  const updateCharacter = useBookStore((s) => s.updateCharacter);
+  const { characters, addCharacter, updateCharacter } = useEncyclopediaStore();
 
   const existing = characterId ? characters.find((c) => c.id === characterId) : null;
 

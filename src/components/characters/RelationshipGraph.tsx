@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
 import type { Character, CharacterSex, Relationship } from '@/types';
 
@@ -78,9 +78,8 @@ interface TooltipData {
 
 export function RelationshipGraph() {
   const navigate = useNavigate();
-  const characters = useBookStore((s) => s.characters);
-  const graphNodePositions = useBookStore((s) => s.graphNodePositions ?? {});
-  const saveGraphNodePositions = useBookStore((s) => s.saveGraphNodePositions);
+  const { characters, graphNodePositions: rawGraphNodePositions, saveGraphNodePositions } = useEncyclopediaStore();
+  const graphNodePositions = rawGraphNodePositions ?? {};
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);

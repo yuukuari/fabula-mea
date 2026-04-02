@@ -21,6 +21,8 @@ interface StoredUser {
   passwordHash: string;
   isAdmin: boolean;
   createdAt: string;
+  avatarUrl?: string;
+  avatarOffsetY?: number;
 }
 
 // ─── LocalStorage helpers ────────────────────────────────────────────────────
@@ -78,6 +80,7 @@ export const devAuth = {
     email: string;
     password: string;
     name?: string;
+    captchaToken?: string;
   }): Promise<{ token: string; user: AuthUser }> {
     const { email, password, name } = data;
 
@@ -149,7 +152,7 @@ export const devAuth = {
     const user = users[payload.userId];
     if (!user) throw new Error('Utilisateur introuvable');
 
-    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false };
+    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY };
   },
 
   // ─── Bonus: list all local dev accounts ──────────────────────────────────
@@ -212,6 +215,94 @@ export const devAuth = {
     saveUsers(users);
     localStorage.removeItem(`emlb-dev:reset-token:${token}`);
 
+    return { ok: true };
+  },
+
+  async updateProfile(data: { name?: string; email?: string; avatarUrl?: string; avatarOffsetY?: number }): Promise<AuthUser> {
+    const token = localStorage.getItem('emlb-token');
+    if (!token) throw new Error('Non authentifié');
+    const payload = decodeToken(token);
+    if (!payload) throw new Error('Token invalide');
+
+    const users = getUsers();
+    const user = users[payload.userId];
+    if (!user) throw new Error('Utilisateur introuvable');
+
+    if (data.name !== undefined) user.name = data.name.trim();
+    if (data.avatarUrl !== undefined) user.avatarUrl = data.avatarUrl;
+    if (data.avatarOffsetY !== undefined) user.avatarOffsetY = data.avatarOffsetY;
+    if (data.email !== undefined) {
+      const newEmail = data.email.trim().toLowerCase();
+      if (newEmail !== user.email) {
+        const emails = getEmails();
+        if (emails[newEmail]) throw new Error('Cet email est déjà utilisé');
+        delete emails[user.email];
+        emails[newEmail] = user.id;
+        user.email = newEmail;
+        saveEmails(emails);
+        // Re-encode token with new email
+        const newToken = encodeToken({ userId: user.id, email: newEmail });
+        localStorage.setItem('emlb-token', newToken);
+      }
+    }
+
+    saveUsers(users);
+    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY };
+  },
+
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<{ ok: boolean }> {
+    const token = localStorage.getItem('emlb-token');
+    if (!token) throw new Error('Non authentifié');
+    const payload = decodeToken(token);
+    if (!payload) throw new Error('Token invalide');
+
+    const users = getUsers();
+    const user = users[payload.userId];
+    if (!user) throw new Error('Utilisateur introuvable');
+
+    const valid = await bcrypt.compare(data.currentPassword, user.passwordHash);
+    if (!valid) throw new Error('Mot de passe actuel incorrect');
+    if (data.newPassword.length < 8) throw new Error('Nouveau mot de passe trop court (min. 8 caractères)');
+
+    user.passwordHash = await bcrypt.hash(data.newPassword, 10);
+    saveUsers(users);
+    return { ok: true };
+  },
+
+  async deleteAccount(): Promise<{ ok: boolean }> {
+    const token = localStorage.getItem('emlb-token');
+    if (!token) throw new Error('Non authentifié');
+    const payload = decodeToken(token);
+    if (!payload) throw new Error('Token invalide');
+
+    const users = getUsers();
+    const user = users[payload.userId];
+    if (!user) throw new Error('Utilisateur introuvable');
+
+    // Clean up all user data from localStorage
+    const prefix = `emlb-dev:u:${user.id}:`;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) keysToRemove.push(key);
+    }
+    // Also remove book keys from client-side storage
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('fabula-mea-book-')) keysToRemove.push(key);
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    localStorage.removeItem('fabula-mea-library');
+
+    // Remove user from users/emails
+    const emails = getEmails();
+    delete emails[user.email];
+    delete users[user.id];
+    saveUsers(users);
+    saveEmails(emails);
+
+    // Clear auth
+    localStorage.removeItem('emlb-token');
     return { ok: true };
   },
 };

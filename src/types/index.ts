@@ -230,9 +230,42 @@ export interface BookMeta {
   genre?: string;
   writingMode: WritingMode;
   countUnit?: CountUnit;
+  sagaId?: EntityId;       // if this book belongs to a saga
+  orderInSaga?: number;    // position within the saga
   chaptersCount: number;
   scenesCount: number;
   charactersCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Sagas ───
+export interface SagaMeta {
+  id: EntityId;
+  title: string;
+  description?: string;
+  author?: string;
+  genre?: string;
+  writingMode: WritingMode;
+  countUnit: CountUnit;
+  layout?: BookLayout;
+  imageUrl?: string;
+  bookIds: EntityId[];    // ordered list of book IDs in this saga
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SagaProject {
+  id: EntityId;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  characters: Character[];
+  places: Place[];
+  worldNotes: WorldNote[];
+  maps: MapItem[];
+  tags: Tag[];
+  graphNodePositions?: Record<string, { x: number; y: number }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -434,6 +467,7 @@ export interface BookProject {
   synopsis?: string;
   writingMode: WritingMode;
   countUnit?: CountUnit;
+  sagaId?: EntityId;        // if set, encyclopedia data lives in the saga
   glossaryEnabled?: boolean;
   tableOfContents?: boolean;
   layout?: BookLayout;

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, User, MapPin, BookOpen, FileText, Globe, Map, Settings, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { PLACE_TYPE_LABELS, WORLD_NOTE_CATEGORY_LABELS } from '@/lib/utils';
 
@@ -47,12 +48,10 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
   const navigate = useNavigate();
   const minimizeEditor = useEditorStore((s) => s.minimize);
   const editorIsOpen = useEditorStore((s) => s.isOpen);
-  const characters = useBookStore((s) => s.characters);
-  const places = useBookStore((s) => s.places);
+  const { characters, places, worldNotes, maps: rawMaps } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
-  const worldNotes = useBookStore((s) => s.worldNotes);
-  const maps = useBookStore((s) => s.maps);
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Users, MapPin, Map, Globe, BookOpen, Target, Eye, Clock, Lightbulb, LayoutDashboard, Feather, Film, PenLine } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useEffect, useMemo } from 'react';
@@ -9,14 +10,8 @@ import { countUnitLabel, isSpecialChapter } from '@/lib/utils';
 
 export function EncyclopediaPage() {
   const navigate = useNavigate();
-  const title = useBookStore((s) => s.title);
-  const author = useBookStore((s) => s.author);
-  const genre = useBookStore((s) => s.genre);
-  const synopsis = useBookStore((s) => s.synopsis);
-  const characters = useBookStore((s) => s.characters);
-  const places = useBookStore((s) => s.places);
-  const maps = useBookStore((s) => s.maps ?? []);
-  const worldNotes = useBookStore((s) => s.worldNotes);
+  const { characters, places, maps: rawMaps, worldNotes } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const goals = useBookStore((s) => s.goals);
@@ -80,18 +75,6 @@ export function EncyclopediaPage() {
           <LayoutDashboard className="w-7 h-7 text-bordeaux-400" />
           Vue d'ensemble
         </h2>
-        <div className="mt-2">
-          <p className="text-lg font-display font-bold text-ink-500">
-            {title || 'Sans titre'}
-          </p>
-          <div className="flex items-center gap-3 text-sm text-ink-300 mt-0.5">
-            {author && <span>{author}</span>}
-            {genre && <><span className="text-ink-200">·</span><span>{genre}</span></>}
-          </div>
-        </div>
-        {synopsis && (
-          <p className="text-sm text-ink-300 mt-2 italic max-w-2xl">{synopsis}</p>
-        )}
       </div>
 
       {/* Key stats row */}

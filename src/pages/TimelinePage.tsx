@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, Edit, X, User, MapPin, Map } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { Scene, SceneStatus } from '@/types';
 import { SCENE_STATUS_LABELS, cn, isSpecialChapter, getChapterShortLabel } from '@/lib/utils';
@@ -11,9 +12,8 @@ type TimelineViewMode = 'character' | 'place';
 export function TimelinePage() {
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
-  const characters = useBookStore((s) => s.characters);
-  const places = useBookStore((s) => s.places);
-  const maps = useBookStore((s) => s.maps ?? []);
+  const { characters, places, maps: rawMaps } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
   const updateScene = useBookStore((s) => s.updateScene);
 
   const [viewMode, setViewMode] = useState<TimelineViewMode>('character');
@@ -342,9 +342,8 @@ export function TimelinePage() {
 }
 
 function TimelineSceneEditor({ scene, onClose }: { scene: Scene; onClose: () => void }) {
-  const characters = useBookStore((s) => s.characters);
-  const places = useBookStore((s) => s.places);
-  const maps = useBookStore((s) => s.maps ?? []);
+  const { characters, places, maps: rawMaps } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
   const chapters = useBookStore((s) => s.chapters);
   const updateScene = useBookStore((s) => s.updateScene);
   const navigate = useNavigate();

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
-import { AdminShell } from '@/components/layout/AdminShell';
-import { StandaloneShell } from '@/components/layout/StandaloneShell';
+import { HomeShell } from '@/components/layout/HomeShell';
 import { HomePage } from '@/pages/HomePage';
 import { EncyclopediaPage } from '@/pages/EncyclopediaPage';
 import { CharactersPage } from '@/pages/CharactersPage';
@@ -14,6 +13,8 @@ import { WorldPage } from '@/pages/WorldPage';
 import { MapsPage } from '@/pages/MapsPage';
 import { NotesIdeasPage } from '@/pages/NotesIdeasPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { EditionPage } from '@/pages/EditionPage';
+import { ProfilePage } from '@/pages/ProfilePage';
 import { AuthPage } from '@/pages/AuthPage';
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
@@ -22,28 +23,22 @@ import { ReleaseNotesPage } from '@/pages/ReleaseNotesPage';
 import { ReviewsPage } from '@/pages/ReviewsPage';
 import { ReviewAuthorView } from '@/pages/reviews/ReviewAuthorView';
 import { ReviewReaderPage } from '@/pages/review/ReviewReaderPage';
+import { SagaPage } from '@/pages/SagaPage';
 import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
-import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
-import { TicketBubble } from '@/components/tickets/TicketBubble';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { NewReleaseModal } from '@/components/releases/NewReleaseModal';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useEditorStore } from '@/store/useEditorStore';
 import { useTicketFormStore } from '@/store/useTicketFormStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
 
 /** Root layout — renders global overlays (ticket bubble, release footer, etc.) on every page */
 function RootLayout() {
   const user = useAuthStore((s) => s.user);
-  const editorOpen = useEditorStore((s) => s.isOpen);
   const ticketFormOpen = useTicketFormStore((s) => s.open);
-  const showTicketForm = useTicketFormStore((s) => s.show);
   const hideTicketForm = useTicketFormStore((s) => s.hide);
-  const currentBookId = useLibraryStore((s) => s.currentBookId);
   return (
     <>
       <Outlet />
-      {user && !editorOpen && !currentBookId && <TicketBubble onCreateTicket={showTicketForm} />}
       {user && <TicketForm open={ticketFormOpen} onClose={hideTicketForm} />}
       <NewReleaseModal />
     </>
@@ -54,16 +49,19 @@ const router = createBrowserRouter([
   {
     element: <RootLayout />,
     children: [
-      { path: '/', element: <HomePage /> },
       { path: 'forgot-password', element: <ForgotPasswordPage /> },
       { path: 'reset-password/:token', element: <ResetPasswordPage /> },
       { path: 'review/:token', element: <ReviewReaderPage /> },
       {
-        element: <StandaloneShell />,
+        element: <HomeShell />,
         children: [
+          { path: '/', element: <HomePage /> },
           { path: 'tickets', element: <TicketsPage /> },
           { path: 'releases', element: <ReleaseNotesPage /> },
           { path: 'reviews/:id', element: <ReviewAuthorView /> },
+          { path: 'admin/members', element: <AdminMembersPage /> },
+          { path: 'profile', element: <ProfilePage /> },
+          { path: 'saga/:sagaId', element: <SagaPage /> },
         ],
       },
       {
@@ -80,15 +78,8 @@ const router = createBrowserRouter([
           { path: 'maps', element: <MapsPage /> },
           { path: 'notes', element: <NotesIdeasPage /> },
           { path: 'reviews', element: <ReviewsPage /> },
+          { path: 'edition', element: <EditionPage /> },
           { path: 'settings', element: <SettingsPage /> },
-        ],
-      },
-      {
-        element: <AdminShell />,
-        children: [
-          { path: 'admin/members', element: <AdminMembersPage /> },
-          { path: 'admin/tickets', element: <TicketsPage /> },
-          { path: 'admin/releases', element: <AdminReleasesPage /> },
         ],
       },
     ],

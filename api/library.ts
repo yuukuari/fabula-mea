@@ -9,7 +9,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const auth = requireAuth(req, res);
   if (!auth) return;
 
-  const key = `emlb:u:${auth.userId}:library`;
+  const type = req.query.type as string | undefined;
+  const key = type === 'sagas'
+    ? `emlb:u:${auth.userId}:sagas`
+    : `emlb:u:${auth.userId}:library`;
 
   if (req.method === 'GET') {
     const json = await redis.get(key);

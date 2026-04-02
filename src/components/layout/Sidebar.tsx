@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, UserCircle, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard, FileText, Library, UserCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -8,7 +8,8 @@ import { useSyncStore } from '@/store/useSyncStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useTicketFormStore } from '@/store/useTicketFormStore';
-import { VersionBadge } from '@/components/releases/VersionBadge';
+import { useReleaseStore } from '@/store/useReleaseStore';
+
 
 interface NavGroup {
   label: string;
@@ -32,12 +33,13 @@ const navGroups: NavGroup[] = [
   {
     label: 'Manuscrit',
     icon: ScrollText,
-    basePaths: ['/chapters', '/timeline', '/progress', '/reviews'],
+    basePaths: ['/chapters', '/timeline', '/progress', '/reviews', '/edition'],
     items: [
       { to: '/chapters', icon: BookOpen, label: 'Chapitres' },
       { to: '/timeline', icon: Clock, label: 'Chronologie' },
       { to: '/progress', icon: Target, label: 'Avancement' },
       { to: '/reviews', icon: Eye, label: 'Relectures' },
+      { to: '/edition', icon: FileText, label: 'Édition' },
     ],
   },
 ];
@@ -50,8 +52,9 @@ const directNavItems = [
 const supportGroup = {
   label: 'Aide & Support',
   icon: HelpCircle,
-  basePaths: ['/tickets'],
+  basePaths: ['/tickets', '/releases'],
   items: [
+    { to: '/releases', icon: Tag, label: 'Versions' },
     { to: '/tickets', icon: List, label: 'Tickets' },
   ],
 };
@@ -72,12 +75,21 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
   const navigate = useNavigate();
   const location = useLocation();
   const bookTitle = useBookStore((s) => s.title);
+  const sagaId = useBookStore((s) => s.sagaId);
   const books = useLibraryStore((s) => s.books);
+  const sagas = useLibraryStore((s) => s.sagas);
   const currentBookId = useLibraryStore((s) => s.currentBookId);
   const selectBook = useLibraryStore((s) => s.selectBook);
   const loadBook = useBookStore((s) => s.loadBook);
   const unloadBook = useBookStore((s) => s.unloadBook);
   const openTicketForm = useTicketFormStore((s) => s.show);
+  const releases = useReleaseStore((s) => s.releases);
+  const loadReleases = useReleaseStore((s) => s.loadReleases);
+  const currentRelease = releases.find((r) => r.status === 'current');
+
+  useEffect(() => {
+    if (releases.length === 0) loadReleases();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showSwitcher, setShowSwitcher] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
@@ -123,6 +135,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
 
   // Load review sessions for sidebar badge
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const reviewSessions = useReviewStore((s) => s.sessions);
   const loadReviewSessions = useReviewStore((s) => s.loadSessions);
 
@@ -164,7 +177,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
   const otherBooks = books.filter((b) => b.id !== currentBookId);
 
   const sidebarContent = (
-    <aside className="w-64 h-screen bg-parchment-50 border-r border-parchment-300 flex flex-col overflow-hidden">
+    <aside className="w-72 h-screen bg-parchment-50 border-r border-parchment-300 flex flex-col overflow-hidden">
       {/* Logo */}
       <div className="p-6 border-b border-parchment-300 flex items-center justify-between">
         <button
@@ -176,11 +189,9 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
             <Feather className="w-5 h-5 text-white" />
           </div>
           <div className="text-left">
-            <h1 className="font-display text-lg font-bold text-ink-500 leading-tight">Ecrire</h1>
-            <p className="text-xs text-ink-300">Mon Livre</p>
+            <h1 className="text-2xl text-ink-500 leading-tight" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</h1>
           </div>
         </button>
-        <VersionBadge />
         {/* Close button — mobile only */}
         <button
           onClick={onMobileClose}
@@ -282,7 +293,13 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
               >
                 <GroupIcon className="w-5 h-5" />
                 <span className="flex-1 text-left">{group.label}</span>
-                <ChevronRight className={cn('w-4 h-4 transition-transform duration-200', isExpanded && 'rotate-90')} />
+                {group.label === 'Encyclopédie' && sagaId && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-bordeaux-400 bg-bordeaux-50 px-1.5 py-0.5 rounded-full shrink-0">
+                    <Library className="w-3 h-3" />
+                    Saga
+                  </span>
+                )}
+                <ChevronRight className={cn('w-4 h-4 shrink-0 transition-transform duration-200', isExpanded && 'rotate-90')} />
               </button>
               {isExpanded && (
                 <div className="ml-4 mt-0.5 space-y-0.5">
@@ -333,6 +350,32 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
 
         <div className="h-px bg-parchment-200 my-2" />
 
+        {/* Profil */}
+        <NavLink
+          to="/profile"
+          onClick={onMobileClose}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+              isActive ? 'text-bordeaux-500' : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
+            )
+          }
+        >
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt=""
+              className="w-5 h-5 rounded-full object-cover"
+              style={user.avatarOffsetY != null ? { objectPosition: `center ${user.avatarOffsetY}%` } : undefined}
+            />
+          ) : (
+            <UserCircle className="w-5 h-5" />
+          )}
+          <span>Profil</span>
+        </NavLink>
+
+        <div className="h-px bg-parchment-200 my-2" />
+
         {/* Support group */}
         {(() => {
           const GroupIcon = supportGroup.icon;
@@ -375,7 +418,12 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
                       }
                     >
                       <Icon className="w-4 h-4" />
-                      <span>{label}</span>
+                      <span className="flex-1">{label}</span>
+                      {label === 'Versions' && currentRelease && (
+                        <span className="text-[10px] font-semibold text-ink-200 bg-parchment-200 px-1.5 py-0.5 rounded-full">
+                          v{currentRelease.version}
+                        </span>
+                      )}
                     </NavLink>
                   ))}
                 </div>
@@ -385,9 +433,17 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
         })()}
       </nav>
 
-      <div className="p-4 border-t border-parchment-300 space-y-3">
-        <AutoSaveIndicator />
-        <UserSection />
+      <div className="px-4 py-3 border-t border-parchment-300 flex items-center">
+        <div className="flex-1">
+          <CompactSyncStatus />
+        </div>
+        <button
+          onClick={logout}
+          title="Se déconnecter"
+          className="p-1 rounded text-ink-200 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+        </button>
       </div>
     </aside>
   );
@@ -417,59 +473,38 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
   );
 }
 
-function AutoSaveIndicator() {
+function CompactSyncStatus() {
   const lastSaved = useBookStore((s) => s.lastSavedAt);
-  const { status, errorMessage } = useSyncStore();
+  const { status } = useSyncStore();
 
-  const cloudIcon = () => {
-    if (status === 'disabled') return null;
-    if (status === 'syncing') return <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />;
-    if (status === 'synced')  return <Cloud className="w-3.5 h-3.5 text-green-400" />;
-    if (status === 'error')   return <CloudAlert className="w-3.5 h-3.5 text-amber-400" />;
-    return <CloudOff className="w-3.5 h-3.5 text-ink-200" />;
-  };
-
-  const cloudLabel = () => {
-    if (status === 'disabled') return null;
-    if (status === 'syncing') return <span className="text-blue-400">Synchro...</span>;
-    if (status === 'synced')  return <span className="text-green-400">Cloud OK</span>;
-    if (status === 'error')   return <span className="text-amber-400">Erreur sync</span>;
-    return <span>Cloud</span>;
-  };
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2 text-xs text-ink-200">
-        <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-        <span>{lastSaved ? 'Sauvegarde auto' : 'Non sauvegardé'}</span>
-      </div>
-      {status !== 'disabled' && (
-        <div className="flex items-center gap-2 text-xs text-ink-200">
-          {cloudIcon()}
-          {cloudLabel()}
-        </div>
-      )}
+  if (status === 'syncing') return (
+    <div className="flex items-center gap-2 text-xs text-blue-400">
+      <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+      <span>Synchronisation...</span>
     </div>
   );
-}
-
-function UserSection() {
-  const { user, logout } = useAuthStore();
-  if (!user) return null;
-
+  if (status === 'synced') return (
+    <div className="flex items-center gap-2 text-xs text-green-400">
+      <Cloud className="w-3.5 h-3.5 flex-shrink-0" />
+      <span>Sauvegardé</span>
+    </div>
+  );
+  if (status === 'error') return (
+    <div className="flex items-center gap-2 text-xs text-amber-400">
+      <CloudAlert className="w-3.5 h-3.5 flex-shrink-0" />
+      <span>Erreur de sync</span>
+    </div>
+  );
+  if (status === 'disabled') return (
+    <div className="flex items-center gap-2 text-xs text-ink-200">
+      <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+      <span>{lastSaved ? 'Sauvegarde auto' : 'Non sauvegardé'}</span>
+    </div>
+  );
   return (
-    <div className="flex items-center gap-2 pt-1">
-      <UserCircle className="w-4 h-4 text-ink-200 flex-shrink-0" />
-      <span className="text-xs text-ink-300 truncate flex-1" title={user.email}>
-        {user.name}
-      </span>
-      <button
-        onClick={logout}
-        title="Se déconnecter"
-        className="p-1 rounded text-ink-200 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-      >
-        <LogOut className="w-3.5 h-3.5" />
-      </button>
+    <div className="flex items-center gap-2 text-xs text-ink-200">
+      <CloudOff className="w-3.5 h-3.5 flex-shrink-0" />
+      <span>Hors ligne</span>
     </div>
   );
 }

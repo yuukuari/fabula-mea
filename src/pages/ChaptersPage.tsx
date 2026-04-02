@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -12,10 +13,8 @@ import type { Scene, SceneStatus, Chapter, GlossaryEntry } from '@/types';
 export function ChaptersPage() {
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
-  const characters = useBookStore((s) => s.characters);
-  const places = useBookStore((s) => s.places);
-  const worldNotes = useBookStore((s) => s.worldNotes);
-  const maps = useBookStore((s) => s.maps ?? []);
+  const { characters, places, worldNotes, maps: rawMaps, updateCharacter, updatePlace, updateWorldNote } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
   const writingMode = useBookStore((s) => s.writingMode);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled ?? false);
@@ -23,9 +22,6 @@ export function ChaptersPage() {
   const tableOfContents = useBookStore((s) => s.tableOfContents ?? false);
   const setTableOfContents = useBookStore((s) => s.setTableOfContents);
   const layout = useBookStore((s) => s.layout);
-  const updateCharacter = useBookStore((s) => s.updateCharacter);
-  const updatePlace = useBookStore((s) => s.updatePlace);
-  const updateWorldNote = useBookStore((s) => s.updateWorldNote);
   const addChapter = useBookStore((s) => s.addChapter);
   const deleteChapter = useBookStore((s) => s.deleteChapter);
   const addScene = useBookStore((s) => s.addScene);
@@ -485,8 +481,7 @@ function ChapterFormDialog({ chapterId, onClose }: { chapterId: string | null; o
 }
 
 function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; scene: Scene | null; onClose: () => void }) {
-  const characters = useBookStore((s) => s.characters);
-  const places = useBookStore((s) => s.places);
+  const { characters, places } = useEncyclopediaStore();
   const goals = useBookStore((s) => s.goals);
   const writingMode = useBookStore((s) => s.writingMode);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');

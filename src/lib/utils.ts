@@ -103,7 +103,7 @@ export const WORLD_NOTE_CATEGORY_LABELS: Record<string, string> = {
   politics: 'Politique',
   religion: 'Religion',
   technology: 'Technologie',
-  flora_fauna: 'Flore & Faune',
+  flora_fauna: 'Faune & Flore',
   language: 'Langues',
   custom: 'Autre',
 };

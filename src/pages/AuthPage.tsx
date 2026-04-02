@@ -1,9 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BookOpen, AlertCircle, Database } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { api } from '@/lib/api';
 import { PasswordInput } from '@/components/shared/PasswordInput';
 import type { BookMeta } from '@/types';
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement, options: { sitekey: string; callback: (token: string) => void; 'expired-callback'?: () => void; theme?: string }) => string;
+      remove: (widgetId: string) => void;
+      reset: (widgetId: string) => void;
+    };
+  }
+}
+
+const IS_DEV = import.meta.env.DEV;
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'; // Test key (always passes)
 
 // ─── Detect existing anonymous local data ───────────────────────────────────
 
@@ -45,11 +58,50 @@ export function AuthPage() {
   const [name, setName] = useState('');
   const [migrating, setMigrating] = useState(false);
 
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
   const { login, signup, isLoading, error, clearError } = useAuthStore();
   const localBooks = getLocalLibrary();
   const hasLocalData = localBooks !== null;
 
   useEffect(() => { clearError(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Render Turnstile widget when signup tab is active
+  const renderCaptcha = useCallback(() => {
+    if (!captchaRef.current || !window.turnstile || widgetIdRef.current) return;
+    widgetIdRef.current = window.turnstile.render(captchaRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: (token: string) => setCaptchaToken(token),
+      'expired-callback': () => setCaptchaToken(null),
+      theme: 'light',
+    });
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 'signup') {
+      // Cleanup widget when switching away from signup
+      if (widgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+      setCaptchaToken(null);
+      return;
+    }
+    // Render immediately if script is loaded, or wait for it
+    if (window.turnstile) {
+      renderCaptcha();
+    } else {
+      const interval = setInterval(() => {
+        if (window.turnstile) {
+          renderCaptcha();
+          clearInterval(interval);
+        }
+      }, 200);
+      return () => clearInterval(interval);
+    }
+  }, [tab, renderCaptcha]);
 
   const migrateLocalData = async (books: BookMeta[]) => {
     setMigrating(true);
@@ -69,7 +121,7 @@ export function AuthPage() {
       if (tab === 'login') {
         await login(email, password);
       } else {
-        await signup(email, password, name.trim() || undefined);
+        await signup(email, password, name.trim() || undefined, captchaToken ?? undefined);
       }
       // After successful auth, migrate existing local data (only first time)
       if (hasLocalData && localBooks) {
@@ -98,7 +150,7 @@ export function AuthPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-bordeaux-600 rounded-2xl mb-4 shadow-lg">
             <BookOpen className="w-8 h-8 text-white" />
           </div>
-          <h1 className="font-display text-3xl font-bold text-ink-500">Fabula Mea</h1>
+          <h1 className="text-4xl text-ink-500" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</h1>
           <p className="text-ink-300 mt-1 text-sm">Votre atelier d'écriture personnel</p>
         </div>
 
@@ -193,9 +245,13 @@ export function AuthPage() {
               </div>
             )}
 
+            {tab === 'signup' && !IS_DEV && (
+              <div ref={captchaRef} className="flex justify-center" />
+            )}
+
             <button
               type="submit"
-              disabled={isLoading || migrating}
+              disabled={isLoading || migrating || (tab === 'signup' && !IS_DEV && !captchaToken)}
               className="btn-primary w-full py-2.5 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {migrating

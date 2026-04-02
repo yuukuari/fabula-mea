@@ -10,6 +10,7 @@ import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL,
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
+import { useSagaStore } from './useSagaStore';
 import { isBase64, uploadImage } from '@/lib/upload';
 
 const shouldSync = () => !!localStorage.getItem('emlb-token');
@@ -79,7 +80,7 @@ interface BookStore extends BookProject {
   loadBook: (bookId: string) => void;
   saveBook: () => void;
   unloadBook: () => void;
-  initNewBook: (bookId: string, title: string, author?: string, genre?: string, writingMode?: import('@/types').WritingMode, countUnit?: import('@/types').CountUnit) => void;
+  initNewBook: (bookId: string, title: string, author?: string, genre?: string, writingMode?: import('@/types').WritingMode, countUnit?: import('@/types').CountUnit, sagaId?: string, layout?: import('@/types').BookLayout) => void;
   updateSceneContent: (sceneId: string, content: string, wordCount: number) => void;
 
   // Project
@@ -204,6 +205,7 @@ function extractProjectData(state: BookStore): BookProject {
     synopsis: state.synopsis,
     writingMode: state.writingMode,
     countUnit: state.countUnit,
+    sagaId: state.sagaId,
     characters: state.characters,
     places: state.places,
     chapters: state.chapters,
@@ -282,7 +284,7 @@ export const useBookStore = create<BookStore>()(
       _loaded: false,
 
       // ─── Lifecycle ───
-      initNewBook: (bookId, title, author = '', genre = '', writingMode = 'count', countUnit = 'words') => {
+      initNewBook: (bookId, title, author = '', genre = '', writingMode = 'count', countUnit = 'words', sagaId, layout) => {
         const timestamp = now();
         const newState = {
           ...emptyState(),
@@ -292,6 +294,8 @@ export const useBookStore = create<BookStore>()(
           genre,
           writingMode,
           countUnit,
+          sagaId,
+          ...(layout ? { layout } : {}),
           chapters: [
             {
               id: generateId(),
@@ -344,6 +348,12 @@ export const useBookStore = create<BookStore>()(
         if (raw) {
           const project = ensureSpecialChapters(JSON.parse(raw) as BookProject);
           set({ ...project, lastSavedAt: now(), _loaded: true });
+          // Load saga if this book belongs to one
+          if (project.sagaId) {
+            useSagaStore.getState().loadSaga(project.sagaId);
+          } else {
+            useSagaStore.getState().unloadSaga();
+          }
         }
 
         // Vérifie l'API de façon asynchrone (priorité si plus récent ou si localStorage vide)
@@ -355,6 +365,10 @@ export const useBookStore = create<BookStore>()(
               const migrated = ensureSpecialChapters(remote);
               set({ ...migrated, lastSavedAt: now(), _loaded: true });
               localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(migrated));
+              // Load saga from remote data if needed
+              if (migrated.sagaId) {
+                useSagaStore.getState().loadSaga(migrated.sagaId);
+              }
             }
             useSyncStore.getState().setSynced();
           }).catch(() => {
@@ -419,6 +433,8 @@ export const useBookStore = create<BookStore>()(
             charactersCount: state.characters.length,
           });
         }
+        // Unload saga too
+        useSagaStore.getState().unloadSaga();
         set({
           ...emptyState(),
           id: '',

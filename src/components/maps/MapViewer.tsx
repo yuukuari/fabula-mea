@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import { Plus, X, MapPin as PinIcon, Trash2, Edit, ExternalLink, ZoomIn } from 'lucide-react';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useNavigate } from 'react-router-dom';
 import type { MapItem, MapPin } from '@/types';
 import { PLACE_TYPE_LABELS } from '@/lib/utils';
@@ -16,12 +16,7 @@ const PIN_COLORS = [
 
 export function MapViewer({ map }: MapViewerProps) {
   const navigate = useNavigate();
-  const places = useBookStore((s) => s.places);
-  const allMaps = useBookStore((s) => s.maps ?? []);
-  const addMapPin = useBookStore((s) => s.addMapPin);
-  const updateMapPin = useBookStore((s) => s.updateMapPin);
-  const deleteMapPin = useBookStore((s) => s.deleteMapPin);
-  const addPlace = useBookStore((s) => s.addPlace);
+  const { places, maps: allMaps = [], addMapPin, updateMapPin, deleteMapPin, addPlace } = useEncyclopediaStore();
 
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

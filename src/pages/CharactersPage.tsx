@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Plus, Users, Search } from 'lucide-react';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { CharacterCard } from '@/components/characters/CharacterCard';
 import { CharacterDetail } from '@/components/characters/CharacterDetail';
@@ -11,7 +11,7 @@ import { RelationshipGraph } from '@/components/characters/RelationshipGraph';
 export function CharactersPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const characters = useBookStore((s) => s.characters);
+  const { characters } = useEncyclopediaStore();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');

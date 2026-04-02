@@ -18,6 +18,8 @@ export interface AuthUser {
   email: string;
   name: string;
   isAdmin?: boolean;
+  avatarUrl?: string;
+  avatarOffsetY?: number;
 }
 
 function getToken(): string | null {
@@ -51,7 +53,7 @@ export const api = {
         }),
 
   auth: {
-    signup: (data: { email: string; password: string; name?: string }) =>
+    signup: (data: { email: string; password: string; name?: string; captchaToken?: string }) =>
       IS_DEV
         ? devAuth.signup(data)
         : apiFetch<{ token: string; user: AuthUser }>('/auth/signup', {
@@ -82,6 +84,26 @@ export const api = {
         : apiFetch<{ ok: boolean }>('/auth/reset-password', {
             method: 'POST',
             body: JSON.stringify({ token, password }),
+          }),
+    updateProfile: (data: { name?: string; email?: string; avatarUrl?: string; avatarOffsetY?: number }) =>
+      IS_DEV
+        ? devAuth.updateProfile(data)
+        : apiFetch<AuthUser>('/auth/profile', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+          }),
+    changePassword: (data: { currentPassword: string; newPassword: string }) =>
+      IS_DEV
+        ? devAuth.changePassword(data)
+        : apiFetch<{ ok: boolean }>('/auth/change-password', {
+            method: 'POST',
+            body: JSON.stringify(data),
+          }),
+    deleteAccount: () =>
+      IS_DEV
+        ? devAuth.deleteAccount()
+        : apiFetch<{ ok: boolean }>('/auth/account', {
+            method: 'DELETE',
           }),
   },
 
@@ -118,6 +140,31 @@ export const api = {
             method: 'POST',
             body: JSON.stringify(data),
           }),
+  },
+
+  sagas: {
+    getMeta: () =>
+      IS_DEV ? devDb.sagas.getMeta() : apiFetch<unknown[]>('/library?type=sagas'),
+    saveMeta: (sagas: unknown[]) =>
+      IS_DEV
+        ? devDb.sagas.saveMeta(sagas)
+        : apiFetch<{ ok: boolean }>('/library?type=sagas', {
+            method: 'POST',
+            body: JSON.stringify(sagas),
+          }),
+    get: (sagaId: string) =>
+      IS_DEV ? devDb.sagas.get(sagaId) : apiFetch<unknown>(`/saga/${sagaId}`),
+    save: (sagaId: string, data: unknown) =>
+      IS_DEV
+        ? devDb.sagas.save(sagaId, data)
+        : apiFetch<{ ok: boolean }>(`/saga/${sagaId}`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+          }),
+    delete: (sagaId: string) =>
+      IS_DEV
+        ? devDb.sagas.delete(sagaId)
+        : apiFetch<{ ok: boolean }>(`/saga/${sagaId}`, { method: 'DELETE' }),
   },
 
   tickets: {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, BookText } from 'lucide-react';
 import type { Character, Relationship } from '@/types';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { CharacterAvatar } from './CharacterAvatar';
@@ -29,9 +29,7 @@ function getRelLabel(rel: Relationship): string {
 
 export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailProps) {
   const navigate = useNavigate();
-  const deleteCharacter = useBookStore((s) => s.deleteCharacter);
-  const deleteRelationship = useBookStore((s) => s.deleteRelationship);
-  const characters = useBookStore((s) => s.characters);
+  const { characters, deleteCharacter, deleteRelationship } = useEncyclopediaStore();
   const [showDelete, setShowDelete] = useState(false);
   const [showRelEditor, setShowRelEditor] = useState(false);
   const [editingRel, setEditingRel] = useState<Relationship | undefined>(undefined);

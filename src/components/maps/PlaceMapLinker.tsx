@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { X, MapPin as PinIcon, Check, Trash2 } from 'lucide-react';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import type { MapItem } from '@/types';
 
 interface PlaceMapLinkerProps {
@@ -12,10 +12,7 @@ interface PlaceMapLinkerProps {
 const PIN_COLORS = ['#8b2252', '#c4a35a', '#2d6a4f', '#1d3557', '#e76f51', '#6a4c93', '#1982c4', '#dc2626'];
 
 export function PlaceMapLinker({ placeId, placeName, onClose }: PlaceMapLinkerProps) {
-  const maps = useBookStore((s) => s.maps ?? []);
-  const addMapPin = useBookStore((s) => s.addMapPin);
-  const updateMapPin = useBookStore((s) => s.updateMapPin);
-  const deleteMapPin = useBookStore((s) => s.deleteMapPin);
+  const { maps = [], addMapPin, updateMapPin, deleteMapPin } = useEncyclopediaStore();
 
   const [selectedMapId, setSelectedMapId] = useState<string | null>(
     // Pre-select the first map that already has this place pinned, otherwise first map

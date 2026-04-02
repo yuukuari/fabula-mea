@@ -44,6 +44,8 @@ function getCurrentUser() {
 
 const libraryKey = (uid: string) => `emlb-dev:u:${uid}:library`;
 const bookKey = (uid: string, bookId: string) => `emlb-dev:u:${uid}:book:${bookId}`;
+const sagasListKey = (uid: string) => `emlb-dev:u:${uid}:sagas`;
+const sagaKey = (uid: string, sagaId: string) => `emlb-dev:u:${uid}:saga:${sagaId}`;
 
 function generateId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
@@ -126,6 +128,40 @@ export const devDb = {
         localStorage.setItem(bookKey(uid, book.id), JSON.stringify(book.data));
       }
       return { ok: true, migrated: data.books.length };
+    },
+  },
+
+  // ─── Sagas ──────────────────────────────────────────────────────────────
+
+  sagas: {
+    async getMeta(): Promise<unknown[]> {
+      const uid = requireUserId();
+      return getJson(sagasListKey(uid), []);
+    },
+
+    async saveMeta(sagas: unknown[]): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      setJson(sagasListKey(uid), sagas);
+      return { ok: true };
+    },
+
+    async get(sagaId: string): Promise<unknown> {
+      const uid = requireUserId();
+      const raw = localStorage.getItem(sagaKey(uid, sagaId));
+      if (!raw) throw new Error('Saga introuvable');
+      return JSON.parse(raw);
+    },
+
+    async save(sagaId: string, data: unknown): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      setJson(sagaKey(uid, sagaId), data);
+      return { ok: true };
+    },
+
+    async delete(sagaId: string): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      localStorage.removeItem(sagaKey(uid, sagaId));
+      return { ok: true };
     },
   },
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Map, Trash2, Upload, X, Edit2, ArrowLeft } from 'lucide-react';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { MapViewer } from '@/components/maps/MapViewer';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -35,10 +35,8 @@ function resizeImage(file: File, maxSize = 1600): Promise<string> {
 }
 
 export function MapsPage() {
-  const maps = useBookStore((s) => s.maps ?? []);
-  const addMap = useBookStore((s) => s.addMap);
-  const updateMap = useBookStore((s) => s.updateMap);
-  const deleteMap = useBookStore((s) => s.deleteMap);
+  const { maps: rawMaps, addMap, updateMap, deleteMap } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
 
   const [searchParams, setSearchParams] = useSearchParams();
   const mapIdParam = searchParams.get('mapId');

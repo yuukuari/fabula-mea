@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, ChevronDown, ChevronRight, Check, Mail, Copy, Link } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useLibraryStore } from '@/store/useLibraryStore';
@@ -21,9 +22,7 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
   const bookAuthor = useBookStore((s) => s.author);
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled);
   const bookLayout = useBookStore((s) => s.layout);
-  const allCharacters = useBookStore((s) => s.characters);
-  const allPlaces = useBookStore((s) => s.places);
-  const allWorldNotes = useBookStore((s) => s.worldNotes);
+  const { characters: allCharacters, places: allPlaces, worldNotes: allWorldNotes } = useEncyclopediaStore();
   const bookId = useLibraryStore((s) => s.currentBookId);
   const user = useAuthStore((s) => s.user);
   const createSession = useReviewStore((s) => s.createSession);

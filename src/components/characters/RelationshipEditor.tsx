@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS, ALWAYS_RECIPROCAL_TYPES } from '@/lib/utils';
 import type { RelationshipType, Relationship } from '@/types';
 
@@ -37,9 +37,7 @@ function getReverseFamilyRole(role: string, targetSex?: string): string {
 }
 
 export function RelationshipEditor({ characterId, existingRelationship, onClose }: RelationshipEditorProps) {
-  const characters = useBookStore((s) => s.characters);
-  const addRelationship = useBookStore((s) => s.addRelationship);
-  const updateRelationship = useBookStore((s) => s.updateRelationship);
+  const { characters, addRelationship, updateRelationship } = useEncyclopediaStore();
 
   const currentChar = characters.find((c) => c.id === characterId);
   const otherCharacters = characters.filter((c) => c.id !== characterId);

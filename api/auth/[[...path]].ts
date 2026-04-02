@@ -21,6 +21,8 @@ interface User {
   passwordHash: string;
   isAdmin?: boolean;
   createdAt?: string;
+  avatarUrl?: string;
+  avatarOffsetY?: number;
 }
 
 // --- Handlers ---
@@ -54,13 +56,30 @@ async function handleLogin(req: VercelRequest, res: VercelResponse) {
   return res.json({ token, user: { id: user.id, email: normalized, name: user.name } });
 }
 
+async function verifyCaptcha(token: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true; // Skip verification if secret not configured
+  try {
+    const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, response: token }),
+    });
+    const data = await resp.json() as { success: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
 async function handleSignup(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { email, password, name } = req.body as {
+  const { email, password, name, captchaToken } = req.body as {
     email?: string;
     password?: string;
     name?: string;
+    captchaToken?: string;
   };
 
   if (!email || !password) {
@@ -68,6 +87,17 @@ async function handleSignup(req: VercelRequest, res: VercelResponse) {
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Mot de passe trop court (min. 8 caractères)' });
+  }
+
+  // Verify Turnstile CAPTCHA
+  if (captchaToken) {
+    const valid = await verifyCaptcha(captchaToken);
+    if (!valid) {
+      return res.status(400).json({ error: 'Vérification CAPTCHA échouée. Veuillez réessayer.' });
+    }
+  } else if (process.env.TURNSTILE_SECRET_KEY) {
+    // If secret is configured, captcha is required
+    return res.status(400).json({ error: 'Vérification CAPTCHA requise' });
   }
 
   const normalized = email.toLowerCase().trim();
@@ -111,7 +141,7 @@ async function handleMe(req: VercelRequest, res: VercelResponse) {
   if (!userJson) return res.status(404).json({ error: 'Utilisateur introuvable' });
 
   const user = JSON.parse(userJson) as User;
-  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false });
+  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY });
 }
 
 async function handleForgotPassword(req: VercelRequest, res: VercelResponse) {
@@ -161,6 +191,88 @@ async function handleResetPassword(req: VercelRequest, res: VercelResponse) {
   return res.json({ ok: true });
 }
 
+async function handleProfile(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'PATCH') return res.status(405).end();
+
+  const auth = requireAuth(req, res);
+  if (!auth) return;
+
+  const userJson = await redis.get(`emlb:user:${auth.userId}`);
+  if (!userJson) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+  const user = JSON.parse(userJson) as User;
+  const { name, email, avatarUrl, avatarOffsetY } = req.body as { name?: string; email?: string; avatarUrl?: string; avatarOffsetY?: number };
+
+  if (name !== undefined) user.name = name.trim();
+  if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+  if (avatarOffsetY !== undefined) user.avatarOffsetY = avatarOffsetY;
+
+  if (email !== undefined) {
+    const newEmail = email.trim().toLowerCase();
+    if (newEmail !== user.email) {
+      const existingId = await redis.get(`emlb:email:${newEmail}`);
+      if (existingId) return res.status(409).json({ error: 'Cet email est déjà utilisé' });
+      await redis.del(`emlb:email:${user.email}`);
+      await redis.set(`emlb:email:${newEmail}`, user.id);
+      user.email = newEmail;
+    }
+  }
+
+  await redis.set(`emlb:user:${user.id}`, JSON.stringify(user));
+  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY });
+}
+
+async function handleChangePassword(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const auth = requireAuth(req, res);
+  if (!auth) return;
+
+  const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Mots de passe requis' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'Nouveau mot de passe trop court (min. 8 caractères)' });
+
+  const userJson = await redis.get(`emlb:user:${auth.userId}`);
+  if (!userJson) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+  const user = JSON.parse(userJson) as User;
+  const valid = await comparePassword(currentPassword, user.passwordHash);
+  if (!valid) return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+
+  user.passwordHash = await hashPassword(newPassword);
+  await redis.set(`emlb:user:${user.id}`, JSON.stringify(user));
+  return res.json({ ok: true });
+}
+
+async function handleDeleteAccount(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'DELETE') return res.status(405).end();
+
+  const auth = requireAuth(req, res);
+  if (!auth) return;
+
+  const userJson = await redis.get(`emlb:user:${auth.userId}`);
+  if (!userJson) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+  const user = JSON.parse(userJson) as User;
+
+  // Delete user data
+  await Promise.all([
+    redis.del(`emlb:user:${user.id}`),
+    redis.del(`emlb:email:${user.email}`),
+    redis.del(`emlb:u:${user.id}:library`),
+  ]);
+
+  // Remove from member-ids index
+  const memberIdsJson = await redis.get('emlb:member-ids');
+  if (memberIdsJson) {
+    const memberIds: string[] = JSON.parse(memberIdsJson);
+    const filtered = memberIds.filter((id) => id !== user.id);
+    await redis.set('emlb:member-ids', JSON.stringify(filtered));
+  }
+
+  return res.json({ ok: true });
+}
+
 // --- Router ---
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -180,6 +292,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleForgotPassword(req, res);
     case 'reset-password':
       return handleResetPassword(req, res);
+    case 'profile':
+      return handleProfile(req, res);
+    case 'change-password':
+      return handleChangePassword(req, res);
+    case 'account':
+      return handleDeleteAccount(req, res);
     default:
       return res.status(404).json({ error: 'Route introuvable' });
   }

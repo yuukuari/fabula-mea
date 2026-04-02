@@ -34,7 +34,7 @@ export function AppShell() {
   if (!currentBookId) return null;
 
   return (
-    <div className="flex flex-col min-h-screen md:ml-64">
+    <div className="flex flex-col min-h-screen md:ml-72">
       <div className="flex flex-1 min-h-0">
         <Sidebar
           onSearchClick={() => setOpen(true)}

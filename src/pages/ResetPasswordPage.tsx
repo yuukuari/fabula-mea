@@ -46,7 +46,7 @@ export function ResetPasswordPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-bordeaux-600 rounded-2xl mb-4 shadow-lg">
             <BookOpen className="w-8 h-8 text-white" />
           </div>
-          <h1 className="font-display text-3xl font-bold text-ink-500">Fabula Mea</h1>
+          <h1 className="text-4xl text-ink-500" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</h1>
           <p className="text-ink-300 mt-1 text-sm">Nouveau mot de passe</p>
         </div>
 

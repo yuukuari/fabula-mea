@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -10,10 +10,7 @@ import type { WorldNoteCategory } from '@/types';
 
 export function WorldPage() {
   const [searchParams] = useSearchParams();
-  const worldNotes = useBookStore((s) => s.worldNotes);
-  const addWorldNote = useBookStore((s) => s.addWorldNote);
-  const updateWorldNote = useBookStore((s) => s.updateWorldNote);
-  const deleteWorldNote = useBookStore((s) => s.deleteWorldNote);
+  const { worldNotes, addWorldNote, updateWorldNote, deleteWorldNote } = useEncyclopediaStore();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -163,9 +160,7 @@ export function WorldPage() {
 }
 
 function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: () => void }) {
-  const worldNotes = useBookStore((s) => s.worldNotes);
-  const addWorldNote = useBookStore((s) => s.addWorldNote);
-  const updateWorldNote = useBookStore((s) => s.updateWorldNote);
+  const { worldNotes, addWorldNote, updateWorldNote } = useEncyclopediaStore();
   const existing = noteId ? worldNotes.find((n) => n.id === noteId) : null;
 
   const [title, setTitle] = useState(existing?.title ?? '');
