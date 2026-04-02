@@ -37,11 +37,13 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
 
 - **Authentification** → `api/auth/*.ts` : vrais JWT signés avec `JWT_SECRET`, hashage bcrypt.
 - **Base de données** → Upstash Redis via `api/_lib/redis.ts` (REST API).
+- **Images** → Vercel Blob via `api/upload.ts` : les images sont uploadées sur un CDN (Vercel Blob Storage) et stockées sous forme d'URLs publiques. En dev, les images restent en base64 dans localStorage.
 - **Variables d'environnement requises** (configurées dans Vercel) :
   - `JWT_SECRET` — Secret pour signer les tokens JWT
   - `UPSTASH_REDIS_REST_URL` — URL de l'instance Upstash Redis
   - `UPSTASH_REDIS_REST_TOKEN` — Token d'accès Upstash Redis
   - `RESEND_API_KEY` — Clé API Resend pour l'envoi d'emails
+  - `BLOB_READ_WRITE_TOKEN` — Token Vercel Blob pour l'upload d'images
 
 ### Clés localStorage (dev) vs Redis (prod)
 
@@ -137,6 +139,7 @@ Choisir le layout adapté :
 | Export | JSZip + file-saver | — |
 | Hébergement | Vercel (SPA + serverless) | — |
 | Base de données | Upstash Redis (prod) / localStorage (dev) | — |
+| Stockage images | Vercel Blob (prod) / base64 localStorage (dev) | — |
 
 ---
 
@@ -162,6 +165,7 @@ Choisir le layout adapté :
 │   ├── admin/members.ts         ← Endpoints admin (membres)
 │   ├── reviews/[[...path]].ts   ← Auteur + relecteur (reader/) dans un seul catch-all
 │   ├── library.ts               ← GET/POST bibliothèque utilisateur
+│   ├── upload.ts                ← Upload d'images vers Vercel Blob (CDN)
 │   └── migrate.ts               ← Migration de données
 │
 ├── src/
@@ -180,6 +184,7 @@ Choisir le layout adapté :
 │   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS, countCharacters, countUnitLabel, isSpecialChapter, getChapterLabel...)
 │   │   ├── calculations.ts      ← Calculs progression (mots/jour, scènes/jour, getTodayProgress, dailySnapshot)
 │   │   ├── fonts.ts             ← Config polices (FONT_STACKS, AVAILABLE_FONTS, DEFAULT_LAYOUT)
+│   │   ├── upload.ts            ← Helper upload images (CDN en prod, base64 en dev)
 │   │   ├── export-epub.ts       ← Génération EPUB 3
 │   │   ├── export-pdf.ts        ← Export PDF via window.print()
 │   │   ├── migration.ts         ← Migration single-book → multi-book
@@ -426,3 +431,4 @@ npm run preview  # Preview du build en local
 22. **Changement de statut de scène** : peut se faire directement depuis la liste des scènes (ChaptersPage) via un select inline, sans avoir à ouvrir la fiche de modification.
 23. **Couvertures et page de titre** : la 1ère de couverture et la page de titre (titre + auteur) apparaissent dans le manuscrit (ChaptersPage), les relectures (nav « Page de titre » + contenu), le PDF (avant la page de titre) et l'EPUB (métadonnées OPF `properties="cover-image"`). La 4ème de couverture apparaît à la fin dans le manuscrit, les relectures (nav « 4ème de couverture ») et le PDF. Dans l'EPUB, seule la 1ère de couverture est intégrée aux métadonnées. La tranche a été supprimée des paramètres.
 24. **Table des matières** : activable via `tableOfContents` dans `BookProject` (checkbox tout en haut de la page ChaptersPage, avant « Avant l'histoire »). Apparaît dans PDF et EPUB uniquement. Les chapitres front/back matter sont éclatés en entrées individuelles par scène (seulement celles avec titre). Les numéros de page sont générés via CSS `target-counter()` dans le PDF.
+25. **Images et CDN** : les images (avatars personnages, lieux, notes univers, cartes, couvertures) sont stockées sur **Vercel Blob** (CDN) en production et en **base64 dans localStorage** en développement. Le helper `src/lib/upload.ts` (`uploadImage()`) gère la logique : en dev → retourne le base64 tel quel, en prod → upload vers `/api/upload` → retourne l'URL CDN publique. La **migration lazy** dans `useBookStore.saveBook()` détecte les images base64 restantes et les upload automatiquement au CDN avant la sync cloud. Les champs `imageUrl` et `coverFront`/`coverBack` acceptent indifféremment un base64 ou une URL HTTP (rétrocompatibilité). L'export EPUB utilise `resolveImageData()` qui gère les deux formats (fetch URL ou parse base64). L'export PDF fonctionne nativement avec les URLs via `<img src="...">`. Variable d'environnement requise : `BLOB_READ_WRITE_TOKEN`.

@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { Download, Upload, Hash, PenLine, AlertTriangle, X, BookOpen, FileText, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Download, Upload, Hash, PenLine, AlertTriangle, X, BookOpen, FileText, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { exportEpub } from '@/lib/export-epub';
 import { exportPdf } from '@/lib/export-pdf';
 import { AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, AVAILABLE_LINE_HEIGHTS, FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
+import { uploadImage } from '@/lib/upload';
 import type { WritingMode, CountUnit, BookFont, BookFontSize, BookLineHeight } from '@/types';
 
 /** Modale de confirmation de changement de mode */
@@ -145,13 +146,24 @@ function CoverUpload({
   aspectHint: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') onChange(reader.result);
+    reader.onload = async () => {
+      if (typeof reader.result === 'string') {
+        setIsUploading(true);
+        try {
+          const url = await uploadImage(reader.result, `cover-${label.toLowerCase().replace(/\s+/g, '-')}`);
+          onChange(url);
+        } catch {
+          onChange(reader.result);
+        } finally {
+          setIsUploading(false);
+        }
+      }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -160,7 +172,11 @@ function CoverUpload({
   return (
     <div>
       <label className="label-field">{label}</label>
-      {value ? (
+      {isUploading ? (
+        <div className="w-full h-40 border border-parchment-200 rounded-lg bg-white flex items-center justify-center">
+          <Loader2 className="w-6 h-6 text-ink-300 animate-spin" />
+        </div>
+      ) : value ? (
         <div className="relative group">
           <img src={value} alt={label} className="w-full h-40 object-contain border border-parchment-200 rounded-lg bg-white" />
           <button

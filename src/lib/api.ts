@@ -42,6 +42,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  upload: (dataUrl: string, filename?: string): Promise<{ url: string }> =>
+    IS_DEV
+      ? Promise.resolve({ url: dataUrl })
+      : apiFetch<{ url: string }>('/upload', {
+          method: 'POST',
+          body: JSON.stringify({ dataUrl, filename }),
+        }),
+
   auth: {
     signup: (data: { email: string; password: string; name?: string }) =>
       IS_DEV

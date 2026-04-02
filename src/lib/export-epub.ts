@@ -27,7 +27,7 @@ interface ExportChapter {
 interface ExportMap {
   id: string;
   name: string;
-  imageUrl: string; // base64 data URL
+  imageUrl: string; // base64 data URL or CDN URL
 }
 
 interface ExportBook {
@@ -95,6 +95,38 @@ function parseDataUrl(dataUrl: string): { mimeType: string; ext: string; base64:
   const base64 = match[2];
   const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : 'jpg';
   return { mimeType, ext, base64 };
+}
+
+/** Fetches a remote image URL and returns its data as base64 + metadata */
+async function fetchImageAsBase64(url: string): Promise<{ mimeType: string; ext: string; base64: string } | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const mimeType = blob.type || 'image/jpeg';
+    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    const arrayBuffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    return { mimeType, ext, base64 };
+  } catch {
+    return null;
+  }
+}
+
+/** Resolves an image source (base64 data URL or HTTP URL) to base64 data for EPUB packaging */
+async function resolveImageData(src: string): Promise<{ mimeType: string; ext: string; base64: string } | null> {
+  if (src.startsWith('data:')) {
+    return parseDataUrl(src);
+  }
+  if (src.startsWith('http://') || src.startsWith('https://')) {
+    return fetchImageAsBase64(src);
+  }
+  return null;
 }
 
 // ── CSS du livre ─────────────────────────────────────────────────
@@ -231,12 +263,11 @@ export async function exportEpub(book: ExportBook): Promise<void> {
   let coverImageFilename = '';
   let coverImageMimeType = '';
   if (book.layout?.coverFront) {
-    const parsed = parseDataUrl(book.layout.coverFront);
+    const parsed = await resolveImageData(book.layout.coverFront);
     if (parsed) {
       coverImageFilename = `cover.${parsed.ext}`;
       coverImageMimeType = parsed.mimeType;
       coverImageId = 'cover-image';
-      // Stocker l'image en base64 dans le zip
       zip.file(`OEBPS/${coverImageFilename}`, parsed.base64, { base64: true });
     }
   }
@@ -362,7 +393,7 @@ ${glossaryBody}
   if (book.maps && book.maps.length > 0) {
     for (const map of book.maps) {
       if (!map.imageUrl) continue;
-      const parsed = parseDataUrl(map.imageUrl);
+      const parsed = await resolveImageData(map.imageUrl);
       if (!parsed) continue;
 
       const imageFilename = `map-${map.id}.${parsed.ext}`;

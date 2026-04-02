@@ -10,8 +10,66 @@ import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL,
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
+import { isBase64, uploadImage } from '@/lib/upload';
 
 const shouldSync = () => !!localStorage.getItem('emlb-token');
+
+const IS_DEV = import.meta.env.DEV;
+
+/**
+ * Migrate base64 images to CDN URLs in a BookProject.
+ * Mutates the project data in-place and returns true if any migration occurred.
+ */
+async function migrateBase64Images(data: BookProject): Promise<boolean> {
+  // In dev mode, skip migration (no CDN available)
+  if (IS_DEV) return false;
+
+  const promises: Promise<void>[] = [];
+  let migrated = false;
+
+  // Characters
+  for (const char of data.characters) {
+    const img = char.imageUrl;
+    if (img && isBase64(img)) {
+      promises.push(uploadImage(img, `char-${char.name}`).then((url) => { char.imageUrl = url; migrated = true; }));
+    }
+  }
+
+  // Places
+  for (const place of data.places) {
+    const img = place.imageUrl;
+    if (img && isBase64(img)) {
+      promises.push(uploadImage(img, `place-${place.name}`).then((url) => { place.imageUrl = url; migrated = true; }));
+    }
+  }
+
+  // World Notes
+  for (const note of data.worldNotes) {
+    const img = note.imageUrl;
+    if (img && isBase64(img)) {
+      promises.push(uploadImage(img, `world-${note.title}`).then((url) => { note.imageUrl = url; migrated = true; }));
+    }
+  }
+
+  // Maps
+  for (const map of (data.maps ?? [])) {
+    const img = map.imageUrl;
+    if (img && isBase64(img)) {
+      promises.push(uploadImage(img, `map-${map.name}`).then((url) => { map.imageUrl = url; migrated = true; }));
+    }
+  }
+
+  // Layout covers
+  if (data.layout?.coverFront && isBase64(data.layout.coverFront)) {
+    promises.push(uploadImage(data.layout.coverFront, 'cover-front').then((url) => { data.layout!.coverFront = url; migrated = true; }));
+  }
+  if (data.layout?.coverBack && isBase64(data.layout.coverBack)) {
+    promises.push(uploadImage(data.layout.coverBack, 'cover-back').then((url) => { data.layout!.coverBack = url; migrated = true; }));
+  }
+
+  await Promise.all(promises);
+  return migrated;
+}
 
 interface BookStore extends BookProject {
   lastSavedAt: string | null;
@@ -324,11 +382,19 @@ export const useBookStore = create<BookStore>()(
         });
         set({ lastSavedAt: now() });
 
-        // Sauvegarde cloud (asynchrone)
+        // Sauvegarde cloud (asynchrone) — migrate base64 images first
         if (shouldSync()) {
           const sync = useSyncStore.getState();
           sync.setSyncing();
-          api.books.save(state.id, data)
+
+          migrateBase64Images(data).then((didMigrate) => {
+            if (didMigrate) {
+              // Update store and localStorage with migrated URLs
+              set({ ...data, lastSavedAt: now() });
+              localStorage.setItem(getBookStorageKey(state.id), JSON.stringify(data));
+            }
+            return api.books.save(state.id, data);
+          })
             .then(() => useSyncStore.getState().setSynced())
             .catch(() => useSyncStore.getState().setError('Échec sync cloud'));
         }

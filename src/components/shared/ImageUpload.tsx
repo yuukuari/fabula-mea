@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
-import { Upload, X, Move, Check } from 'lucide-react';
+import { Upload, X, Move, Check, Loader2 } from 'lucide-react';
+import { uploadImage } from '@/lib/upload';
 
 interface ImageUploadProps {
   value?: string;
@@ -18,6 +19,7 @@ export function ImageUpload({ value, onChange, className = '', round, offsetY = 
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const dragStartRef = useRef<{ startY: number; startOffset: number } | null>(null);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -27,7 +29,7 @@ export function ImageUpload({ value, onChange, className = '', round, offsetY = 
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas');
         const maxSize = 400;
         let w = img.width;
@@ -45,9 +47,21 @@ export function ImageUpload({ value, onChange, className = '', round, offsetY = 
         canvas.height = h;
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, w, h);
-        onChange(canvas.toDataURL('image/jpeg', 0.8));
-        // Reset offset to center when new image is uploaded
-        onOffsetYChange?.(50);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+        // Upload to CDN (in prod) or keep base64 (in dev)
+        setIsUploading(true);
+        try {
+          const url = await uploadImage(dataUrl, round ? 'avatar' : 'image');
+          onChange(url);
+          onOffsetYChange?.(50);
+        } catch {
+          // Fallback to base64 on error
+          onChange(dataUrl);
+          onOffsetYChange?.(50);
+        } finally {
+          setIsUploading(false);
+        }
       };
       img.src = reader.result as string;
     };
@@ -162,6 +176,10 @@ export function ImageUpload({ value, onChange, className = '', round, offsetY = 
               </div>
             )}
           </div>
+        ) : isUploading ? (
+          <div className="w-32 h-32 rounded-full border-2 border-parchment-300 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 text-ink-300 animate-spin" />
+          </div>
         ) : (
           <button
             type="button"
@@ -187,7 +205,11 @@ export function ImageUpload({ value, onChange, className = '', round, offsetY = 
 
   return (
     <div className={`relative ${className}`}>
-      {value ? (
+      {isUploading ? (
+        <div className="w-full h-48 border-2 border-parchment-300 rounded-lg flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-ink-300 animate-spin" />
+        </div>
+      ) : value ? (
         <div className="relative group">
           <img
             src={value}
