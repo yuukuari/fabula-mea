@@ -324,12 +324,15 @@ export interface TicketStatusChange {
   ticketId: string;
   userId: string;
   userName: string;
-  /** 'status_change' (default) or 'release_assign' */
-  type?: 'status_change' | 'release_assign';
+  type?: 'status_change' | 'release_assign' | 'type_change' | 'module_change';
   fromStatus?: TicketStatus;
   toStatus?: TicketStatus;
   releaseId?: string;
   releaseName?: string;
+  fromType?: TicketType;
+  toType?: TicketType;
+  fromModule?: TicketModule | null;
+  toModule?: TicketModule | null;
   createdAt: string;
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Bug, HelpCircle, Sparkles, Eye, EyeOff, Clock, CheckCircle, Copy,
-  Trash2, ChevronLeft, Send, MessageSquare, Tag, SmilePlus, X, ExternalLink, ArrowRightLeft,
+  Trash2, ChevronLeft, Send, MessageSquare, Tag, SmilePlus, X, ExternalLink, ArrowRightLeft, Layers,
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Heading1, Heading2, Heading3, Quote, List, ListOrdered,
@@ -39,7 +39,7 @@ const MODULE_LABELS: Record<string, string> = {
   characters: 'Personnages',
   places: 'Lieux',
   chapters: 'Chapitres / Scènes',
-  timeline: 'Timeline',
+  timeline: 'Chronologie',
   progress: 'Progression',
   world: 'Worldbuilding',
   maps: 'Cartes',
@@ -377,10 +377,22 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <span className={cn('badge', typeConf.color)}>
-                <TypeIcon className="w-3.5 h-3.5 mr-1" />
-                {typeConf.label}
-              </span>
+              {isAdmin ? (
+                <select
+                  value={ticket.type}
+                  onChange={(e) => updateTicket(ticketId, { type: e.target.value as TicketType })}
+                  className={cn('badge cursor-pointer border-0', typeConf.color)}
+                >
+                  {Object.entries(TYPE_CONFIG).map(([key, conf]) => (
+                    <option key={key} value={key}>{conf.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className={cn('badge', typeConf.color)}>
+                  <TypeIcon className="w-3.5 h-3.5 mr-1" />
+                  {typeConf.label}
+                </span>
+              )}
               <span className={cn('badge', statusConf.color)}>
                 {statusConf.label}
               </span>
@@ -389,11 +401,22 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
                   <EyeOff className="w-3 h-3 mr-1" /> Privé
                 </span>
               )}
-              {ticket.module && MODULE_LABELS[ticket.module] && (
+              {isAdmin ? (
+                <select
+                  value={ticket.module ?? ''}
+                  onChange={(e) => updateTicket(ticketId, { module: (e.target.value || undefined) as TicketModule | undefined })}
+                  className="badge bg-purple-50 text-purple-600 cursor-pointer border-0"
+                >
+                  <option value="">Aucune section</option>
+                  {Object.entries(MODULE_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              ) : ticket.module && MODULE_LABELS[ticket.module] ? (
                 <span className="badge bg-purple-50 text-purple-600">
                   {MODULE_LABELS[ticket.module]}
                 </span>
-              )}
+              ) : null}
             </div>
             <h1 className="text-xl font-display font-bold text-ink-500">{ticket.title}</h1>
             <p className="text-sm text-ink-200 mt-1">
@@ -484,7 +507,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
 
         {/* Description */}
         <div
-          className="prose prose-sm max-w-none mt-4 pt-4 border-t border-parchment-200"
+          className="tiptap max-w-none mt-4 pt-4 border-t border-parchment-200 text-sm"
           dangerouslySetInnerHTML={{ __html: ticket.description }}
         />
 
@@ -551,6 +574,52 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
         {timeline.map((entry) => {
           if (entry.kind === 'status') {
             const sc = entry.data;
+
+            // Type change activity
+            if (sc.type === 'type_change') {
+              const fromConf = sc.fromType ? TYPE_CONFIG[sc.fromType] : null;
+              const toConf = sc.toType ? TYPE_CONFIG[sc.toType] : null;
+              return (
+                <div
+                  key={sc.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-parchment-50 rounded-lg text-xs text-ink-300 border border-parchment-200"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                  <span className="font-medium">{sc.userName}</span>
+                  a changé le type de
+                  {fromConf && <span className={cn('badge text-[10px]', fromConf.color)}>{fromConf.label}</span>}
+                  vers
+                  {toConf && <span className={cn('badge text-[10px]', toConf.color)}>{toConf.label}</span>}
+                  <span className="ml-auto text-ink-200">
+                    {new Date(sc.createdAt).toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
+              );
+            }
+
+            // Module change activity
+            if (sc.type === 'module_change') {
+              const fromLabel = sc.fromModule ? MODULE_LABELS[sc.fromModule] : null;
+              const toLabel = sc.toModule ? MODULE_LABELS[sc.toModule] : null;
+              return (
+                <div
+                  key={sc.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-parchment-50 rounded-lg text-xs text-ink-300 border border-parchment-200"
+                >
+                  <Layers className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                  <span className="font-medium">{sc.userName}</span>
+                  {toLabel
+                    ? <>
+                        a changé la section vers
+                        <span className="badge bg-purple-50 text-purple-600 text-[10px]">{toLabel}</span>
+                      </>
+                    : <>a retiré la section <span className="badge bg-purple-50 text-purple-600 text-[10px]">{fromLabel}</span></>}
+                  <span className="ml-auto text-ink-200">
+                    {new Date(sc.createdAt).toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
+              );
+            }
 
             // Release assignment activity
             if (sc.type === 'release_assign') {
@@ -658,7 +727,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
                   )}
                 </div>
               </div>
-              <div className="prose prose-sm max-w-none text-ink-400" dangerouslySetInnerHTML={{ __html: comment.content }} />
+              <div className="tiptap max-w-none text-sm text-ink-400" dangerouslySetInnerHTML={{ __html: comment.content }} />
               {/* Reactions */}
               {Object.keys(comment.reactions).length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">

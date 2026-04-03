@@ -254,7 +254,7 @@ export const devDb = {
       return { ticket, comments, statusChanges };
     },
 
-    async update(id: string, data: Partial<Pick<Ticket, 'status' | 'releaseId'>>): Promise<{ ticket: Ticket }> {
+    async update(id: string, data: Partial<Pick<Ticket, 'status' | 'releaseId' | 'type' | 'module'>>): Promise<{ ticket: Ticket }> {
       const tickets = getJson<Ticket[]>('emlb-dev:tickets', []);
       const idx = tickets.findIndex((t) => t.id === id);
       if (idx === -1) throw new Error('Ticket introuvable');
@@ -294,6 +294,40 @@ export const devDb = {
           type: 'release_assign',
           releaseId: data.releaseId || undefined,
           releaseName: release ? `v${release.version}${release.title ? ' — ' + release.title : ''}` : undefined,
+          createdAt: new Date().toISOString(),
+        });
+        setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
+      }
+
+      // If type changed, add a type change entry
+      if (data.type && data.type !== oldTicket.type) {
+        const user = getCurrentUser();
+        const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${id}:statusChanges`, []);
+        changes.push({
+          id: generateId(),
+          ticketId: id,
+          userId: user.id,
+          userName: user.name,
+          type: 'type_change',
+          fromType: oldTicket.type,
+          toType: data.type,
+          createdAt: new Date().toISOString(),
+        });
+        setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
+      }
+
+      // If module changed, add a module change entry
+      if (data.module !== undefined && (data.module || null) !== (oldTicket.module || null)) {
+        const user = getCurrentUser();
+        const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${id}:statusChanges`, []);
+        changes.push({
+          id: generateId(),
+          ticketId: id,
+          userId: user.id,
+          userName: user.name,
+          type: 'module_change',
+          fromModule: oldTicket.module || null,
+          toModule: data.module || null,
           createdAt: new Date().toISOString(),
         });
         setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);

@@ -20,7 +20,7 @@ interface TicketStore {
     description: string;
     visibility: Ticket['visibility'];
   }) => Promise<Ticket>;
-  updateTicket: (id: string, data: Partial<Pick<Ticket, 'status' | 'releaseId'>>) => Promise<void>;
+  updateTicket: (id: string, data: Partial<Pick<Ticket, 'status' | 'releaseId' | 'type' | 'module'>>) => Promise<void>;
   deleteTicket: (id: string) => Promise<void>;
   addComment: (ticketId: string, content: string) => Promise<void>;
   deleteComment: (ticketId: string, commentId: string) => Promise<void>;
@@ -81,8 +81,8 @@ export const useTicketStore = create<TicketStore>()((set, get) => ({
         tickets: s.tickets.map((t) => (t.id === id ? ticket : t)),
         currentTicket: s.currentTicket?.id === id ? ticket : s.currentTicket,
       }));
-      // Reload ticket to get updated status changes / release assignments
-      if (data.status || data.releaseId !== undefined) {
+      // Reload ticket to get updated status changes / release assignments / type-module changes
+      if (data.status || data.releaseId !== undefined || data.type || data.module !== undefined) {
         get().loadTicket(id);
       }
     } catch (err) {

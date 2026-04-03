@@ -183,7 +183,7 @@ export const api = {
       IS_DEV
         ? devDb.tickets.get(id)
         : apiFetch<{ ticket: Ticket; comments: TicketComment[]; statusChanges: TicketStatusChange[] }>(`/tickets/${id}`),
-    update: (id: string, data: Partial<Pick<Ticket, 'status' | 'releaseId'>>) =>
+    update: (id: string, data: Partial<Pick<Ticket, 'status' | 'releaseId' | 'type' | 'module'>>) =>
       IS_DEV
         ? devDb.tickets.update(id, data)
         : apiFetch<{ ticket: Ticket }>(`/tickets/${id}`, {
