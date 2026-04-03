@@ -176,13 +176,15 @@ export const devDb = {
       const visible = allTickets.filter(
         (t) => t.visibility === 'public' || t.userId === uid || user.isAdmin
       );
-      // Gather all status changes for visible tickets
+      // Gather all status changes for visible tickets + comment counts
       const allChanges: TicketStatusChange[] = [];
-      for (const t of visible) {
+      const ticketsWithCounts = visible.map((t) => {
         const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${t.id}:statusChanges`, []);
         allChanges.push(...changes);
-      }
-      return { tickets: visible, statusChanges: allChanges };
+        const comments = getJson<TicketComment[]>(`emlb-dev:ticket:${t.id}:comments`, []);
+        return { ...t, commentCount: comments.length };
+      });
+      return { tickets: ticketsWithCounts, statusChanges: allChanges };
     },
 
     async create(data: {

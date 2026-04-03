@@ -20,7 +20,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useReleaseStore } from '@/store/useReleaseStore';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { useNavigate } from 'react-router-dom';
-import type { Ticket, TicketType, TicketStatus, TicketModule, TicketComment, TicketStatusChange } from '@/types';
+import type { Ticket, TicketType, TicketStatus, TicketModule, TicketComment, TicketStatusChange, Release } from '@/types';
 
 const TYPE_CONFIG: Record<TicketType, { icon: typeof Bug; label: string; color: string }> = {
   bug: { icon: Bug, label: 'Bug', color: 'bg-red-100 text-red-700' },
@@ -54,6 +54,8 @@ const QUICK_REACTIONS = ['👍', '👎', '❤️', '🎉', '😕', '🔥'];
 
 export function TicketsPage() {
   const { tickets, statusChanges, loadTickets, isLoading } = useTicketStore();
+  const releases = useReleaseStore((s) => s.releases);
+  const loadReleases = useReleaseStore((s) => s.loadReleases);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | TicketType>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
@@ -61,6 +63,7 @@ export function TicketsPage() {
 
   useEffect(() => {
     loadTickets();
+    loadReleases();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = tickets
@@ -154,6 +157,7 @@ export function TicketsPage() {
             <TicketRow
               key={ticket.id}
               ticket={ticket}
+              releases={releases}
               onClick={() => setSelectedId(ticket.id)}
             />
           ))}
@@ -163,10 +167,11 @@ export function TicketsPage() {
   );
 }
 
-function TicketRow({ ticket, onClick }: { ticket: Ticket; onClick: () => void }) {
+function TicketRow({ ticket, releases, onClick }: { ticket: Ticket; releases: Release[]; onClick: () => void }) {
   const typeConf = TYPE_CONFIG[ticket.type];
   const statusConf = STATUS_CONFIG[ticket.status];
   const TypeIcon = typeConf.icon;
+  const release = ticket.releaseId ? releases.find((r) => r.id === ticket.releaseId) : null;
 
   return (
     <button
@@ -195,6 +200,24 @@ function TicketRow({ ticket, onClick }: { ticket: Ticket; onClick: () => void })
             <>
               <span>•</span>
               <span className="flex items-center gap-1"><EyeOff className="w-3 h-3" /> Privé</span>
+            </>
+          )}
+          {release && (
+            <>
+              <span>•</span>
+              <span className="flex items-center gap-1 badge bg-blue-50 text-blue-600 text-[10px] py-0 px-1.5">
+                <Tag className="w-3 h-3" />
+                v{release.version}
+              </span>
+            </>
+          )}
+          {(ticket.commentCount ?? 0) > 0 && (
+            <>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" />
+                {ticket.commentCount}
+              </span>
             </>
           )}
         </div>

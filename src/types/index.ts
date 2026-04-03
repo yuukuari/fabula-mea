@@ -302,6 +302,7 @@ export interface Ticket {
   status: TicketStatus;
   releaseId?: string;
   reactions: Record<string, string[]>; // emoji → userId[]
+  commentCount?: number;
   createdAt: string;
   updatedAt: string;
 }

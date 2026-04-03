@@ -76,14 +76,18 @@ async function handleIndex(req: VercelRequest, res: VercelResponse, auth: { user
     );
 
     const statusChanges: unknown[] = [];
+    const ticketsWithCounts = [];
     for (const t of visible) {
       const changesJson = await redis.get(`emlb:ticket:${t.id}:statusChanges`);
       if (changesJson) {
         statusChanges.push(...JSON.parse(changesJson));
       }
+      const commentsJson = await redis.get(`emlb:ticket:${t.id}:comments`);
+      const comments = commentsJson ? JSON.parse(commentsJson) : [];
+      ticketsWithCounts.push({ ...t, commentCount: comments.length });
     }
 
-    return res.json({ tickets: visible, statusChanges });
+    return res.json({ tickets: ticketsWithCounts, statusChanges });
   }
 
   if (req.method === 'POST') {
@@ -299,6 +303,28 @@ async function handleReaction(req: VercelRequest, res: VercelResponse, auth: { u
   const { emoji } = req.body;
   if (!emoji) return res.status(400).json({ error: 'Emoji requis' });
 
+  // Reaction on ticket description
+  if (commentId === '__desc__') {
+    const ticketsJson = await redis.get('emlb:tickets');
+    const tickets = ticketsJson ? JSON.parse(ticketsJson) : [];
+    const ticketIdx = tickets.findIndex((t: any) => t.id === ticketId);
+    if (ticketIdx === -1) return res.status(404).json({ error: 'Ticket introuvable' });
+    const ticket = { ...tickets[ticketIdx] };
+    const reactions = { ...(ticket.reactions ?? {}) };
+    const users = reactions[emoji] ?? [];
+    if (users.includes(auth.userId)) {
+      reactions[emoji] = users.filter((u: string) => u !== auth.userId);
+      if (reactions[emoji].length === 0) delete reactions[emoji];
+    } else {
+      reactions[emoji] = [...users, auth.userId];
+    }
+    ticket.reactions = reactions;
+    tickets[ticketIdx] = ticket;
+    await redis.set('emlb:tickets', JSON.stringify(tickets));
+    return res.json({ ticket });
+  }
+
+  // Reaction on comment
   const commentsJson = await redis.get(`emlb:ticket:${ticketId}:comments`);
   const comments: TicketComment[] = commentsJson ? JSON.parse(commentsJson) : [];
   const commentIdx = comments.findIndex((c) => c.id === commentId);
