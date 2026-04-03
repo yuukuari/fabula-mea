@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Clock, Edit, X, User, MapPin, Map } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
@@ -21,6 +22,7 @@ export function TimelinePage() {
   const [filterPlaceId, setFilterPlaceId] = useState<string | null>(null);
   const [filterCharacterId, setFilterCharacterId] = useState<string | null>(null);
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
+  const [tooltip, setTooltip] = useState<{ scene: Scene; x: number; y: number } | null>(null);
 
   // Only scenes with dates can be shown on the timeline
   const datedScenes = useMemo(() =>
@@ -117,16 +119,11 @@ export function TimelinePage() {
     const left = getPosition(scene.startDateTime!);
     const width = getWidth(scene);
     const chapter = chapters.find((c) => c.id === scene.chapterId);
-    const place = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
-    const sceneMaps = place
-      ? maps.filter((m) => m.pins.some((p) => p.placeId === place.id))
-      : [];
-    const sceneChars = scene.characterIds.map((cid) => characters.find((c) => c.id === cid)).filter(Boolean);
 
     return (
       <div
         key={scene.id}
-        className={cn('absolute top-1 bottom-1 rounded cursor-pointer transition-all group', dimmed && 'opacity-20')}
+        className={cn('absolute top-1 bottom-1 rounded cursor-pointer transition-all', dimmed && 'opacity-20')}
         style={{
           left: `${left}%`,
           width: `${width}%`,
@@ -134,42 +131,24 @@ export function TimelinePage() {
           backgroundColor: getChapterColor(scene.chapterId),
         }}
         onClick={() => setEditingScene(scene)}
-        title={scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}
+        onMouseEnter={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setTooltip({ scene, x: rect.left + rect.width / 2, y: rect.top });
+        }}
+        onMouseLeave={() => setTooltip(null)}
       >
         <span className="text-[10px] text-white px-1 truncate block leading-8 font-medium">
           {scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}
         </span>
-        {sceneMaps.length > 0 && (
-          <div className="absolute top-0.5 right-0.5 w-3 h-3 opacity-70">
-            <Map className="w-3 h-3 text-white" />
-          </div>
-        )}
-        {/* Tooltip */}
-        <div className="absolute bottom-full left-0 mb-1 bg-ink-500 text-white text-xs rounded-lg p-2.5 hidden group-hover:block z-10 shadow-lg max-w-xs" style={{ minWidth: '200px' }}>
-          <div className="font-medium">{scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}</div>
-          {chapter && !isSpecialChapter(chapter) && <div className="text-white/70 mt-0.5">{getChapterShortLabel(chapter)}</div>}
-          {scene.description && (
-            <div className="text-white/80 mt-1.5 text-[11px] leading-relaxed whitespace-normal border-t border-white/20 pt-1.5">
-              {scene.description.length > 200 ? scene.description.slice(0, 200) + '…' : scene.description}
+        {(() => {
+          const place = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
+          const sceneMaps = place ? maps.filter((m) => m.pins.some((p) => p.placeId === place.id)) : [];
+          return sceneMaps.length > 0 ? (
+            <div className="absolute top-0.5 right-0.5 w-3 h-3 opacity-70">
+              <Map className="w-3 h-3 text-white" />
             </div>
-          )}
-          {sceneChars.length > 0 && (
-            <div className="text-white/70 flex items-center gap-1 mt-1">
-              <User className="w-3 h-3 shrink-0" />{sceneChars.map((c) => c!.name).join(', ')}
-            </div>
-          )}
-          {place && (
-            <div className="text-white/70 flex items-center gap-1 mt-0.5 flex-wrap">
-              <MapPin className="w-3 h-3 shrink-0" />{place.name}
-              {sceneMaps.map((m) => (
-                <span key={m.id} className="flex items-center gap-0.5 text-gold-300">
-                  <Map className="w-3 h-3" />{m.name}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="text-white/70 mt-0.5">{new Date(scene.startDateTime!).toLocaleString('fr-FR')}</div>
-        </div>
+          ) : null;
+        })()}
       </div>
     );
   };
@@ -330,6 +309,12 @@ export function TimelinePage() {
         </div>
       )}
 
+      {/* Tooltip (portal to avoid overflow clipping) */}
+      {tooltip && createPortal(
+        <TimelineTooltip scene={tooltip.scene} x={tooltip.x} y={tooltip.y} />,
+        document.body
+      )}
+
       {/* Quick Edit Dialog */}
       {editingScene && (
         <TimelineSceneEditor
@@ -337,6 +322,56 @@ export function TimelinePage() {
           onClose={() => setEditingScene(null)}
         />
       )}
+    </div>
+  );
+}
+
+function TimelineTooltip({ scene, x, y }: { scene: Scene; x: number; y: number }) {
+  const chapters = useBookStore((s) => s.chapters);
+  const { characters, places, maps: rawMaps } = useEncyclopediaStore();
+  const maps = rawMaps ?? [];
+  const chapter = chapters.find((c) => c.id === scene.chapterId);
+  const place = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
+  const sceneMaps = place ? maps.filter((m) => m.pins.some((p) => p.placeId === place.id)) : [];
+  const sceneChars = scene.characterIds.map((cid) => characters.find((c) => c.id === cid)).filter(Boolean);
+
+  // Position tooltip above the scene, centered horizontally, clamped to viewport
+  const tooltipStyle: React.CSSProperties = {
+    position: 'fixed',
+    left: `${Math.max(8, Math.min(x, window.innerWidth - 328))}px`,
+    top: `${y - 8}px`,
+    transform: 'translateY(-100%)',
+    zIndex: 9999,
+    minWidth: '200px',
+    maxWidth: '320px',
+    pointerEvents: 'none' as const,
+  };
+
+  return (
+    <div style={tooltipStyle} className="bg-ink-500 text-white text-xs rounded-lg p-2.5 shadow-lg">
+      <div className="font-medium">{scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}</div>
+      {chapter && !isSpecialChapter(chapter) && <div className="text-white/70 mt-0.5">{getChapterShortLabel(chapter)}</div>}
+      {scene.description && (
+        <div className="text-white/80 mt-1.5 text-[11px] leading-relaxed whitespace-normal border-t border-white/20 pt-1.5">
+          {scene.description.length > 200 ? scene.description.slice(0, 200) + '…' : scene.description}
+        </div>
+      )}
+      {sceneChars.length > 0 && (
+        <div className="text-white/70 flex items-center gap-1 mt-1">
+          <User className="w-3 h-3 shrink-0" />{sceneChars.map((c) => c!.name).join(', ')}
+        </div>
+      )}
+      {place && (
+        <div className="text-white/70 flex items-center gap-1 mt-0.5 flex-wrap">
+          <MapPin className="w-3 h-3 shrink-0" />{place.name}
+          {sceneMaps.map((m) => (
+            <span key={m.id} className="flex items-center gap-0.5 text-gold-300">
+              <Map className="w-3 h-3" />{m.name}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="text-white/70 mt-0.5">{new Date(scene.startDateTime!).toLocaleString('fr-FR')}</div>
     </div>
   );
 }
@@ -376,6 +411,10 @@ function TimelineSceneEditor({ scene, onClose }: { scene: Scene; onClose: () => 
           <h3 className="font-display text-lg font-bold text-ink-500">{scene.title || `Scène ${(chapter?.sceneIds.indexOf(scene.id) ?? 0) + 1}`}</h3>
           <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
+
+        {scene.description && (
+          <p className="text-sm text-ink-300 -mt-2 mb-4">{scene.description}</p>
+        )}
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
