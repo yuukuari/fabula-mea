@@ -107,7 +107,9 @@ export function HomePage() {
   const [countUnit, setCountUnit] = useState<CountUnit>('words');
   const [sagaChoice, setSagaChoice] = useState<'standalone' | 'existing' | 'new'>('standalone');
   const [selectedSagaId, setSelectedSagaId] = useState<string>('');
+  const [newSynopsis, setNewSynopsis] = useState('');
   const [newSagaTitle, setNewSagaTitle] = useState('');
+  const [newSagaSynopsis, setNewSagaSynopsis] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [collapsedSagas, setCollapsedSagas] = useState<Set<string>>(new Set());
 
@@ -132,8 +134,8 @@ export function HomePage() {
 
     let sagaId: string | undefined;
     if (sagaChoice === 'new' && newSagaTitle.trim()) {
-      sagaId = createSaga(newSagaTitle.trim(), { author: newAuthor.trim(), genre: newGenre.trim(), writingMode: effectiveWritingMode, countUnit: effectiveCountUnit });
-      initNewSaga(sagaId, newSagaTitle.trim());
+      sagaId = createSaga(newSagaTitle.trim(), { description: newSagaSynopsis.trim(), author: newAuthor.trim(), genre: newGenre.trim(), writingMode: effectiveWritingMode, countUnit: effectiveCountUnit });
+      initNewSaga(sagaId, newSagaTitle.trim(), newSagaSynopsis.trim());
     } else if (sagaChoice === 'existing' && selectedSagaId) {
       sagaId = selectedSagaId;
     }
@@ -144,8 +146,12 @@ export function HomePage() {
 
     const bookId = createBook(newTitle.trim(), effectiveAuthor.trim(), effectiveGenre.trim(), effectiveWritingMode, effectiveCountUnit, sagaId);
     initNewBook(bookId, newTitle.trim(), effectiveAuthor.trim(), effectiveGenre.trim(), effectiveWritingMode, effectiveCountUnit, sagaId, effectiveLayout);
+    if (newSynopsis.trim()) {
+      useBookStore.getState().updateProject({ synopsis: newSynopsis.trim() });
+    }
     selectBook(bookId);
     setNewTitle('');
+    setNewSynopsis('');
     setNewAuthor('');
     setNewGenre('');
     setWritingMode(null);
@@ -153,17 +159,20 @@ export function HomePage() {
     setSagaChoice('standalone');
     setSelectedSagaId('');
     setNewSagaTitle('');
+    setNewSagaSynopsis('');
     setShowCreate(false);
     navigate('/encyclopedia');
   };
 
   const handleCancelCreate = () => {
     setShowCreate(false);
+    setNewSynopsis('');
     setWritingMode(null);
     setCountUnit('words');
     setSagaChoice('standalone');
     setSelectedSagaId('');
     setNewSagaTitle('');
+    setNewSagaSynopsis('');
   };
 
   const handleSelect = (bookId: string) => {
@@ -295,13 +304,23 @@ export function HomePage() {
                     autoFocus
                   />
                 </div>
+                <div className="mb-6">
+                  <label className="label-field">Synopsis</label>
+                  <textarea
+                    className="textarea-field"
+                    placeholder="De quoi parle ce tome ?"
+                    value={newSynopsis}
+                    onChange={(e) => setNewSynopsis(e.target.value)}
+                    rows={3}
+                  />
+                </div>
               </>
             )}
 
-            {/* New saga: saga title + book title + shared fields */}
+            {/* New saga: saga title + synopsis + book title + synopsis + shared fields */}
             {sagaChoice === 'new' && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="label-field">Nom de la saga *</label>
                     <input
@@ -323,22 +342,56 @@ export function HomePage() {
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="label-field">Synopsis de la saga</label>
+                    <textarea
+                      className="textarea-field"
+                      placeholder="De quoi parle votre saga ?"
+                      value={newSagaSynopsis}
+                      onChange={(e) => setNewSagaSynopsis(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <label className="label-field">Synopsis du livre</label>
+                    <textarea
+                      className="textarea-field"
+                      placeholder="De quoi parle ce premier tome ?"
+                      value={newSynopsis}
+                      onChange={(e) => setNewSynopsis(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                </div>
               </>
             )}
 
-            {/* Standalone: title + author + genre */}
+            {/* Standalone: title + synopsis */}
             {sagaChoice === 'standalone' && (
-              <div className="mb-6">
-                <label className="label-field">Titre du livre *</label>
-                <input
-                  className="input-field max-w-md"
-                  placeholder="Le titre de votre livre"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                  autoFocus
-                />
-              </div>
+              <>
+                <div className="mb-6">
+                  <label className="label-field">Titre du livre *</label>
+                  <input
+                    className="input-field max-w-md"
+                    placeholder="Le titre de votre livre"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                    autoFocus
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="label-field">Synopsis</label>
+                  <textarea
+                    className="textarea-field"
+                    placeholder="De quoi parle votre livre ?"
+                    value={newSynopsis}
+                    onChange={(e) => setNewSynopsis(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </>
             )}
 
             {/* Author + Genre — shown for standalone and new saga only */}

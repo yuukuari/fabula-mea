@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, User, MapPin, BookOpen, FileText, Globe, Map, Settings, X } from 'lucide-react';
+import { Search, User, MapPin, BookOpen, FileText, Globe, Map, Settings, X, Lightbulb } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { PLACE_TYPE_LABELS, WORLD_NOTE_CATEGORY_LABELS } from '@/lib/utils';
 
-type ResultType = 'character' | 'place' | 'chapter' | 'scene' | 'worldNote' | 'map' | 'settings';
+type ResultType = 'character' | 'place' | 'chapter' | 'scene' | 'worldNote' | 'noteIdea' | 'map' | 'settings';
 
 interface SearchResult {
   type: ResultType;
@@ -22,6 +22,7 @@ const TYPE_ICONS: Record<ResultType, React.ElementType> = {
   chapter: BookOpen,
   scene: FileText,
   worldNote: Globe,
+  noteIdea: Lightbulb,
   map: Map,
   settings: Settings,
 };
@@ -32,6 +33,7 @@ const TYPE_LABELS: Record<ResultType, string> = {
   chapter: 'Chapitre',
   scene: 'Scène',
   worldNote: 'Univers',
+  noteIdea: 'Note',
   map: 'Carte',
   settings: 'Paramètres',
 };
@@ -52,6 +54,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
   const maps = rawMaps ?? [];
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
+  const noteIdeas = useBookStore((s) => s.noteIdeas ?? []);
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -101,6 +104,13 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
       }
     }
 
+    // Notes & Ideas → URL param so NotesIdeasPage opens the detail view
+    for (const n of noteIdeas) {
+      if ((n.title ?? '').toLowerCase().includes(q)) {
+        out.push({ type: 'noteIdea', id: n.id, title: n.title || 'Note sans titre', navigateTo: `/notes?noteId=${n.id}` });
+      }
+    }
+
     // Maps → URL param so MapsPage selects the map
     for (const m of maps) {
       if (m.name.toLowerCase().includes(q) || m.description?.toLowerCase().includes(q)) {
@@ -116,7 +126,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
     }
 
     return out.slice(0, 15);
-  }, [query, characters, places, chapters, scenes, worldNotes, maps]);
+  }, [query, characters, places, chapters, scenes, worldNotes, noteIdeas, maps]);
 
   useEffect(() => { setSelectedIndex(0); }, [results]);
 
@@ -160,7 +170,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
           <input
             autoFocus
             type="text"
-            placeholder="Rechercher personnage, lieu, carte, paramètres..."
+            placeholder="Rechercher personnage, lieu, note, carte, paramètres..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}

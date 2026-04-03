@@ -108,6 +108,18 @@ export const WORLD_NOTE_CATEGORY_LABELS: Record<string, string> = {
   custom: 'Autre',
 };
 
+export const WORLD_NOTE_CATEGORY_COLORS: Record<string, string> = {
+  history: 'bg-amber-100 text-amber-700',
+  culture: 'bg-purple-100 text-purple-700',
+  magic_system: 'bg-indigo-100 text-indigo-700',
+  politics: 'bg-red-100 text-red-700',
+  religion: 'bg-yellow-100 text-yellow-700',
+  technology: 'bg-cyan-100 text-cyan-700',
+  flora_fauna: 'bg-green-100 text-green-700',
+  language: 'bg-pink-100 text-pink-700',
+  custom: 'bg-gray-100 text-gray-600',
+};
+
 /** Count characters including spaces from HTML text */
 export function countCharacters(html: string): number {
   const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');

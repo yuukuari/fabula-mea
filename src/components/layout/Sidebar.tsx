@@ -205,7 +205,13 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
           )}
         >
           <BookOpen className="w-4 h-4 flex-shrink-0" />
-          <span className="flex-1 truncate font-medium">{bookTitle || 'Sans titre'}</span>
+          <div className="flex-1 min-w-0">
+            {sagaId && (() => {
+              const saga = sagas.find((s) => s.id === sagaId);
+              return saga ? <span className="block text-[10px] leading-tight text-bordeaux-400 truncate">{saga.title}</span> : null;
+            })()}
+            <span className="block truncate font-medium">{bookTitle || 'Sans titre'}</span>
+          </div>
           <ChevronDown className={cn('w-4 h-4 flex-shrink-0 transition-transform', showSwitcher && 'rotate-180')} />
         </button>
 
@@ -213,17 +219,64 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
           <div className="absolute left-4 right-4 top-full mt-1 z-50 bg-white rounded-lg border border-parchment-300 shadow-lg overflow-hidden">
             {otherBooks.length > 0 ? (
               <div className="max-h-48 overflow-y-auto">
-                {otherBooks.map((book) => (
-                  <button
-                    key={book.id}
-                    onClick={() => handleSwitchBook(book.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-ink-400
-                               hover:bg-parchment-100 transition-colors text-left border-b border-parchment-100 last:border-0"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 text-ink-200 flex-shrink-0" />
-                    <span className="truncate">{book.title}</span>
-                  </button>
-                ))}
+                {(() => {
+                  const sagaBooks: Record<string, typeof otherBooks> = {};
+                  const standalone: typeof otherBooks = [];
+
+                  otherBooks.forEach((book) => {
+                    if (book.sagaId) {
+                      if (!sagaBooks[book.sagaId]) sagaBooks[book.sagaId] = [];
+                      sagaBooks[book.sagaId].push(book);
+                    } else {
+                      standalone.push(book);
+                    }
+                  });
+
+                  const sagaEntries = Object.entries(sagaBooks);
+
+                  return (
+                    <>
+                      {sagaEntries.map(([sId, sBooks]) => {
+                        const saga = sagas.find((s) => s.id === sId);
+                        return (
+                          <div key={sId}>
+                            <div className="px-3 py-1.5 text-xs font-semibold text-ink-200 uppercase tracking-wide flex items-center gap-1.5 bg-parchment-50">
+                              <Library className="w-3 h-3" />
+                              {saga?.title || 'Saga'}
+                            </div>
+                            {sBooks.map((book) => (
+                              <button
+                                key={book.id}
+                                onClick={() => handleSwitchBook(book.id)}
+                                className="w-full flex items-center gap-2 px-3 pl-6 py-2 text-sm text-ink-400
+                                           hover:bg-parchment-100 transition-colors text-left border-b border-parchment-100 last:border-0"
+                              >
+                                <BookOpen className="w-3.5 h-3.5 text-ink-200 flex-shrink-0" />
+                                <span className="truncate">{book.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })}
+                      {standalone.length > 0 && sagaEntries.length > 0 && (
+                        <div className="px-3 py-1.5 text-xs font-semibold text-ink-200 uppercase tracking-wide bg-parchment-50">
+                          Livres indépendants
+                        </div>
+                      )}
+                      {standalone.map((book) => (
+                        <button
+                          key={book.id}
+                          onClick={() => handleSwitchBook(book.id)}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-ink-400
+                                     hover:bg-parchment-100 transition-colors text-left border-b border-parchment-100 last:border-0"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-ink-200 flex-shrink-0" />
+                          <span className="truncate">{book.title}</span>
+                        </button>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
             ) : (
               <p className="px-3 py-2.5 text-xs text-ink-200">Aucun autre livre</p>

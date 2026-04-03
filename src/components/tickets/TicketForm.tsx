@@ -32,7 +32,7 @@ const MODULE_OPTIONS: { value: TicketModule; label: string }[] = [
   { value: 'chapters', label: 'Chapitres / Scènes' },
   { value: 'timeline', label: 'Chronologie' },
   { value: 'progress', label: 'Progression' },
-  { value: 'world', label: 'Worldbuilding' },
+  { value: 'world', label: 'Univers & Glossaire' },
   { value: 'maps', label: 'Cartes' },
   { value: 'notes', label: 'Notes & Idées' },
   { value: 'reviews', label: 'Relectures' },

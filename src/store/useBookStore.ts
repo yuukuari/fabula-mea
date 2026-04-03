@@ -172,6 +172,8 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     genre: '',
     synopsis: '',
     writingMode: 'count',
+    countUnit: undefined,
+    sagaId: undefined,
     characters: [],
     places: [],
     chapters: [],
@@ -188,6 +190,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     selfComments: [],
     graphNodePositions: {},
     glossaryEnabled: false,
+    tableOfContents: undefined,
     layout: {
       fontFamily: 'Times New Roman',
       fontSize: 12,
@@ -347,7 +350,7 @@ export const useBookStore = create<BookStore>()(
         const raw = localStorage.getItem(getBookStorageKey(bookId));
         if (raw) {
           const project = ensureSpecialChapters(JSON.parse(raw) as BookProject);
-          set({ ...project, lastSavedAt: now(), _loaded: true });
+          set({ ...emptyState(), ...project, lastSavedAt: now(), _loaded: true });
           // Load saga if this book belongs to one
           if (project.sagaId) {
             useSagaStore.getState().loadSaga(project.sagaId);
@@ -363,7 +366,7 @@ export const useBookStore = create<BookStore>()(
             const cur = get();
             if (!raw || remote.updatedAt > (cur.updatedAt ?? '')) {
               const migrated = ensureSpecialChapters(remote);
-              set({ ...migrated, lastSavedAt: now(), _loaded: true });
+              set({ ...emptyState(), ...migrated, lastSavedAt: now(), _loaded: true });
               localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(migrated));
               // Load saga from remote data if needed
               if (migrated.sagaId) {

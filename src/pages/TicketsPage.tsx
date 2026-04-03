@@ -41,7 +41,7 @@ const MODULE_LABELS: Record<string, string> = {
   chapters: 'Chapitres / Scènes',
   timeline: 'Chronologie',
   progress: 'Progression',
-  world: 'Worldbuilding',
+  world: 'Univers & Glossaire',
   maps: 'Cartes',
   notes: 'Notes & Idées',
   reviews: 'Relectures',

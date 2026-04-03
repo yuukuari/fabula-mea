@@ -229,13 +229,13 @@ export function SagaPage() {
             />
           </div>
           <div>
-            <label className="label-field">Description</label>
+            <label className="label-field">Synopsis</label>
             <textarea
               value={saga.description ?? ''}
               onChange={(e) => updateSagaMeta(saga.id, { description: e.target.value })}
               className="textarea-field"
               rows={3}
-              placeholder="Description de la saga..."
+              placeholder="Synopsis de la saga..."
             />
           </div>
           <div className="grid grid-cols-2 gap-4">

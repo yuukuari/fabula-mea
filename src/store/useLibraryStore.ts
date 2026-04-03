@@ -155,6 +155,8 @@ export const useLibraryStore = create<LibraryStore>()(
       createSaga: (title, opts = {}) => {
         const id = generateId();
         const timestamp = now();
+        // Strip cover images from layout to avoid bloating localStorage
+        const { coverFront: _cf, coverBack: _cb, ...layoutWithoutCovers } = opts.layout ?? {} as BookLayout;
         const meta: SagaMeta = {
           id, title,
           description: opts.description ?? '',
@@ -162,7 +164,7 @@ export const useLibraryStore = create<LibraryStore>()(
           genre: opts.genre ?? '',
           writingMode: opts.writingMode ?? 'count',
           countUnit: opts.countUnit ?? 'words',
-          layout: opts.layout,
+          layout: opts.layout ? layoutWithoutCovers as BookLayout : undefined,
           bookIds: [],
           createdAt: timestamp, updatedAt: timestamp,
         };
@@ -190,9 +192,15 @@ export const useLibraryStore = create<LibraryStore>()(
       },
 
       updateSagaMeta: (id, data) => {
+        // Strip cover images from layout to avoid bloating localStorage
+        const cleaned = { ...data };
+        if (cleaned.layout) {
+          const { coverFront: _cf, coverBack: _cb, ...rest } = cleaned.layout;
+          cleaned.layout = rest as BookLayout;
+        }
         set((s) => ({
           sagas: s.sagas.map((sg) =>
-            sg.id === id ? { ...sg, ...data, updatedAt: now() } : sg
+            sg.id === id ? { ...sg, ...cleaned, updatedAt: now() } : sg
           ),
         }));
         if (shouldSync()) {

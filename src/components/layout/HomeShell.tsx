@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, Feather } from 'lucide-react';
 import { HomeSidebar } from './HomeSidebar';
 
 export function HomeShell() {
@@ -21,6 +21,9 @@ export function HomeShell() {
             >
               <Menu className="w-5 h-5" />
             </button>
+            <div className="w-8 h-8 bg-bordeaux-500 rounded-lg flex items-center justify-center">
+              <Feather className="w-4 h-4 text-white" />
+            </div>
             <span className="text-2xl text-ink-500" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</span>
           </header>
 

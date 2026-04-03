@@ -80,17 +80,17 @@ function ReleaseEntry({
   isFirst,
 }: {
   release: Release;
-  tickets: Array<{ id: string; userName: string }>;
+  tickets: Array<{ id: string; userName: string; releaseId?: string }>;
   isFirst: boolean;
 }) {
   const isCurrent = release.status === 'current';
 
   // Find contributors: users who created tickets linked to this release
-  const contributors = release.ticketIds
-    .map((tid) => tickets.find((t) => t.id === tid))
-    .filter(Boolean)
-    .map((t) => t!.userName);
-  const uniqueContributors = [...new Set(contributors)];
+  // Tickets can be linked via release.ticketIds OR ticket.releaseId
+  const linkedTickets = tickets.filter(
+    (t) => t.releaseId === release.id || release.ticketIds.includes(t.id)
+  );
+  const uniqueContributors = [...new Set(linkedTickets.map((t) => t.userName))];
 
   return (
     <div className="relative pl-12">

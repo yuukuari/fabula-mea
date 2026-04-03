@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText } from 'lucide-react';
+import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { WORLD_NOTE_CATEGORY_LABELS } from '@/lib/utils';
+import { cn, WORLD_NOTE_CATEGORY_LABELS, WORLD_NOTE_CATEGORY_COLORS } from '@/lib/utils';
 import type { WorldNoteCategory } from '@/types';
 
 export function WorldPage() {
@@ -24,10 +24,11 @@ export function WorldPage() {
     if (id) setSelectedId(id);
   }, [searchParams]);
   const [filterCategory, setFilterCategory] = useState<string>('');
+  const [search, setSearch] = useState('');
 
-  const filtered = filterCategory
-    ? worldNotes.filter((n) => n.category === filterCategory)
-    : worldNotes;
+  const filtered = worldNotes
+    .filter((n) => !filterCategory || n.category === filterCategory)
+    .filter((n) => !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase()));
 
   const selectedNote = selectedId ? worldNotes.find((n) => n.id === selectedId) : null;
 
@@ -49,7 +50,7 @@ export function WorldPage() {
             <img src={selectedNote.imageUrl} alt="" className="w-full h-48 object-cover rounded-lg mb-4" />
           )}
           <div className="flex items-center gap-2 flex-wrap mb-2">
-            <span className="badge bg-parchment-200 text-ink-400">{WORLD_NOTE_CATEGORY_LABELS[selectedNote.category]}</span>
+            <span className={cn('badge', WORLD_NOTE_CATEGORY_COLORS[selectedNote.category] ?? 'bg-parchment-200 text-ink-400')}>{WORLD_NOTE_CATEGORY_LABELS[selectedNote.category]}</span>
             {selectedNote.inGlossary && (
               <span className="flex items-center gap-1 text-xs text-bordeaux-500">
                 <BookText className="w-3.5 h-3.5" /> Glossaire
@@ -97,7 +98,7 @@ export function WorldPage() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="section-title">Univers & Glossaire</h2>
         <button onClick={() => { setEditingId(null); setShowForm(true); }} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" /><span className="hidden sm:inline">Nouvelle note</span>
+          <Plus className="w-4 h-4" /><span className="hidden sm:inline">Nouvelle fiche</span>
         </button>
       </div>
 
@@ -113,11 +114,24 @@ export function WorldPage() {
             <button
               key={key}
               onClick={() => setFilterCategory(key)}
-              className={`badge cursor-pointer ${filterCategory === key ? 'bg-bordeaux-500 text-white' : 'bg-parchment-200 text-ink-400'}`}
+              className={cn('badge cursor-pointer', filterCategory === key ? 'ring-2 ring-bordeaux-400 ring-offset-1' : '', WORLD_NOTE_CATEGORY_COLORS[key] ?? 'bg-parchment-200 text-ink-400')}
             >
               {label}
             </button>
           ))}
+        </div>
+      )}
+
+      {worldNotes.length > 0 && (
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-200" />
+          <input
+            type="text"
+            placeholder="Rechercher une fiche univers..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input-field pl-10"
+          />
         </div>
       )}
 
@@ -141,7 +155,7 @@ export function WorldPage() {
               )}
               <div className="p-4">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="badge bg-parchment-200 text-ink-300 text-xs">{WORLD_NOTE_CATEGORY_LABELS[note.category]}</span>
+                  <span className={cn('badge text-xs', WORLD_NOTE_CATEGORY_COLORS[note.category] ?? 'bg-parchment-200 text-ink-300')}>{WORLD_NOTE_CATEGORY_LABELS[note.category]}</span>
                   {note.inGlossary && (
                     <BookText className="w-3.5 h-3.5 text-bordeaux-400" />
                   )}
@@ -191,7 +205,7 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg mx-4 my-4">
         <div className="flex items-center justify-between p-6 border-b border-parchment-300">
-          <h3 className="font-display text-xl font-bold text-ink-500">{existing ? 'Modifier la note' : 'Nouvelle note'}</h3>
+          <h3 className="font-display text-xl font-bold text-ink-500">{existing ? 'Modifier la fiche' : 'Nouvelle fiche'}</h3>
           <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -239,7 +253,7 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
                       }}
                       className="rounded border-parchment-300"
                     />
-                    <span className="badge bg-parchment-200 text-ink-300 text-xs mr-1">{WORLD_NOTE_CATEGORY_LABELS[n.category]}</span>
+                    <span className={cn('badge text-xs mr-1', WORLD_NOTE_CATEGORY_COLORS[n.category] ?? 'bg-parchment-200 text-ink-300')}>{WORLD_NOTE_CATEGORY_LABELS[n.category]}</span>
                     {n.title}
                   </label>
                 ))}

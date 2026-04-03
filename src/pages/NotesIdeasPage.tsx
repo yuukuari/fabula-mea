@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  Plus, Lightbulb, Edit, Trash2, X, ArrowLeft, ListChecks,
+  Plus, Lightbulb, Edit, Trash2, X, ArrowLeft, ListChecks, Search,
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Heading1, Heading2, Heading3, Quote, List, ListOrdered,
@@ -40,7 +40,11 @@ export function NotesIdeasPage() {
     if (id) setSelectedId(id);
   }, [searchParams]);
 
-  const sorted = [...noteIdeas].sort((a, b) => a.order - b.order);
+  const [search, setSearch] = useState('');
+
+  const sorted = [...noteIdeas]
+    .filter((n) => !search || (n.title ?? '').toLowerCase().includes(search.toLowerCase()) || n.content.replace(/<[^>]*>/g, ' ').toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.order - b.order);
   const selectedNote = selectedId ? noteIdeas.find((n) => n.id === selectedId) : null;
 
   // ─── Detail view ───
@@ -105,7 +109,20 @@ export function NotesIdeasPage() {
         </button>
       </div>
 
-      {sorted.length === 0 ? (
+      {noteIdeas.length > 0 && (
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-200" />
+          <input
+            type="text"
+            placeholder="Rechercher une note..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input-field pl-10"
+          />
+        </div>
+      )}
+
+      {sorted.length === 0 && !search ? (
         <EmptyState
           icon={Lightbulb}
           title="Aucune note"

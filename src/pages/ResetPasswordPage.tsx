@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { BookOpen, AlertCircle, CheckCircle } from 'lucide-react';
+import { Feather, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PasswordInput } from '@/components/shared/PasswordInput';
 
@@ -44,7 +44,7 @@ export function ResetPasswordPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-bordeaux-600 rounded-2xl mb-4 shadow-lg">
-            <BookOpen className="w-8 h-8 text-white" />
+            <Feather className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl text-ink-500" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</h1>
           <p className="text-ink-300 mt-1 text-sm">Nouveau mot de passe</p>
