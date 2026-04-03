@@ -424,7 +424,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
         {isAdmin ? (
           <div className="flex items-center gap-2 pt-3 border-t border-parchment-200">
             <Tag className="w-4 h-4 text-ink-200" />
-            <span className="text-sm text-ink-300">Release :</span>
+            <span className="text-sm text-ink-300">Version :</span>
             <select
               value={ticket.releaseId ?? ''}
               onChange={(e) => handleReleaseAssign(e.target.value)}
@@ -433,7 +433,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
               <option value="">Aucune</option>
               {releases.map((r) => (
                 <option key={r.id} value={r.id}>
-                  v{r.version}{r.title ? ` — ${r.title}` : ''}
+                  {r.version}{r.title ? ` — ${r.title}` : ''}
                 </option>
               ))}
             </select>
@@ -441,7 +441,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
         ) : ticket.releaseId ? (
           <div className="flex items-center gap-2 pt-3 border-t border-parchment-200">
             <Tag className="w-4 h-4 text-ink-200" />
-            <span className="text-sm text-ink-300">Release :</span>
+            <span className="text-sm text-ink-300">Version :</span>
             {(() => {
               const rel = releases.find((r) => r.id === ticket.releaseId);
               return rel ? (
@@ -449,7 +449,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
                   onClick={() => navigate('/releases')}
                   className="text-sm text-bordeaux-500 hover:underline flex items-center gap-1"
                 >
-                  v{rel.version}{rel.title ? ` — ${rel.title}` : ''}
+                  {rel.version}{rel.title ? ` — ${rel.title}` : ''}
                   <ExternalLink className="w-3 h-3" />
                 </button>
               ) : (
@@ -540,10 +540,10 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
                   <span className="font-medium">{sc.userName}</span>
                   {sc.releaseId
                     ? <>
-                        a planifié ce ticket dans la release
+                        a planifié ce ticket dans la version
                         <span className="badge bg-blue-100 text-blue-700 text-[10px]">{sc.releaseName || sc.releaseId}</span>
                       </>
-                    : <>a retiré ce ticket de sa release</>}
+                    : <>a retiré ce ticket de sa version</>}
                   <span className="ml-auto text-ink-200">
                     {new Date(sc.createdAt).toLocaleDateString('fr-FR')}
                   </span>

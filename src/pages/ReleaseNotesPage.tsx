@@ -57,7 +57,7 @@ export function ReleaseNotesPage() {
           <div className="w-8 h-8 border-2 border-bordeaux-400 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : sorted.length === 0 ? (
-        <p className="text-center text-ink-200 py-12">Aucune release pour le moment.</p>
+        <p className="text-center text-ink-200 py-12">Aucune version pour le moment.</p>
       ) : (
         <div className="relative">
           {/* Vertical timeline line */}
@@ -109,7 +109,7 @@ function ReleaseEntry({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h2 className="font-display font-bold text-lg text-ink-500">
-                v{release.version}
+                Version {release.version}
               </h2>
               <span
                 className={cn(
@@ -124,7 +124,7 @@ function ReleaseEntry({
                 {STATUS_LABELS[release.status]}
               </span>
             </div>
-            <h3 className="text-sm font-medium text-ink-400">{release.title || `Release v${release.version}`}</h3>
+            {release.title && <h3 className="text-sm font-medium text-ink-400">{release.title}</h3>}
           </div>
           {release.releasedAt && (
             <span className="text-xs text-ink-200 flex-shrink-0">

@@ -123,6 +123,20 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                   <Users className="w-4 h-4" />
                   <span>Membres</span>
                 </NavLink>
+                <NavLink
+                  to="/admin/releases"
+                  onClick={onMobileClose}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                      'text-ink-300 hover:bg-parchment-200 hover:text-ink-500',
+                      isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
+                    )
+                  }
+                >
+                  <Tag className="w-4 h-4" />
+                  <span>Versions</span>
+                </NavLink>
               </div>
             )}
           </div>

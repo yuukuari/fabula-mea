@@ -27,7 +27,7 @@ export function NewReleaseModal() {
           Nouvelle version disponible !
         </h2>
         <p className="text-3xl font-display font-bold text-bordeaux-500 mb-3">
-          v{newRelease.version}
+          Version {newRelease.version}
         </p>
         {newRelease.title && (
           <h3 className="text-sm font-medium text-ink-400 mb-2">{newRelease.title}</h3>

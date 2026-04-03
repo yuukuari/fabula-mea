@@ -25,6 +25,7 @@ import { ReviewAuthorView } from '@/pages/reviews/ReviewAuthorView';
 import { ReviewReaderPage } from '@/pages/review/ReviewReaderPage';
 import { SagaPage } from '@/pages/SagaPage';
 import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
+import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { NewReleaseModal } from '@/components/releases/NewReleaseModal';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -60,6 +61,7 @@ const router = createBrowserRouter([
           { path: 'releases', element: <ReleaseNotesPage /> },
           { path: 'reviews/:id', element: <ReviewAuthorView /> },
           { path: 'admin/members', element: <AdminMembersPage /> },
+          { path: 'admin/releases', element: <AdminReleasesPage /> },
           { path: 'profile', element: <ProfilePage /> },
           { path: 'saga/:sagaId', element: <SagaPage /> },
         ],

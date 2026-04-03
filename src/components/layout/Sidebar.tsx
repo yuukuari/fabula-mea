@@ -62,7 +62,7 @@ const supportGroup = {
 const adminItems = [
   { to: '/admin/members', icon: Users, label: 'Membres' },
   { to: '/admin/tickets', icon: MessageSquare, label: 'Tickets' },
-  { to: '/admin/releases', icon: Tag, label: 'Releases' },
+  { to: '/admin/releases', icon: Tag, label: 'Versions' },
 ];
 
 interface SidebarProps {
