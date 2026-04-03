@@ -1,12 +1,27 @@
 import { useEffect, useState } from 'react';
 import {
-  Plus, Trash2, Pencil, X, Save, Bug, Sparkles, Zap, Tag, ArrowLeft, ExternalLink
+  Plus, Trash2, Pencil, X, Save, Bug, Sparkles, Zap, Tag, ArrowLeft, ExternalLink, GripVertical
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useReleaseStore } from '@/store/useReleaseStore';
 import { useTicketStore } from '@/store/useTicketStore';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Release, ReleaseStatus, ReleaseItem, ReleaseItemType } from '@/types';
 
 const STATUS_OPTIONS: { value: ReleaseStatus; label: string; color: string }[] = [
@@ -26,6 +41,54 @@ function generateId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 }
 
+function SortableReleaseItem({ item, index, onUpdate, onRemove }: {
+  item: ReleaseItem;
+  index: number;
+  onUpdate: (index: number, updates: Partial<ReleaseItem>) => void;
+  onRemove: (index: number) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-2">
+      <button
+        type="button"
+        className="p-1.5 rounded text-ink-200 hover:text-ink-400 cursor-grab active:cursor-grabbing flex-shrink-0 mt-0.5"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </button>
+      <select
+        value={item.type}
+        onChange={(e) => onUpdate(index, { type: e.target.value as ReleaseItemType })}
+        className="text-sm border border-parchment-300 rounded px-2 py-1.5 bg-white w-36"
+      >
+        {ITEM_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>{t.label}</option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={item.description}
+        onChange={(e) => onUpdate(index, { description: e.target.value })}
+        placeholder="Description..."
+        className="input-field flex-1 text-sm"
+      />
+      <button
+        onClick={() => onRemove(index)}
+        className="p-1.5 rounded text-ink-200 hover:text-red-500 hover:bg-red-50"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export function AdminReleasesPage() {
   const navigate = useNavigate();
   const { releases, loadReleases, createRelease, updateRelease, deleteRelease, isLoading } = useReleaseStore();
@@ -34,6 +97,17 @@ export function AdminReleasesPage() {
   const [isNew, setIsNew] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleItemDragEnd = (event: DragEndEvent) => {
+    if (!editingRelease) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const items = editingRelease.items as ReleaseItem[];
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    setEditingRelease({ ...editingRelease, items: arrayMove(items, oldIndex, newIndex) });
+  };
 
   useEffect(() => {
     loadReleases();
@@ -191,34 +265,16 @@ export function AdminReleasesPage() {
                 </button>
               </div>
               <div className="space-y-2">
-                {(editingRelease.items as ReleaseItem[] ?? []).map((item, i) => (
-                  <div key={item.id} className="flex items-start gap-2">
-                    <select
-                      value={item.type}
-                      onChange={(e) => updateItem(i, { type: e.target.value as ReleaseItemType })}
-                      className="text-sm border border-parchment-300 rounded px-2 py-1.5 bg-white w-36"
-                    >
-                      {ITEM_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(e) => updateItem(i, { description: e.target.value })}
-                      placeholder="Description..."
-                      className="input-field flex-1 text-sm"
-                    />
-                    <button
-                      onClick={() => removeItem(i)}
-                      className="p-1.5 rounded text-ink-200 hover:text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-                {(editingRelease.items ?? []).length === 0 && (
+                {(editingRelease.items ?? []).length === 0 ? (
                   <p className="text-xs text-ink-200 py-2">Aucun élément ajouté</p>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleItemDragEnd}>
+                    <SortableContext items={(editingRelease.items as ReleaseItem[]).map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                      {(editingRelease.items as ReleaseItem[]).map((item, i) => (
+                        <SortableReleaseItem key={item.id} item={item} index={i} onUpdate={updateItem} onRemove={removeItem} />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 )}
               </div>
             </div>
