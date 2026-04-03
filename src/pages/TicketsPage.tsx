@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Bug, HelpCircle, Sparkles, Eye, EyeOff, Clock, CheckCircle, Copy,
-  Trash2, ChevronLeft, Send, MessageSquare, Tag, SmilePlus, X, ExternalLink,
+  Trash2, ChevronLeft, Send, MessageSquare, Tag, SmilePlus, X, ExternalLink, ArrowRightLeft,
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Heading1, Heading2, Heading3, Quote, List, ListOrdered,
@@ -559,6 +559,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => vo
                 key={sc.id}
                 className="flex items-center gap-2 px-4 py-2 bg-parchment-50 rounded-lg text-xs text-ink-300 border border-parchment-200"
               >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                 <span className="font-medium">{sc.userName}</span>
                 a changé le statut de
                 {fromConf && <span className={cn('badge text-[10px]', fromConf.color)}>{fromConf.label}</span>}

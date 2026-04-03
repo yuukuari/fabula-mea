@@ -171,6 +171,7 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
 
     const { status, releaseId } = req.body;
     const oldStatus = ticket.status;
+    const oldReleaseId = ticket.releaseId;
 
     if (status) ticket.status = status;
     if (releaseId !== undefined) ticket.releaseId = releaseId || undefined;
@@ -186,8 +187,28 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
         ticketId: id,
         userId: auth.userId,
         userName: user?.name ?? 'Admin',
+        type: 'status_change',
         fromStatus: oldStatus,
         toStatus: status,
+        createdAt: new Date().toISOString(),
+      });
+      await redis.set(`emlb:ticket:${id}:statusChanges`, JSON.stringify(changes));
+    }
+
+    if (releaseId !== undefined && releaseId !== oldReleaseId) {
+      const changesJson = await redis.get(`emlb:ticket:${id}:statusChanges`);
+      const changes = changesJson ? JSON.parse(changesJson) : [];
+      const releasesJson = await redis.get('emlb:releases');
+      const releases = releasesJson ? JSON.parse(releasesJson) : [];
+      const release = releases.find((r: any) => r.id === releaseId);
+      changes.push({
+        id: generateId(),
+        ticketId: id,
+        userId: auth.userId,
+        userName: user?.name ?? 'Admin',
+        type: 'release_assign',
+        releaseId: releaseId || undefined,
+        releaseName: release ? `v${release.version}${release.title ? ' — ' + release.title : ''}` : undefined,
         createdAt: new Date().toISOString(),
       });
       await redis.set(`emlb:ticket:${id}:statusChanges`, JSON.stringify(changes));

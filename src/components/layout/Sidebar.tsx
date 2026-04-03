@@ -59,12 +59,6 @@ const supportGroup = {
   ],
 };
 
-const adminItems = [
-  { to: '/admin/members', icon: Users, label: 'Membres' },
-  { to: '/admin/tickets', icon: MessageSquare, label: 'Tickets' },
-  { to: '/admin/releases', icon: Tag, label: 'Versions' },
-];
-
 interface SidebarProps {
   onSearchClick?: () => void;
   mobileOpen: boolean;
@@ -396,14 +390,6 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
               </button>
               {isExpanded && (
                 <div className="ml-4 mt-0.5 space-y-0.5">
-                  <button
-                    onClick={() => { openTicketForm(); onMobileClose(); }}
-                    className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
-                               bg-bordeaux-50 text-bordeaux-600 hover:bg-bordeaux-100 border border-bordeaux-200"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Créer un ticket</span>
-                  </button>
                   {supportGroup.items.map(({ to, icon: Icon, label }) => (
                     <NavLink
                       key={to}
@@ -426,6 +412,14 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
                       )}
                     </NavLink>
                   ))}
+                  <button
+                    onClick={() => { openTicketForm(); onMobileClose(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
+                               bg-bordeaux-50 text-bordeaux-600 hover:bg-bordeaux-100 border border-bordeaux-200"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Créer un ticket</span>
+                  </button>
                 </div>
               )}
             </div>
