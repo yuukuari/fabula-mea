@@ -509,7 +509,7 @@ export function SettingsPage() {
       )}
 
       {/* Transform to saga — only for standalone books */}
-      {!sagaId && (
+      {!saga && (
         <div className="card-fantasy p-6 mb-6 border-bordeaux-100">
           <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Transformer en saga</h3>
           <p className="text-sm text-ink-300 mb-4">
