@@ -48,7 +48,17 @@ export const useReleaseStore = create<ReleaseStore>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { release } = await api.releases.create(data);
-      set((s) => ({ releases: [...s.releases, release], isLoading: false }));
+      set((s) => ({
+        releases: [
+          ...s.releases.map((r) =>
+            data.status === 'current' && r.status === 'current'
+              ? { ...r, status: 'released' as const, updatedAt: new Date().toISOString() }
+              : r
+          ),
+          release,
+        ],
+        isLoading: false,
+      }));
       return release;
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
@@ -60,7 +70,14 @@ export const useReleaseStore = create<ReleaseStore>()((set, get) => ({
     try {
       const { release } = await api.releases.update(id, data);
       set((s) => ({
-        releases: s.releases.map((r) => (r.id === id ? release : r)),
+        releases: s.releases.map((r) => {
+          if (r.id === id) return release;
+          // Auto-demote: if the updated release is now 'current', demote previous 'current'
+          if (data.status === 'current' && r.status === 'current') {
+            return { ...r, status: 'released' as const, updatedAt: new Date().toISOString() };
+          }
+          return r;
+        }),
       }));
     } catch (err) {
       set({ error: (err as Error).message });

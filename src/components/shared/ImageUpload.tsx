@@ -214,7 +214,7 @@ export function ImageUpload({ value, onChange, className = '', round, offsetY = 
           <img
             src={value}
             alt=""
-            className="w-full h-48 object-cover rounded-lg cursor-pointer"
+            className="w-full h-48 object-contain rounded-lg cursor-pointer bg-parchment-100"
             onClick={handleClickUpload}
             title="Cliquez pour changer l'image"
           />

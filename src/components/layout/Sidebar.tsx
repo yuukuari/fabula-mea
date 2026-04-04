@@ -35,8 +35,8 @@ const navGroups: NavGroup[] = [
     icon: ScrollText,
     basePaths: ['/chapters', '/timeline', '/progress', '/reviews', '/edition'],
     items: [
-      { to: '/chapters', icon: BookOpen, label: 'Chapitres' },
       { to: '/timeline', icon: Clock, label: 'Chronologie' },
+      { to: '/chapters', icon: BookOpen, label: 'Chapitres' },
       { to: '/progress', icon: Target, label: 'Avancement' },
       { to: '/reviews', icon: Eye, label: 'Relectures' },
       { to: '/edition', icon: FileText, label: 'Édition' },

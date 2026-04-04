@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map, BookText } from 'lucide-react';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
@@ -54,7 +54,7 @@ export function PlacesPage() {
 
         <div className="card-fantasy p-6">
           {selectedPlace.imageUrl && (
-            <img src={selectedPlace.imageUrl} alt={selectedPlace.name} className="w-full h-64 object-cover rounded-lg mb-4" />
+            <img src={selectedPlace.imageUrl} alt={selectedPlace.name} className="w-full h-64 object-contain rounded-lg mb-4 bg-parchment-100" />
           )}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h2 className="font-display text-3xl font-bold text-ink-500">{selectedPlace.name}</h2>
@@ -194,7 +194,7 @@ export function PlacesPage() {
           {filtered.map((place) => (
             <div key={place.id} onClick={() => setSelectedId(place.id)} className="card-fantasy cursor-pointer overflow-hidden">
               {place.imageUrl ? (
-                <img src={place.imageUrl} alt={place.name} className="w-full h-36 object-cover" />
+                <img src={place.imageUrl} alt={place.name} className="w-full h-36 object-contain bg-parchment-100" />
               ) : (
                 <div className="w-full h-36 bg-parchment-200 flex items-center justify-center">
                   <MapPin className="w-12 h-12 text-ink-100" />
@@ -235,11 +235,27 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
   const [inspirations, setInspirations] = useState(existing?.inspirations?.join(', ') ?? '');
   const [connectedIds, setConnectedIds] = useState<string[]>(existing?.connectedPlaceIds ?? []);
   const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const otherPlaces = places.filter((p) => p.id !== placeId);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const isDirty = useCallback(() => {
+    if (!existing) {
+      return !!(name || description || imageUrl || inspirations || notes || inGlossary || connectedIds.length > 0 || type !== 'other');
+    }
+    return (
+      name !== (existing.name ?? '') ||
+      type !== (existing.type ?? 'other') ||
+      description !== (existing.description ?? '') ||
+      inGlossary !== (existing.inGlossary ?? false) ||
+      imageUrl !== existing.imageUrl ||
+      inspirations !== (existing.inspirations?.join(', ') ?? '') ||
+      JSON.stringify(connectedIds) !== JSON.stringify(existing.connectedPlaceIds ?? []) ||
+      notes !== (existing.notes ?? '')
+    );
+  }, [name, type, description, inGlossary, imageUrl, inspirations, connectedIds, notes, existing]);
+
+  const handleSave = () => {
     if (!name.trim()) return;
 
     const data = {
@@ -261,18 +277,32 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
     onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg mx-4 my-4">
-        <div className="flex items-center justify-between p-6 border-b border-parchment-300">
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-2xl mx-4 my-4 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b border-parchment-300 flex-shrink-0">
           <h3 className="font-display text-xl font-bold text-ink-500">
             {existing ? 'Modifier le lieu' : 'Nouveau lieu'}
           </h3>
-          <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
+          <button onClick={handleClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <ImageUpload value={imageUrl} onChange={setImageUrl} />
 
           <div>
@@ -334,13 +364,28 @@ function PlaceForm({ placeId, onClose }: { placeId: string | null; onClose: () =
             <label className="label-field">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="textarea-field" rows={2} />
           </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
-            <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+          </div>
+          <div className="flex justify-end gap-3 p-6 border-t border-parchment-300 flex-shrink-0">
+            <button type="button" onClick={handleClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">{existing ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>
+
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); onClose(); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); handleSave(); }} className="btn-primary text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

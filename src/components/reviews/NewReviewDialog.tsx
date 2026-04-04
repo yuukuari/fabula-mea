@@ -184,7 +184,7 @@ export function NewReviewDialog({ onClose, onCreated, onMultiCreated }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4"
+        className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col m-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

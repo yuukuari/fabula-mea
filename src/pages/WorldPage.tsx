@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
@@ -47,7 +47,7 @@ export function WorldPage() {
         </div>
         <div className="card-fantasy p-6">
           {selectedNote.imageUrl && (
-            <img src={selectedNote.imageUrl} alt="" className="w-full h-48 object-cover rounded-lg mb-4" />
+            <img src={selectedNote.imageUrl} alt="" className="w-full h-48 object-contain rounded-lg mb-4 bg-parchment-100" />
           )}
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <span className={cn('badge', WORLD_NOTE_CATEGORY_COLORS[selectedNote.category] ?? 'bg-parchment-200 text-ink-400')}>{WORLD_NOTE_CATEGORY_LABELS[selectedNote.category]}</span>
@@ -138,16 +138,16 @@ export function WorldPage() {
       {worldNotes.length === 0 ? (
         <EmptyState
           icon={Globe}
-          title="Aucune note"
-          description="Creez des notes pour decrire votre univers : histoire, culture, magie, politique..."
-          action={<button onClick={() => setShowForm(true)} className="btn-primary">Créer une note</button>}
+          title="Aucune fiche"
+          description="Creez des fiches pour décrire votre univers : histoire, culture, magie, politique..."
+          action={<button onClick={() => setShowForm(true)} className="btn-primary">Créer une fiche</button>}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((note) => (
             <div key={note.id} onClick={() => setSelectedId(note.id)} className="card-fantasy cursor-pointer overflow-hidden">
               {note.imageUrl ? (
-                <img src={note.imageUrl} alt={note.title} className="w-full h-36 object-cover" />
+                <img src={note.imageUrl} alt={note.title} className="w-full h-36 object-contain bg-parchment-100" />
               ) : (
                 <div className="w-full h-36 bg-parchment-200 flex items-center justify-center">
                   <Globe className="w-12 h-12 text-ink-100" />
@@ -183,15 +183,27 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
   const [inGlossary, setInGlossary] = useState(existing?.inGlossary ?? false);
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl);
   const [linkedNoteIds, setLinkedNoteIds] = useState<string[]>(existing?.linkedNoteIds ?? []);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const otherNotes = worldNotes.filter((n) => n.id !== noteId);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const isDirty = useCallback(() => {
+    if (!existing) {
+      return !!(title || content || imageUrl || inGlossary || linkedNoteIds.length > 0 || category !== 'custom');
+    }
+    return (
+      title !== (existing.title ?? '') ||
+      category !== (existing.category ?? 'custom') ||
+      content !== (existing.content ?? '') ||
+      inGlossary !== (existing.inGlossary ?? false) ||
+      imageUrl !== existing.imageUrl ||
+      JSON.stringify(linkedNoteIds) !== JSON.stringify(existing.linkedNoteIds ?? [])
+    );
+  }, [title, category, content, inGlossary, imageUrl, linkedNoteIds, existing]);
+
+  const handleSave = () => {
     if (!title.trim()) return;
-
     const data = { title, category, content, inGlossary, imageUrl, linkedNoteIds };
-
     if (existing) {
       updateWorldNote(existing.id, data);
     } else {
@@ -200,15 +212,29 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
     onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg mx-4 my-4">
-        <div className="flex items-center justify-between p-6 border-b border-parchment-300">
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-2xl mx-4 my-4 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b border-parchment-300 flex-shrink-0">
           <h3 className="font-display text-xl font-bold text-ink-500">{existing ? 'Modifier la fiche' : 'Nouvelle fiche'}</h3>
-          <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
+          <button onClick={handleClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <ImageUpload value={imageUrl} onChange={setImageUrl} />
 
           <div>
@@ -261,12 +287,28 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
-            <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+          </div>
+          <div className="flex justify-end gap-3 p-6 border-t border-parchment-300 flex-shrink-0">
+            <button type="button" onClick={handleClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">{existing ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>
+
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); onClose(); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); handleSave(); }} className="btn-primary text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

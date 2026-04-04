@@ -99,6 +99,32 @@ export type PlaceType =
   | 'region'
   | 'other';
 
+// ─── Timeline Events ───
+export type DurationUnit = 'hours' | 'days' | 'months' | 'years';
+
+export interface EventDuration {
+  value: number;
+  unit: DurationUnit;
+}
+
+export interface TimelineEvent {
+  id: EntityId;
+  title: string;
+  description?: string;
+  startDate: string;           // YYYY-MM-DD (date part)
+  startTime?: string;          // HH:mm (optional, when user checks "include time")
+  duration: EventDuration;
+  order: number;               // position in the timeline sequence
+  characterIds: EntityId[];
+  placeId?: EntityId;
+  chapterId?: EntityId;        // optional chapter reference
+  sceneId?: EntityId;          // optional single scene reference (shares dates/duration with event)
+  tags: EntityId[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Chapters & Scenes ───
 export type ChapterType = 'front_matter' | 'chapter' | 'back_matter';
 
@@ -123,8 +149,11 @@ export interface Scene {
   orderInChapter: number;
   characterIds: EntityId[];
   placeId?: EntityId;
-  startDateTime?: string;
-  endDateTime?: string;
+  startDateTime?: string;   // @deprecated – kept for compat, use startDate+duration
+  endDateTime?: string;     // @deprecated – kept for compat, use startDate+duration
+  startDate?: string;       // YYYY-MM-DD
+  startTime?: string;       // HH:mm (optional)
+  duration?: EventDuration; // same model as TimelineEvent
   targetWordCount: number;
   currentWordCount: number; // manual in count mode, auto-computed in write mode
   content?: string;         // HTML (TipTap) – write mode only
@@ -280,6 +309,7 @@ export type TicketModule =
   | 'places'
   | 'chapters'
   | 'timeline'
+  | 'writing'
   | 'progress'
   | 'world'
   | 'maps'
@@ -484,6 +514,7 @@ export interface BookProject {
   writingSessions: WritingSession[];
   worldNotes: WorldNote[];
   maps: MapItem[];
+  timelineEvents?: TimelineEvent[];
   noteIdeas?: NoteIdea[];
   selfComments?: SelfComment[];
   graphNodePositions?: Record<string, { x: number; y: number }>;

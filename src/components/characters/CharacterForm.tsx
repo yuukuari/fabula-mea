@@ -122,8 +122,8 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
-      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-2xl mx-4 my-4">
-        <div className="flex items-center justify-between p-6 border-b border-parchment-300">
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-3xl mx-4 my-4 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b border-parchment-300 flex-shrink-0">
           <h3 className="font-display text-xl font-bold text-ink-500">
             {existing ? 'Modifier le personnage' : 'Nouveau personnage'}
           </h3>
@@ -132,7 +132,8 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
           <ImageUpload
             value={imageUrl}
             onChange={setImageUrl}
@@ -281,8 +282,8 @@ export function CharacterForm({ characterId, onClose }: CharacterFormProps) {
             <label className="label-field">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="textarea-field" rows={2} />
           </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
+          </div>
+          <div className="flex justify-end gap-3 p-6 border-t border-parchment-300 flex-shrink-0">
             <button type="button" onClick={handleClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">
               {existing ? 'Enregistrer' : 'Créer'}

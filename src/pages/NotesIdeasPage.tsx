@@ -126,7 +126,7 @@ export function NotesIdeasPage() {
         <EmptyState
           icon={Lightbulb}
           title="Aucune note"
-          description="Notez vos idées, passages inspirants, checklists et réflexions en vrac."
+          description="Notez vos idées, vos recherches, passages inspirants, checklists et réflexions en vrac."
           action={<button onClick={() => setShowForm(true)} className="btn-primary">Créer une note</button>}
         />
       ) : (
@@ -205,6 +205,7 @@ function NoteIdeaForm({ noteId, onClose }: { noteId: string | null; onClose: () 
   const existing = noteId ? noteIdeas.find((n) => n.id === noteId) : null;
 
   const [title, setTitle] = useState(existing?.title ?? '');
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -240,12 +241,19 @@ function NoteIdeaForm({ noteId, onClose }: { noteId: string | null; onClose: () 
     }
   }, [editor]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const isDirty = useCallback(() => {
+    const content = editor?.getHTML() ?? '';
+    if (!existing) {
+      const plainText = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      return !!(title || plainText);
+    }
+    return title !== (existing.title ?? '') || content !== (existing.content ?? '');
+  }, [title, editor, existing]);
+
+  const handleSave = () => {
     const content = editor?.getHTML() ?? '';
     const plainText = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     if (!plainText) return;
-
     if (existing) {
       updateNoteIdea(existing.id, { title, content });
     } else {
@@ -254,17 +262,31 @@ function NoteIdeaForm({ noteId, onClose }: { noteId: string | null; onClose: () 
     onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-2xl mx-4 my-4">
-        <div className="flex items-center justify-between p-6 border-b border-parchment-300">
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-3xl mx-4 my-4 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b border-parchment-300 flex-shrink-0">
           <h3 className="font-display text-xl font-bold text-ink-500">
             {existing ? 'Modifier la note' : 'Nouvelle note'}
           </h3>
-          <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
+          <button onClick={handleClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <div>
             <label className="label-field">Titre</label>
             <input
@@ -349,12 +371,28 @@ function NoteIdeaForm({ noteId, onClose }: { noteId: string | null; onClose: () 
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
-            <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+          </div>
+          <div className="flex justify-end gap-3 p-6 border-t border-parchment-300 flex-shrink-0">
+            <button type="button" onClick={handleClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">{existing ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>
+
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); onClose(); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); handleSave(); }} className="btn-primary text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -74,7 +74,13 @@ async function handleIndex(req: VercelRequest, res: VercelResponse) {
     };
 
     const releasesJson = await redis.get('emlb:releases');
-    const releases: Release[] = releasesJson ? JSON.parse(releasesJson) : [];
+    let releases: Release[] = releasesJson ? JSON.parse(releasesJson) : [];
+    // Auto-demote: if setting this release to 'current', previous 'current' becomes 'released'
+    if (release.status === 'current') {
+      releases = releases.map((r) =>
+        r.status === 'current' ? { ...r, status: 'released' as const, updatedAt: new Date().toISOString() } : r
+      );
+    }
     releases.push(release);
     await redis.set('emlb:releases', JSON.stringify(releases));
 
@@ -103,6 +109,14 @@ async function handleById(req: VercelRequest, res: VercelResponse, id: string) {
   if (releaseIdx === -1) return res.status(404).json({ error: 'Release introuvable' });
 
   if (req.method === 'PATCH') {
+    // Auto-demote: if setting this release to 'current', previous 'current' becomes 'released'
+    if (req.body.status === 'current' && releases[releaseIdx].status !== 'current') {
+      for (let i = 0; i < releases.length; i++) {
+        if (i !== releaseIdx && releases[i].status === 'current') {
+          releases[i] = { ...releases[i], status: 'released' as const, updatedAt: new Date().toISOString() };
+        }
+      }
+    }
     const updated = { ...releases[releaseIdx], ...req.body, updatedAt: new Date().toISOString() };
     releases[releaseIdx] = updated;
     await redis.set('emlb:releases', JSON.stringify(releases));

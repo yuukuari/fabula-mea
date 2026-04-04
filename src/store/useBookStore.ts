@@ -4,14 +4,15 @@ import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
   Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
-  BookLayout,
+  BookLayout, TimelineEvent, EventDuration, DurationUnit,
 } from '@/types';
-import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR } from '@/lib/utils';
+import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR, computeEventEndDate, getEventStartDate } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
 import { useSagaStore } from './useSagaStore';
 import { isBase64, uploadImage } from '@/lib/upload';
+import { migrateScenesToTimelineEvents } from '@/lib/migration';
 
 const shouldSync = () => !!localStorage.getItem('emlb-token');
 
@@ -157,6 +158,18 @@ interface BookStore extends BookProject {
   deleteNoteIdea: (id: string) => void;
   reorderNoteIdeas: (noteIds: string[]) => void;
 
+  // Timeline Events
+  addTimelineEvent: (event: Partial<TimelineEvent> & { title: string; startDate: string; duration: EventDuration }) => string;
+  updateTimelineEvent: (id: string, data: Partial<TimelineEvent>) => void;
+  deleteTimelineEvent: (id: string) => void;
+  reorderTimelineEvents: (eventIds: string[]) => void;
+  insertTimelineEvent: (referenceId: string, position: 'before' | 'after', event: Partial<TimelineEvent> & { title: string; duration: EventDuration }) => string;
+  splitTimelineEvent: (id: string, splitPoints: number[], unit: DurationUnit) => void;
+  linkEventToScene: (eventId: string, chapterId: string, sceneId: string) => void;
+  unlinkEventFromScene: (eventId: string) => void;
+  convertEventToChapter: (eventId: string) => string;
+  createSceneForEvent: (eventId: string, chapterId: string) => string;
+
   // Graph node positions
   saveGraphNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
 
@@ -186,6 +199,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     writingSessions: [],
     worldNotes: [],
     maps: [],
+    timelineEvents: [],
     noteIdeas: [],
     selfComments: [],
     graphNodePositions: {},
@@ -218,6 +232,7 @@ function extractProjectData(state: BookStore): BookProject {
     writingSessions: state.writingSessions,
     worldNotes: state.worldNotes,
     maps: state.maps,
+    timelineEvents: state.timelineEvents,
     noteIdeas: state.noteIdeas,
     selfComments: state.selfComments,
     graphNodePositions: state.graphNodePositions,
@@ -349,7 +364,7 @@ export const useBookStore = create<BookStore>()(
 
         const raw = localStorage.getItem(getBookStorageKey(bookId));
         if (raw) {
-          const project = ensureSpecialChapters(JSON.parse(raw) as BookProject);
+          const project = migrateScenesToTimelineEvents(ensureSpecialChapters(JSON.parse(raw) as BookProject));
           set({ ...emptyState(), ...project, lastSavedAt: now(), _loaded: true });
           // Load saga if this book belongs to one
           if (project.sagaId) {
@@ -365,7 +380,7 @@ export const useBookStore = create<BookStore>()(
             const remote = remoteData as BookProject;
             const cur = get();
             if (!raw || remote.updatedAt > (cur.updatedAt ?? '')) {
-              const migrated = ensureSpecialChapters(remote);
+              const migrated = migrateScenesToTimelineEvents(ensureSpecialChapters(remote));
               set({ ...emptyState(), ...migrated, lastSavedAt: now(), _loaded: true });
               localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(migrated));
               // Load saga from remote data if needed
@@ -714,6 +729,9 @@ export const useBookStore = create<BookStore>()(
               orderInChapter,
               characterIds: scene.characterIds ?? [],
               placeId: scene.placeId,
+              startDate: scene.startDate,
+              startTime: scene.startTime,
+              duration: scene.duration,
               startDateTime: scene.startDateTime,
               endDateTime: scene.endDateTime,
               targetWordCount: scene.targetWordCount ?? s.goals.defaultWordsPerScene,
@@ -736,13 +754,38 @@ export const useBookStore = create<BookStore>()(
         return id;
       },
 
-      updateScene: (id, data) =>
-        set((s) => ({
-          scenes: s.scenes.map((sc) =>
+      updateScene: (id, data) => {
+        const state = get();
+        const temporalChanged = data.startDate !== undefined || data.startTime !== undefined || data.duration !== undefined;
+
+        // Find linked timeline event (event.sceneId === this scene's id)
+        const linkedEvent = temporalChanged
+          ? (state.timelineEvents ?? []).find((e) => e.sceneId === id)
+          : null;
+
+        set((s) => {
+          const newScenes = s.scenes.map((sc) =>
             sc.id === id ? { ...sc, ...data, updatedAt: now() } : sc
-          ),
-          ...touchSave(),
-        })),
+          );
+
+          // Sync temporal data to linked event
+          const newTimelineEvents = linkedEvent
+            ? (s.timelineEvents ?? []).map((e) =>
+                e.id === linkedEvent.id
+                  ? {
+                      ...e,
+                      ...(data.startDate !== undefined ? { startDate: data.startDate } : {}),
+                      ...(data.startTime !== undefined ? { startTime: data.startTime } : {}),
+                      ...(data.duration !== undefined ? { duration: data.duration } : {}),
+                      updatedAt: now(),
+                    }
+                  : e
+              )
+            : s.timelineEvents;
+
+          return { scenes: newScenes, timelineEvents: newTimelineEvents, ...touchSave() };
+        });
+      },
 
       updateSceneContent: (sceneId, content, wordCount) =>
         set((s) => ({
@@ -1045,6 +1088,333 @@ export const useBookStore = create<BookStore>()(
           }),
           ...touchSave(),
         })),
+
+      // ─── Timeline Events ───
+      addTimelineEvent: (event) => {
+        const id = generateId();
+        const timestamp = now();
+        const events = get().timelineEvents ?? [];
+        const maxOrder = events.length > 0 ? Math.max(...events.map((e) => e.order)) + 1 : 0;
+        const newEvent: TimelineEvent = {
+          id,
+          title: event.title,
+          description: event.description,
+          startDate: event.startDate,
+          startTime: event.startTime,
+          duration: event.duration,
+          order: event.order ?? maxOrder,
+          characterIds: event.characterIds ?? [],
+          placeId: event.placeId,
+          chapterId: event.chapterId,
+          sceneId: event.sceneId,
+          tags: event.tags ?? [],
+          notes: event.notes,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        set((s) => ({
+          timelineEvents: [...(s.timelineEvents ?? []), newEvent],
+          ...touchSave(),
+        }));
+        return id;
+      },
+
+      updateTimelineEvent: (id, data) => {
+        const state = get();
+        const event = (state.timelineEvents ?? []).find((e) => e.id === id);
+        if (!event) return;
+
+        // If this event is linked to a scene and temporal data changed, sync to the scene
+        const updatedEvent = { ...event, ...data };
+        const temporalChanged = data.startDate !== undefined || data.startTime !== undefined || data.duration !== undefined;
+        const sceneId = data.sceneId !== undefined ? data.sceneId : event.sceneId;
+
+        set((s) => {
+          const newTimelineEvents = (s.timelineEvents ?? []).map((e) =>
+            e.id === id ? { ...e, ...data, updatedAt: now() } : e
+          );
+          // Sync temporal data to linked scene
+          const newScenes = (temporalChanged && sceneId)
+            ? s.scenes.map((sc) =>
+                sc.id === sceneId
+                  ? {
+                      ...sc,
+                      startDate: updatedEvent.startDate,
+                      startTime: updatedEvent.startTime,
+                      duration: updatedEvent.duration,
+                      startDateTime: undefined,
+                      endDateTime: undefined,
+                      updatedAt: now(),
+                    }
+                  : sc
+              )
+            : s.scenes;
+          return { timelineEvents: newTimelineEvents, scenes: newScenes, ...touchSave() };
+        });
+      },
+
+      deleteTimelineEvent: (id) =>
+        set((s) => ({
+          timelineEvents: (s.timelineEvents ?? []).filter((e) => e.id !== id),
+          ...touchSave(),
+        })),
+
+      reorderTimelineEvents: (eventIds) =>
+        set((s) => ({
+          timelineEvents: eventIds
+            .map((id, i) => {
+              const evt = (s.timelineEvents ?? []).find((e) => e.id === id);
+              return evt ? { ...evt, order: i } : null;
+            })
+            .filter(Boolean) as TimelineEvent[],
+          ...touchSave(),
+        })),
+
+      insertTimelineEvent: (referenceId, position, event) => {
+        const id = generateId();
+        const timestamp = now();
+        const events = [...(get().timelineEvents ?? [])].sort((a, b) => a.order - b.order);
+        const refIndex = events.findIndex((e) => e.id === referenceId);
+        if (refIndex === -1) return id;
+
+        const refEvent = events[refIndex];
+        let startDate: string;
+        let startTime: string | undefined;
+
+        const toDateStr = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const toTimeStr = (d: Date) =>
+          `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+        // Hours-based events always need a startTime; others only if ref had one
+        const needsTime = refEvent.duration.unit === 'hours' || event.duration.unit === 'hours' || !!refEvent.startTime;
+
+        if (position === 'after') {
+          // New event starts right after reference event ends
+          const endDate: Date = computeEventEndDate(refEvent.startDate, refEvent.startTime, refEvent.duration);
+          startDate = toDateStr(endDate);
+          startTime = needsTime ? toTimeStr(endDate) : undefined;
+        } else {
+          // New event ends right when reference event starts
+          // Compute backward: new start = ref start - new duration
+          // Use calendar arithmetic (same as computeEventEndDate but reversed) to stay consistent
+          const refStart = getEventStartDate(refEvent.startDate, refEvent.startTime);
+          const dur = event.duration;
+          let newStart: Date;
+          switch (dur.unit) {
+            case 'hours':
+              newStart = new Date(refStart.getTime() - dur.value * 3600000);
+              break;
+            case 'days': {
+              newStart = new Date(refStart);
+              newStart.setDate(newStart.getDate() - dur.value);
+              break;
+            }
+            case 'months': {
+              newStart = new Date(refStart);
+              newStart.setMonth(newStart.getMonth() - dur.value);
+              break;
+            }
+            case 'years': {
+              newStart = new Date(refStart);
+              newStart.setFullYear(newStart.getFullYear() - dur.value);
+              break;
+            }
+          }
+          startDate = toDateStr(newStart);
+          startTime = needsTime ? toTimeStr(newStart) : undefined;
+        }
+
+        const newEvent: TimelineEvent = {
+          id,
+          title: event.title,
+          description: event.description,
+          startDate,
+          startTime,
+          duration: event.duration,
+          order: 0,
+          characterIds: event.characterIds ?? [],
+          placeId: event.placeId,
+          chapterId: event.chapterId,
+          tags: event.tags ?? [],
+          notes: event.notes,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+
+        const insertIndex = position === 'before' ? refIndex : refIndex + 1;
+        events.splice(insertIndex, 0, newEvent);
+        events.forEach((e, i) => { e.order = i; });
+
+        set(() => ({
+          timelineEvents: events,
+          ...touchSave(),
+        }));
+        return id;
+      },
+
+      splitTimelineEvent: (id, splitPoints, unit) => {
+        if (splitPoints.length < 1) return;
+        const events = [...(get().timelineEvents ?? [])].sort((a, b) => a.order - b.order);
+        const index = events.findIndex((e) => e.id === id);
+        if (index === -1) return;
+
+        const original = events[index];
+        const timestamp = now();
+        const parts = splitPoints.length + 1;
+
+        // Build percentage boundaries: [0, ...splitPoints, 100]
+        const boundaries = [0, ...splitPoints.sort((a, b) => a - b), 100];
+
+        // Compute exact original time span in ms
+        const originalStartMs = getEventStartDate(original.startDate, original.startTime).getTime();
+        const originalEndMs = computeEventEndDate(original.startDate, original.startTime, original.duration).getTime();
+        const totalMs = originalEndMs - originalStartMs;
+
+        const newEvents: TimelineEvent[] = [];
+        for (let i = 0; i < parts; i++) {
+          const partStartMs = originalStartMs + (boundaries[i] / 100) * totalMs;
+          const partEndMs = originalStartMs + (boundaries[i + 1] / 100) * totalMs;
+          const dMs = partEndMs - partStartMs;
+
+          // Compute duration in the chosen unit
+          let durationValue: number;
+          if (unit === 'hours') durationValue = Math.max(1, Math.round(dMs / 3600000));
+          else if (unit === 'days') durationValue = Math.max(1, Math.round(dMs / 86400000));
+          else if (unit === 'months') durationValue = Math.max(1, Math.round(dMs / (30.44 * 86400000)));
+          else durationValue = Math.max(1, Math.round(dMs / (365.25 * 86400000)));
+
+          const duration: EventDuration = { value: durationValue, unit };
+          const partStart = new Date(partStartMs);
+          const partStartDate = `${partStart.getFullYear()}-${String(partStart.getMonth() + 1).padStart(2, '0')}-${String(partStart.getDate()).padStart(2, '0')}`;
+          const h = partStart.getHours();
+          const m = partStart.getMinutes();
+          const partStartTime = (original.startTime || h !== 0 || m !== 0)
+            ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+            : undefined;
+
+          newEvents.push({
+            id: i === 0 ? original.id : generateId(),
+            title: `${original.title} (${i + 1}/${parts})`,
+            description: original.description,
+            startDate: partStartDate,
+            startTime: partStartTime,
+            duration,
+            order: 0,
+            characterIds: [...original.characterIds],
+            placeId: original.placeId,
+            chapterId: original.chapterId,
+            sceneId: i === 0 ? original.sceneId : undefined,
+            tags: [...original.tags],
+            notes: original.notes,
+            createdAt: i === 0 ? original.createdAt : timestamp,
+            updatedAt: timestamp,
+          });
+        }
+
+        events.splice(index, 1, ...newEvents);
+        events.forEach((e, i) => { e.order = i; });
+
+        set(() => ({
+          timelineEvents: events,
+          ...touchSave(),
+        }));
+      },
+
+      linkEventToScene: (eventId, chapterId, sceneId) =>
+        set((s) => ({
+          timelineEvents: (s.timelineEvents ?? []).map((e) =>
+            e.id === eventId ? { ...e, chapterId, sceneId, updatedAt: now() } : e
+          ),
+          ...touchSave(),
+        })),
+
+      unlinkEventFromScene: (eventId) =>
+        set((s) => ({
+          timelineEvents: (s.timelineEvents ?? []).map((e) =>
+            e.id === eventId ? { ...e, sceneId: undefined, updatedAt: now() } : e
+          ),
+          ...touchSave(),
+        })),
+
+      convertEventToChapter: (eventId) => {
+        const state = get();
+        const event = (state.timelineEvents ?? []).find((e) => e.id === eventId);
+        if (!event) return '';
+
+        const timestamp = now();
+        const normalChapters = state.chapters.filter((c) => (c.type ?? 'chapter') === 'chapter');
+        const maxNum = normalChapters.length > 0 ? Math.max(...normalChapters.map((c) => c.number)) : 0;
+        const chapterId = generateId();
+
+        const newChapter: Chapter = {
+          id: chapterId,
+          title: event.title,
+          number: maxNum + 1,
+          type: 'chapter',
+          synopsis: event.description ?? '',
+          sceneIds: [],
+          color: CHAPTER_COLORS[normalChapters.length % CHAPTER_COLORS.length],
+          tags: [],
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+
+        set((s) => ({
+          chapters: [...s.chapters, newChapter],
+          timelineEvents: (s.timelineEvents ?? []).map((e) =>
+            e.id === eventId
+              ? { ...e, chapterId, updatedAt: timestamp }
+              : e
+          ),
+          ...touchSave(),
+        }));
+
+        return chapterId;
+      },
+
+      createSceneForEvent: (eventId, chapterId) => {
+        const state = get();
+        const event = (state.timelineEvents ?? []).find((e) => e.id === eventId);
+        if (!event) return '';
+
+        const timestamp = now();
+        const chapter = state.chapters.find((c) => c.id === chapterId);
+        if (!chapter) return '';
+
+        const sceneId = generateId();
+        const newScene: Scene = {
+          id: sceneId,
+          title: event.title,
+          description: event.description ?? '',
+          chapterId,
+          orderInChapter: chapter.sceneIds.length,
+          characterIds: [...event.characterIds],
+          placeId: event.placeId,
+          targetWordCount: state.goals.defaultWordsPerScene,
+          currentWordCount: 0,
+          status: 'outline',
+          tags: [...event.tags],
+          notes: event.notes,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+
+        set((s) => ({
+          scenes: [...s.scenes, newScene],
+          chapters: s.chapters.map((c) =>
+            c.id === chapterId ? { ...c, sceneIds: [...c.sceneIds, sceneId], updatedAt: timestamp } : c
+          ),
+          timelineEvents: (s.timelineEvents ?? []).map((e) =>
+            e.id === eventId
+              ? { ...e, sceneId, updatedAt: timestamp }
+              : e
+          ),
+          ...touchSave(),
+        }));
+
+        return sceneId;
+      },
 
       // ─── Graph node positions ───
       saveGraphNodePositions: (positions) =>

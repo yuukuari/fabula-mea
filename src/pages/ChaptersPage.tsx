@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, WORLD_NOTE_CATEGORY_LABELS, PLACE_TYPE_LABELS } from '@/lib/utils';
 import { getSceneProgress } from '@/lib/calculations';
-import type { Scene, SceneStatus, Chapter, GlossaryEntry } from '@/types';
+import type { Scene, SceneStatus, Chapter, GlossaryEntry, EventDuration, DurationUnit } from '@/types';
 
 export function ChaptersPage() {
   const chapters = useBookStore((s) => s.chapters);
@@ -86,7 +86,7 @@ export function ChaptersPage() {
                     </select>
                   </div>
                   {scene.description && (
-                    <p className="text-xs text-ink-300 mt-1 line-clamp-2">{scene.description}</p>
+                    <p className="text-xs text-ink-300 mt-1 line-clamp-2 whitespace-pre-line">{scene.description}</p>
                   )}
                   <div className="flex items-center gap-3 mt-2 text-xs text-ink-200">
                     {sceneChars.length > 0 && (
@@ -111,8 +111,8 @@ export function ChaptersPage() {
                         ))}
                       </span>
                     )}
-                    {scene.startDateTime && (
-                      <span>{new Date(scene.startDateTime).toLocaleDateString('fr-FR')}</span>
+                    {scene.startDate && (
+                      <span>{new Date(scene.startDate + 'T00:00:00').toLocaleDateString('fr-FR')}</span>
                     )}
                   </div>
                   {/* Progress bar */}
@@ -277,7 +277,7 @@ export function ChaptersPage() {
                 </div>
 
                 {chapter.synopsis && isExpanded && (
-                  <p className="px-4 pb-2 text-sm text-ink-300 italic">{chapter.synopsis}</p>
+                  <p className="px-4 pb-2 text-sm text-ink-300 italic whitespace-pre-line">{chapter.synopsis}</p>
                 )}
 
                 {renderSceneList(chapter)}
@@ -467,7 +467,7 @@ function ChapterFormDialog({ chapterId, onClose }: { chapterId: string | null; o
             <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" placeholder="Laisser vide pour afficher uniquement le numéro" />
           </div>
           <div>
-            <label className="label-field">Synopsis</label>
+            <label className="label-field">Description</label>
             <textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} className="textarea-field" rows={3} />
           </div>
           <div className="flex justify-end gap-3">
@@ -487,26 +487,56 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const addScene = useBookStore((s) => s.addScene);
   const updateScene = useBookStore((s) => s.updateScene);
+  const timelineEvents = useBookStore((s) => s.timelineEvents) ?? [];
+
+  // Check if this scene is linked to a timeline event
+  const linkedEvent = scene ? timelineEvents.find((e) => e.sceneId === scene.id) : null;
 
   const [title, setTitle] = useState(scene?.title ?? '');
   const [description, setDescription] = useState(scene?.description ?? '');
   const [characterIds, setCharacterIds] = useState<string[]>(scene?.characterIds ?? []);
   const [placeId, setPlaceId] = useState(scene?.placeId ?? '');
-  const [startDateTime, setStartDateTime] = useState(scene?.startDateTime ?? '');
-  const [endDateTime, setEndDateTime] = useState(scene?.endDateTime ?? '');
+  const [hasDate, setHasDate] = useState(!!(scene?.startDate) || !!linkedEvent);
+  const [startDate, setStartDate] = useState(scene?.startDate ?? linkedEvent?.startDate ?? new Date().toISOString().slice(0, 10));
+  const [includeTime, setIncludeTime] = useState(!!(scene?.startTime ?? linkedEvent?.startTime));
+  const [startTime, setStartTime] = useState(scene?.startTime ?? linkedEvent?.startTime ?? '00:00');
+  const [duration, setDuration] = useState<EventDuration>(scene?.duration ?? linkedEvent?.duration ?? { value: 1, unit: 'days' });
   const [targetWordCount, setTargetWordCount] = useState(scene?.targetWordCount ?? goals.defaultWordsPerScene);
   const [currentWordCount, setCurrentWordCount] = useState(scene?.currentWordCount ?? 0);
   const [status, setStatus] = useState<SceneStatus>(scene?.status ?? 'outline');
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const data = {
+  const isDirty = useCallback(() => {
+    if (!scene) {
+      return !!(title || description || characterIds.length > 0 || placeId || status !== 'outline' || targetWordCount !== goals.defaultWordsPerScene || currentWordCount > 0);
+    }
+    return (
+      title !== (scene.title ?? '') ||
+      description !== (scene.description ?? '') ||
+      JSON.stringify(characterIds) !== JSON.stringify(scene.characterIds ?? []) ||
+      placeId !== (scene.placeId ?? '') ||
+      status !== (scene.status ?? 'outline') ||
+      targetWordCount !== (scene.targetWordCount ?? goals.defaultWordsPerScene) ||
+      currentWordCount !== (scene.currentWordCount ?? 0) ||
+      hasDate !== (!!(scene.startDate) || !!linkedEvent) ||
+      (hasDate && startDate !== (scene.startDate ?? linkedEvent?.startDate ?? '')) ||
+      (hasDate && includeTime !== !!(scene.startTime ?? linkedEvent?.startTime)) ||
+      (hasDate && includeTime && startTime !== (scene.startTime ?? linkedEvent?.startTime ?? '00:00')) ||
+      (hasDate && JSON.stringify(duration) !== JSON.stringify(scene.duration ?? linkedEvent?.duration ?? { value: 1, unit: 'days' }))
+    );
+  }, [title, description, characterIds, placeId, status, targetWordCount, currentWordCount, hasDate, startDate, includeTime, startTime, duration, scene, linkedEvent, goals.defaultWordsPerScene]);
+
+  const handleSave = () => {
+    const data: Partial<Scene> & { chapterId?: string } = {
       title: title.trim(),
       description,
       characterIds,
       placeId: placeId || undefined,
-      startDateTime: startDateTime || undefined,
-      endDateTime: endDateTime || undefined,
+      startDate: hasDate ? startDate : undefined,
+      startTime: hasDate && includeTime ? startTime : undefined,
+      duration: hasDate ? duration : undefined,
+      startDateTime: undefined,
+      endDateTime: undefined,
       targetWordCount,
       currentWordCount,
       status,
@@ -520,6 +550,19 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
     onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
   const toggleCharacter = (id: string) => {
     setCharacterIds((ids) =>
       ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]
@@ -528,98 +571,189 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg mx-4 my-4">
-        <div className="flex items-center justify-between p-6 border-b border-parchment-300">
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-2xl mx-4 my-4 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b border-parchment-300 flex-shrink-0">
           <h3 className="font-display text-xl font-bold text-ink-500">
-            {scene ? 'Modifier la scene' : 'Nouvelle scene'}
+            {scene ? 'Modifier la scène' : 'Nouvelle scène'}
           </h3>
-          <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
+          <button onClick={handleClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div>
-            <label className="label-field">Titre <span className="text-ink-200 font-normal">(facultatif)</span></label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" placeholder="Laisser vide pour afficher Scène N" />
-          </div>
-
-          <div>
-            <label className="label-field">Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="textarea-field" rows={3} />
-          </div>
-
-          <div>
-            <label className="label-field">Statut</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value as SceneStatus)} className="input-field">
-              {Object.entries(SCENE_STATUS_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="label-field">Personnages presents</label>
-            <div className="grid grid-cols-2 gap-1 max-h-32 overflow-y-auto">
-              {characters.map((c) => (
-                <label key={c.id} className="flex items-center gap-2 text-sm text-ink-300 py-1">
-                  <input
-                    type="checkbox"
-                    checked={characterIds.includes(c.id)}
-                    onChange={() => toggleCharacter(c.id)}
-                    className="rounded border-parchment-300"
-                  />
-                  {c.name}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="label-field">Lieu</label>
-            <select value={placeId} onChange={(e) => setPlaceId(e.target.value)} className="input-field">
-              <option value="">Aucun</option>
-              {places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
             <div>
-              <label className="label-field">Date/heure debut (dans l'histoire)</label>
-              <input type="datetime-local" value={startDateTime} onChange={(e) => setStartDateTime(e.target.value)} className="input-field" />
+              <label className="label-field">Titre <span className="text-ink-200 font-normal">(facultatif)</span></label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" placeholder="Laisser vide pour afficher Scène N" />
             </div>
-            <div>
-              <label className="label-field">Date/heure fin</label>
-              <input type="datetime-local" value={endDateTime} onChange={(e) => setEndDateTime(e.target.value)} className="input-field" />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label-field">Objectif {countUnitLabel(countUnit)}</label>
-              <input type="number" value={targetWordCount} onChange={(e) => setTargetWordCount(Number(e.target.value))} className="input-field" min={0} />
+              <label className="label-field">Description</label>
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="textarea-field" rows={3} />
             </div>
-            {writingMode === 'count' && (
+
+            <div>
+              <label className="label-field">Statut</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as SceneStatus)} className="input-field">
+                {Object.entries(SCENE_STATUS_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {characters.length > 0 && (
               <div>
-                <label className="label-field">{countUnit === 'characters' ? 'Signes écrits' : 'Mots écrits'}</label>
-                <input type="number" value={currentWordCount} onChange={(e) => setCurrentWordCount(Number(e.target.value))} className="input-field" min={0} />
+                <label className="label-field">Personnages présents</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {characters.map((c) => {
+                    const selected = characterIds.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => toggleCharacter(c.id)}
+                        className={cn(
+                          'px-2.5 py-1 rounded-full text-xs font-medium transition-colors border',
+                          selected
+                            ? 'bg-bordeaux-500 text-white border-bordeaux-500'
+                            : 'bg-parchment-100 text-ink-300 border-parchment-300 hover:border-bordeaux-300 hover:text-ink-400'
+                        )}
+                      >
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
-            {writingMode === 'write' && (
-              <div>
-                <label className="label-field">{countUnit === 'characters' ? 'Signes écrits' : 'Mots écrits'}</label>
-                <p className="input-field bg-parchment-100 text-ink-300 cursor-not-allowed select-none">
-                  {currentWordCount} <span className="text-xs">(calculé automatiquement)</span>
+
+            <div>
+              <label className="label-field">Lieu</label>
+              <select value={placeId} onChange={(e) => setPlaceId(e.target.value)} className="input-field">
+                <option value="">Aucun</option>
+                {places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+
+            {/* Date & Duration (dans l'histoire) */}
+            <div>
+              <label className="label-field flex items-center gap-2">
+                Temporalité dans l'histoire
+                <input
+                  type="checkbox"
+                  checked={hasDate}
+                  onChange={(e) => setHasDate(e.target.checked)}
+                  disabled={!!linkedEvent}
+                  className="rounded border-parchment-300 disabled:opacity-50"
+                />
+              </label>
+              {linkedEvent && (
+                <p className="text-xs text-ink-200 italic mt-0.5">
+                  Liée à l'événement « {linkedEvent.title} » — les dates sont synchronisées.
                 </p>
-              </div>
-            )}
-          </div>
+              )}
+              {hasDate && (
+                <div className="space-y-3 mt-2 border-l-2 border-parchment-200 ml-1 pl-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-ink-300 mb-1 block">Date de début</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="input-field text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-ink-300 mb-1 block flex items-center gap-2">
+                        Heure
+                        <input
+                          type="checkbox"
+                          checked={includeTime}
+                          onChange={(e) => setIncludeTime(e.target.checked)}
+                          className="rounded border-parchment-300"
+                        />
+                      </label>
+                      {includeTime ? (
+                        <input
+                          type="time"
+                          value={startTime}
+                          onChange={(e) => setStartTime(e.target.value)}
+                          className="input-field text-sm"
+                        />
+                      ) : (
+                        <div className="input-field text-sm text-ink-200 bg-parchment-100 cursor-not-allowed">—</div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-ink-300 mb-1 block">Durée</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        value={duration.value}
+                        onChange={(e) => setDuration({ ...duration, value: Math.max(1, parseInt(e.target.value) || 1) })}
+                        className="input-field w-20 text-sm"
+                      />
+                      <select
+                        value={duration.unit}
+                        onChange={(e) => setDuration({ ...duration, unit: e.target.value as DurationUnit })}
+                        className="input-field w-28 text-sm"
+                      >
+                        <option value="hours">heure(s)</option>
+                        <option value="days">jour(s)</option>
+                        <option value="months">mois</option>
+                        <option value="years">année(s)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-parchment-300">
-            <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label-field">Objectif {countUnitLabel(countUnit)}</label>
+                <input type="number" value={targetWordCount} onChange={(e) => setTargetWordCount(Number(e.target.value))} className="input-field" min={0} />
+              </div>
+              {writingMode === 'count' && (
+                <div>
+                  <label className="label-field">{countUnit === 'characters' ? 'Signes écrits' : 'Mots écrits'}</label>
+                  <input type="number" value={currentWordCount} onChange={(e) => setCurrentWordCount(Number(e.target.value))} className="input-field" min={0} />
+                </div>
+              )}
+              {writingMode === 'write' && (
+                <div>
+                  <label className="label-field">{countUnit === 'characters' ? 'Signes écrits' : 'Mots écrits'}</label>
+                  <p className="input-field bg-parchment-100 text-ink-300 cursor-not-allowed select-none">
+                    {currentWordCount} <span className="text-xs">(calculé automatiquement)</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 p-6 border-t border-parchment-300 flex-shrink-0">
+            <button type="button" onClick={handleClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">{scene ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>
+
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); onClose(); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); handleSave(); }} className="btn-primary text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -120,6 +120,113 @@ export const WORLD_NOTE_CATEGORY_COLORS: Record<string, string> = {
   custom: 'bg-gray-100 text-gray-600',
 };
 
+// ─── Duration helpers ───
+
+export const DURATION_UNIT_LABELS: Record<string, string> = {
+  hours: 'heure(s)',
+  days: 'jour(s)',
+  months: 'mois',
+  years: 'année(s)',
+};
+
+/**
+ * Convert a startDateTime + endDateTime (ISO strings) into a startDate + duration.
+ * Used for migration from the old scene-based timeline to TimelineEvents.
+ *
+ * Rounding rules:
+ * - ≤24h → keep in hours (rounded)
+ * - >24h and ≤60 days → round to days (ceil)
+ * - >60 days and ≤18 months → round to months
+ * - >18 months → round to years
+ */
+export function convertToSimpleDuration(
+  startDateTime: string,
+  endDateTime?: string
+): { startDate: string; startTime: string | undefined; duration: import('@/types').EventDuration } {
+  const start = new Date(startDateTime);
+  const end = endDateTime ? new Date(endDateTime) : new Date(start.getTime() + 3600000); // +1h default
+
+  const startDate = startDateTime.slice(0, 10); // YYYY-MM-DD
+  // Extract time if it's not midnight
+  const hours = start.getHours();
+  const minutes = start.getMinutes();
+  const startTime = (hours !== 0 || minutes !== 0)
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+    : undefined;
+
+  const diffMs = Math.max(end.getTime() - start.getTime(), 0);
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  let duration: import('@/types').EventDuration;
+
+  if (diffHours <= 24) {
+    duration = { value: Math.max(1, Math.round(diffHours)), unit: 'hours' };
+  } else if (diffDays <= 60) {
+    duration = { value: Math.ceil(diffDays), unit: 'days' };
+  } else if (diffDays <= 548) { // ~18 months
+    duration = { value: Math.max(1, Math.round(diffDays / 30)), unit: 'months' };
+  } else {
+    duration = { value: Math.max(1, Math.round(diffDays / 365)), unit: 'years' };
+  }
+
+  return { startDate, startTime, duration };
+}
+
+/**
+ * Compute the end date of a timeline event from its startDate + duration.
+ * Returns a Date object.
+ */
+export function computeEventEndDate(
+  startDate: string,
+  startTime: string | undefined,
+  duration: import('@/types').EventDuration
+): Date {
+  const dateStr = startTime ? `${startDate}T${startTime}:00` : `${startDate}T00:00:00`;
+  const start = new Date(dateStr);
+
+  switch (duration.unit) {
+    case 'hours':
+      return new Date(start.getTime() + duration.value * 3600000);
+    case 'days': {
+      const d = new Date(start);
+      d.setDate(d.getDate() + duration.value);
+      return d;
+    }
+    case 'months': {
+      const d = new Date(start);
+      d.setMonth(d.getMonth() + duration.value);
+      return d;
+    }
+    case 'years': {
+      const d = new Date(start);
+      d.setFullYear(d.getFullYear() + duration.value);
+      return d;
+    }
+  }
+}
+
+/**
+ * Get the start Date of a timeline event.
+ */
+export function getEventStartDate(startDate: string, startTime?: string): Date {
+  const dateStr = startTime ? `${startDate}T${startTime}:00` : `${startDate}T00:00:00`;
+  return new Date(dateStr);
+}
+
+/**
+ * Format a duration for display in French.
+ */
+export function formatDuration(duration: import('@/types').EventDuration): string {
+  const v = duration.value;
+  switch (duration.unit) {
+    case 'hours': return v === 1 ? '1 heure' : `${v} heures`;
+    case 'days': return v === 1 ? '1 jour' : `${v} jours`;
+    case 'months': return `${v} mois`;
+    case 'years': return v === 1 ? '1 an' : `${v} ans`;
+  }
+}
+
 /** Count characters including spaces from HTML text */
 export function countCharacters(html: string): number {
   const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');

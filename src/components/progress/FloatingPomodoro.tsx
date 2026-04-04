@@ -6,14 +6,70 @@ type TimerMode = 'work' | 'break';
 
 const WORK_MINUTES = 25;
 const BREAK_MINUTES = 5;
+const STORAGE_KEY = 'fabula-mea-pomodoro';
+
+interface PomodoroState {
+  mode: TimerMode;
+  sessionsCompleted: number;
+  isRunning: boolean;
+  /** When running: timestamp (ms) when the timer should reach 0 */
+  endsAt: number | null;
+  /** When paused: seconds remaining */
+  secondsLeft: number;
+}
+
+function loadState(): PomodoroState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveState(state: PomodoroState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function initState(): { mode: TimerMode; secondsLeft: number; isRunning: boolean; sessionsCompleted: number } {
+  const saved = loadState();
+  if (!saved) return { mode: 'work', secondsLeft: WORK_MINUTES * 60, isRunning: false, sessionsCompleted: 0 };
+
+  if (saved.isRunning && saved.endsAt) {
+    const remaining = Math.round((saved.endsAt - Date.now()) / 1000);
+    if (remaining > 0) {
+      return { mode: saved.mode, secondsLeft: remaining, isRunning: true, sessionsCompleted: saved.sessionsCompleted };
+    }
+    // Timer expired while page was closed — advance to next mode
+    const nextMode: TimerMode = saved.mode === 'work' ? 'break' : 'work';
+    const sessions = saved.mode === 'work' ? saved.sessionsCompleted + 1 : saved.sessionsCompleted;
+    return { mode: nextMode, secondsLeft: nextMode === 'work' ? WORK_MINUTES * 60 : BREAK_MINUTES * 60, isRunning: false, sessionsCompleted: sessions };
+  }
+
+  return { mode: saved.mode, secondsLeft: saved.secondsLeft, isRunning: false, sessionsCompleted: saved.sessionsCompleted };
+}
 
 export function FloatingPomodoro() {
+  const initial = useRef(initState()).current;
   const [expanded, setExpanded] = useState(false);
-  const [mode, setMode] = useState<TimerMode>('work');
-  const [secondsLeft, setSecondsLeft] = useState(WORK_MINUTES * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [sessionsCompleted, setSessionsCompleted] = useState(0);
+  const [mode, setMode] = useState<TimerMode>(initial.mode);
+  const [secondsLeft, setSecondsLeft] = useState(initial.secondsLeft);
+  const [isRunning, setIsRunning] = useState(initial.isRunning);
+  const [sessionsCompleted, setSessionsCompleted] = useState(initial.sessionsCompleted);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Persist state on every change
+  useEffect(() => {
+    const state: PomodoroState = {
+      mode,
+      sessionsCompleted,
+      isRunning,
+      endsAt: isRunning ? Date.now() + secondsLeft * 1000 : null,
+      secondsLeft,
+    };
+    saveState(state);
+  }, [mode, sessionsCompleted, isRunning, secondsLeft]);
 
   const totalSeconds = mode === 'work' ? WORK_MINUTES * 60 : BREAK_MINUTES * 60;
   const progress = 1 - secondsLeft / totalSeconds;

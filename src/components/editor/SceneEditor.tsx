@@ -6,7 +6,7 @@ import { useEditorStore } from '@/store/useEditorStore';
 import { SceneInlineEditor, countWords } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
-import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel, formatDuration } from '@/lib/utils';
 import { getTodayProgress } from '@/lib/calculations';
 import type { Scene, Chapter, GlossaryEntry } from '@/types';
 
@@ -444,11 +444,18 @@ export function SceneEditor() {
                 <div key={chapter.id} className="mb-12">
                   {/* Don't show heading for front/back matter */}
                   {!isSpecial && (
-                    <div className="flex items-center gap-3 mb-8">
-                      <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
-                      <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">
-                        {getChapterLabel(chapter)}
-                      </h2>
+                    <div className="mb-8">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
+                        <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">
+                          {getChapterLabel(chapter)}
+                        </h2>
+                      </div>
+                      {chapter.synopsis && (
+                        <p className="text-sm text-ink-200 italic font-serif border-l-2 border-parchment-300 pl-3 mt-3 whitespace-pre-line">
+                          {chapter.synopsis}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -457,7 +464,7 @@ export function SceneEditor() {
                       .map((id) => characters.find((c) => c.id === id)?.name)
                       .filter(Boolean);
                     const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
-                    const hasMetadata = sceneChars.length > 0 || scenePlace || scene.startDateTime;
+                    const hasMetadata = sceneChars.length > 0 || scenePlace || scene.startDate;
 
                     return (
                     <div
@@ -474,7 +481,7 @@ export function SceneEditor() {
                             </h3>
                           )}
                           {scene.description && (
-                            <p className="text-sm text-ink-200 italic font-serif border-l-2 border-parchment-300 pl-3">
+                            <p className="text-sm text-ink-200 italic font-serif border-l-2 border-parchment-300 pl-3 whitespace-pre-line">
                               {scene.description}
                             </p>
                           )}
@@ -492,10 +499,12 @@ export function SceneEditor() {
                                   {scenePlace.name}
                                 </span>
                               )}
-                              {scene.startDateTime && (
+                              {scene.startDate && (
                                 <span className="flex items-center gap-1">
                                   <Calendar className="w-3 h-3 shrink-0" />
-                                  {scene.startDateTime}{scene.endDateTime ? ` → ${scene.endDateTime}` : ''}
+                                  {new Date(scene.startDate + 'T00:00:00').toLocaleDateString('fr-FR')}
+                                  {scene.startTime ? ` ${scene.startTime}` : ''}
+                                  {scene.duration ? ` · ${formatDuration(scene.duration)}` : ''}
                                 </span>
                               )}
                             </div>

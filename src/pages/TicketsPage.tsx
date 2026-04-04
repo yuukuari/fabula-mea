@@ -40,6 +40,7 @@ const MODULE_LABELS: Record<string, string> = {
   places: 'Lieux',
   chapters: 'Chapitres / Scènes',
   timeline: 'Chronologie',
+  writing: 'Écriture',
   progress: 'Progression',
   world: 'Univers & Glossaire',
   maps: 'Cartes',

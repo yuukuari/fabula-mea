@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Map, Trash2, Upload, X, Edit2, ArrowLeft } from 'lucide-react';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
@@ -91,6 +91,8 @@ export function MapsPage() {
   // Edit form state
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [showUnsavedNewMap, setShowUnsavedNewMap] = useState(false);
+  const [showUnsavedEditMap, setShowUnsavedEditMap] = useState(false);
 
   const selectedMap = maps.find((m) => m.id === selectedMapId) ?? null;
 
@@ -105,13 +107,34 @@ export function MapsPage() {
     e.target.value = '';
   };
 
-  const handleCreateMap = (e: React.FormEvent) => {
-    e.preventDefault();
+  const isNewMapDirty = useCallback(() => {
+    return !!(newName || newDescription || newImageData);
+  }, [newName, newDescription, newImageData]);
+
+  const isEditMapDirty = useCallback(() => {
+    if (!editingMap) return false;
+    return editName !== editingMap.name || editDescription !== (editingMap.description ?? '');
+  }, [editName, editDescription, editingMap]);
+
+  const saveNewMap = () => {
     if (!newName || !newImageData) return;
     const id = addMap({ name: newName, description: newDescription, imageUrl: newImageData });
     setSelectedMapId(id);
     setShowNewMapDialog(false);
     setNewName(''); setNewDescription(''); setNewImageData(null);
+  };
+
+  const handleCreateMap = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveNewMap();
+  };
+
+  const closeNewMapDialog = () => {
+    if (isNewMapDirty()) {
+      setShowUnsavedNewMap(true);
+    } else {
+      setShowNewMapDialog(false);
+    }
   };
 
   const openEdit = (m: MapItem) => {
@@ -121,11 +144,23 @@ export function MapsPage() {
     setShowEditDialog(true);
   };
 
-  const handleEditMap = (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveEditMap = () => {
     if (!editingMap) return;
     updateMap(editingMap.id, { name: editName, description: editDescription });
     setShowEditDialog(false);
+  };
+
+  const handleEditMap = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveEditMap();
+  };
+
+  const closeEditMapDialog = () => {
+    if (isEditMapDirty()) {
+      setShowUnsavedEditMap(true);
+    } else {
+      setShowEditDialog(false);
+    }
   };
 
   const handleDeleteMap = () => {
@@ -252,11 +287,11 @@ export function MapsPage() {
       {/* New map dialog */}
       {showNewMapDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowNewMapDialog(false)} />
-          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="absolute inset-0 bg-black/40" onClick={closeNewMapDialog} />
+          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-ink-500">Nouvelle carte</h3>
-              <button onClick={() => setShowNewMapDialog(false)} className="btn-ghost p-1"><X className="w-4 h-4" /></button>
+              <button onClick={closeNewMapDialog} className="btn-ghost p-1"><X className="w-4 h-4" /></button>
             </div>
             <form onSubmit={handleCreateMap} className="space-y-4">
               {/* Image upload */}
@@ -307,7 +342,7 @@ export function MapsPage() {
                 />
               </div>
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowNewMapDialog(false)} className="btn-secondary flex-1">Annuler</button>
+                <button type="button" onClick={closeNewMapDialog} className="btn-secondary flex-1">Annuler</button>
                 <button type="submit" className="btn-primary flex-1" disabled={!newImageData || !newName}>
                   Créer la carte
                 </button>
@@ -320,11 +355,11 @@ export function MapsPage() {
       {/* Edit map dialog */}
       {showEditDialog && editingMap && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowEditDialog(false)} />
-          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+          <div className="absolute inset-0 bg-black/40" onClick={closeEditMapDialog} />
+          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-ink-500">Modifier la carte</h3>
-              <button onClick={() => setShowEditDialog(false)} className="btn-ghost p-1"><X className="w-4 h-4" /></button>
+              <button onClick={closeEditMapDialog} className="btn-ghost p-1"><X className="w-4 h-4" /></button>
             </div>
             <form onSubmit={handleEditMap} className="space-y-4">
               <div>
@@ -336,10 +371,42 @@ export function MapsPage() {
                 <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="textarea-field" rows={2} />
               </div>
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowEditDialog(false)} className="btn-secondary flex-1">Annuler</button>
+                <button type="button" onClick={closeEditMapDialog} className="btn-secondary flex-1">Annuler</button>
                 <button type="submit" className="btn-primary flex-1">Enregistrer</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved changes — new map */}
+      {showUnsavedNewMap && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedNewMap(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedNewMap(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedNewMap(false); setShowNewMapDialog(false); setNewName(''); setNewDescription(''); setNewImageData(null); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedNewMap(false); saveNewMap(); }} className="btn-primary text-sm">Créer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved changes — edit map */}
+      {showUnsavedEditMap && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedEditMap(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedEditMap(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedEditMap(false); setShowEditDialog(false); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedEditMap(false); saveEditMap(); }} className="btn-primary text-sm">Enregistrer</button>
+            </div>
           </div>
         </div>
       )}

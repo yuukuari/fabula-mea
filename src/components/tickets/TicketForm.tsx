@@ -31,6 +31,7 @@ const MODULE_OPTIONS: { value: TicketModule; label: string }[] = [
   { value: 'places', label: 'Lieux' },
   { value: 'chapters', label: 'Chapitres / Scènes' },
   { value: 'timeline', label: 'Chronologie' },
+  { value: 'writing', label: 'Écriture' },
   { value: 'progress', label: 'Progression' },
   { value: 'world', label: 'Univers & Glossaire' },
   { value: 'maps', label: 'Cartes' },
@@ -64,6 +65,7 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);
   const [confirmTypeChange, setConfirmTypeChange] = useState<TicketType | null>(null);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -160,15 +162,29 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
     }
   };
 
-  const handleClose = () => {
+  const isDirty = useCallback(() => {
+    if (showSuccess) return false;
+    return !!(title || module || !isContentDefault() || visibility !== 'public');
+  }, [title, module, isContentDefault, visibility, showSuccess]);
+
+  const forceClose = () => {
     setTitle('');
     setType('bug');
     setModule('');
     setVisibility('public');
     setShowSuccess(false);
     setCreatedTicketId(null);
+    setShowUnsavedConfirm(false);
     editor?.commands.setContent(TEMPLATES.bug);
     onClose();
+  };
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      forceClose();
+    }
   };
 
   if (!open) return null;
@@ -176,7 +192,7 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-parchment-200">
           <h2 className="text-lg font-display font-bold text-ink-500">
@@ -188,7 +204,7 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
         </div>
 
         {showSuccess ? (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center overflow-y-auto">
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
             <p className="text-lg font-medium text-ink-500 mb-2">Votre ticket a été créé avec succès !</p>
             <p className="text-sm text-ink-300 mb-6">
@@ -210,7 +226,8 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
             </div>
           </div>
         ) : (
-          <div className="p-5 space-y-5">
+          <>
+            <div className="p-5 space-y-5 overflow-y-auto flex-1 min-h-0">
             {/* Type */}
             <div>
               <label className="label-field">Type *</label>
@@ -365,8 +382,9 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
               </p>
             </div>
 
+            </div>
             {/* Submit */}
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end gap-3 p-5 border-t border-parchment-200 flex-shrink-0">
               <button onClick={handleClose} className="btn-secondary">
                 Annuler
               </button>
@@ -379,7 +397,7 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
                 {isSubmitting ? 'Envoi...' : 'Envoyer'}
               </button>
             </div>
-          </div>
+          </>
         )}
 
         {/* Confirm type change dialog */}
@@ -391,6 +409,21 @@ export function TicketForm({ open, onClose }: TicketFormProps) {
           onConfirm={confirmChangeType}
           onCancel={() => setConfirmTypeChange(null)}
         />
+
+        {showUnsavedConfirm && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+            <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+              <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+              <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">Annuler</button>
+                <button onClick={forceClose} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+                <button onClick={() => { setShowUnsavedConfirm(false); handleSubmit(); }} className="btn-primary text-sm">Envoyer</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

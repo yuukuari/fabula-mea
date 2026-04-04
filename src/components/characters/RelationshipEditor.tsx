@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS, ALWAYS_RECIPROCAL_TYPES } from '@/lib/utils';
@@ -53,6 +53,7 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
   // Family roles
   const [familyRoleSource, setFamilyRoleSource] = useState(existingRelationship?.familyRoleSource ?? 'pere');
   const [familyRoleTarget, setFamilyRoleTarget] = useState(existingRelationship?.familyRoleTarget ?? 'fils');
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const isAlwaysReciprocal = ALWAYS_RECIPROCAL_TYPES.includes(type);
   // For non-always-reciprocal types (lover, mentor, rival, custom), show the checkbox
@@ -68,8 +69,34 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
     }
   }, [familyRoleSource, type, currentChar?.sex, isEditing]);
 
+  const isDirty = useCallback(() => {
+    if (!existingRelationship) {
+      return !!(targetId || description || type !== 'friend' || customType);
+    }
+    return (
+      targetId !== (existingRelationship.targetCharacterId ?? '') ||
+      type !== (existingRelationship.type ?? 'friend') ||
+      customType !== (existingRelationship.customType ?? '') ||
+      description !== (existingRelationship.description ?? '') ||
+      familyRoleSource !== (existingRelationship.familyRoleSource ?? 'pere') ||
+      familyRoleTarget !== (existingRelationship.familyRoleTarget ?? 'fils')
+    );
+  }, [targetId, type, customType, description, familyRoleSource, familyRoleTarget, existingRelationship]);
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    handleSave();
+  };
+
+  const handleSave = () => {
     if (!targetId) return;
 
     const relData = {
@@ -141,16 +168,17 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
           <h3 className="font-display text-lg font-bold text-ink-500">
             {isEditing ? 'Modifier la relation' : 'Ajouter une relation'}
           </h3>
-          <button type="button" onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
+          <button type="button" onClick={handleClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="px-6 space-y-4 overflow-y-auto flex-1">
           <div>
             <label className="label-field">Personnage</label>
             <select
@@ -254,12 +282,28 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="textarea-field" rows={2} />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+          </div>
+          <div className="flex justify-end gap-3 p-6 pt-4 border-t border-parchment-200 flex-shrink-0">
+            <button type="button" onClick={handleClose} className="btn-secondary">Annuler</button>
             <button type="submit" className="btn-primary">{isEditing ? 'Enregistrer' : 'Ajouter'}</button>
           </div>
         </form>
       </div>
+
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); onClose(); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); handleSave(); }} className="btn-primary text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

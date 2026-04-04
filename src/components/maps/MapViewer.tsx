@@ -340,7 +340,7 @@ export function MapViewer({ map }: MapViewerProps) {
       {addingAt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setAddingAt(null)} />
-          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-sm mx-4 p-5">
+          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-md mx-4 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-ink-500">Ajouter un marqueur</h3>
               <button onClick={() => setAddingAt(null)} className="btn-ghost p-1"><X className="w-4 h-4" /></button>
@@ -412,7 +412,7 @@ export function MapViewer({ map }: MapViewerProps) {
       {editingPin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setEditingPin(null)} />
-          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-sm mx-4 p-5">
+          <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-md mx-4 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-ink-500">Modifier le marqueur</h3>
               <button onClick={() => setEditingPin(null)} className="btn-ghost p-1"><X className="w-4 h-4" /></button>

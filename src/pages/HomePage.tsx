@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, Trash2, Users, MapPin, Film, Hash, PenLine, MessageSquare, Library, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { Plus, BookOpen, Trash2, Users, MapPin, Film, Hash, PenLine, MessageSquare, Library, ChevronDown, ChevronRight, Settings, X } from 'lucide-react';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
 import { useSagaStore } from '@/store/useSagaStore';
@@ -112,6 +112,7 @@ export function HomePage() {
   const [newSagaSynopsis, setNewSagaSynopsis] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [collapsedSagas, setCollapsedSagas] = useState<Set<string>>(new Set());
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const toggleSagaCollapse = (sagaId: string) => {
     setCollapsedSagas((prev) => {
@@ -120,6 +121,22 @@ export function HomePage() {
       else next.add(sagaId);
       return next;
     });
+  };
+
+  const isDirty = useCallback(() => {
+    return !!(
+      newTitle || newAuthor || newGenre || writingMode || countUnit !== 'words' ||
+      sagaChoice !== 'standalone' || selectedSagaId || newSynopsis ||
+      newSagaTitle || newSagaSynopsis
+    );
+  }, [newTitle, newAuthor, newGenre, writingMode, countUnit, sagaChoice, selectedSagaId, newSynopsis, newSagaTitle, newSagaSynopsis]);
+
+  const handleCloseCreate = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      handleCancelCreate();
+    }
   };
 
   // Resolve effective values based on saga choice
@@ -199,8 +216,7 @@ export function HomePage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-8 py-10">
-        {/* Create new book */}
-        {!showCreate ? (
+        {/* Create new book button */}
           <button
             onClick={() => setShowCreate(true)}
             className="w-full mb-8 flex items-center justify-center gap-3 px-6 py-5
@@ -211,325 +227,333 @@ export function HomePage() {
             <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
             <span className="font-display text-lg">Nouveau livre</span>
           </button>
-        ) : (
-          <div className="mb-8 card-fantasy p-6">
-            <h2 className="font-display text-xl font-semibold text-ink-500 mb-5">
-              Nouveau livre
-            </h2>
 
-            {/* Step 1: Type choice — always shown first */}
-            <div className="mb-6">
-              <label className="label-field mb-3">Type de projet</label>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => { setSagaChoice('standalone'); setSelectedSagaId(''); setNewSagaTitle(''); }}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
-                    sagaChoice === 'standalone'
-                      ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
-                      : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
-                  )}
-                >
-                  <BookOpen className="w-4 h-4" />
-                  Livre indépendant
-                </button>
-                {sagas.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => { setSagaChoice('existing'); setNewSagaTitle(''); if (!selectedSagaId && sagas.length > 0) setSelectedSagaId(sagas[0].id); }}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
-                      sagaChoice === 'existing'
-                        ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
-                        : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
-                    )}
-                  >
-                    <Library className="w-4 h-4" />
-                    Saga existante
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => { setSagaChoice('new'); setSelectedSagaId(''); }}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
-                    sagaChoice === 'new'
-                      ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
-                      : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
-                  )}
-                >
-                  <Plus className="w-4 h-4" />
-                  Nouvelle saga
-                </button>
+        {/* Create new book modal */}
+        {showCreate && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
+            <div className="absolute inset-0 bg-black/40" onClick={handleCloseCreate} />
+            <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-3xl mx-4 my-4 flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-6 border-b border-parchment-300 flex-shrink-0">
+                <h2 className="font-display text-xl font-bold text-ink-500">
+                  Nouveau livre
+                </h2>
+                <button onClick={handleCloseCreate} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
               </div>
-              <p className="text-xs text-ink-200 mt-1.5">
-                {sagaChoice === 'standalone'
-                  ? 'Ce livre aura sa propre encyclopédie (personnages, lieux, univers, cartes).'
-                  : 'Les livres d\'une saga partagent la même encyclopédie (personnages, lieux, univers, cartes).'}
-              </p>
-            </div>
-
-            {/* Existing saga: select + saga info + book title only */}
-            {sagaChoice === 'existing' && sagas.length > 0 && (
-              <>
-                <div className="mb-6">
-                  <label className="label-field">Saga</label>
-                  <select
-                    className="input-field max-w-xs"
-                    value={selectedSagaId}
-                    onChange={(e) => setSelectedSagaId(e.target.value)}
-                  >
-                    {sagas.map((s) => (
-                      <option key={s.id} value={s.id}>{s.title}</option>
-                    ))}
-                  </select>
-                  {selectedSaga && (
-                    <div className="mt-3 text-xs text-ink-300 space-y-0.5">
-                      {selectedSaga.author && <p>Auteur : <span className="text-ink-400">{selectedSaga.author}</span></p>}
-                      {selectedSaga.genre && <p>Genre : <span className="text-ink-400">{selectedSaga.genre}</span></p>}
-                      <p>Mode : <span className="text-ink-400">{selectedSaga.writingMode === 'write' ? 'Écriture intégrée' : 'Comptage de mots'}</span></p>
-                      <p>Unité : <span className="text-ink-400">{selectedSaga.countUnit === 'characters' ? 'Signes' : 'Mots'}</span></p>
-                    </div>
-                  )}
-                </div>
-                <div className="mb-6">
-                  <label className="label-field">Titre du livre *</label>
-                  <input
-                    className="input-field max-w-md"
-                    placeholder="Le titre de ce nouveau tome"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                    autoFocus
-                  />
-                </div>
-                <div className="mb-6">
-                  <label className="label-field">Synopsis</label>
-                  <textarea
-                    className="textarea-field"
-                    placeholder="De quoi parle ce tome ?"
-                    value={newSynopsis}
-                    onChange={(e) => setNewSynopsis(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* New saga: saga title + synopsis + book title + synopsis + shared fields */}
-            {sagaChoice === 'new' && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="label-field">Nom de la saga *</label>
-                    <input
-                      className="input-field"
-                      placeholder="Le nom de votre saga"
-                      value={newSagaTitle}
-                      onChange={(e) => setNewSagaTitle(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <label className="label-field">Titre du premier livre *</label>
-                    <input
-                      className="input-field"
-                      placeholder="Le titre du premier tome"
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <label className="label-field">Synopsis de la saga</label>
-                    <textarea
-                      className="textarea-field"
-                      placeholder="De quoi parle votre saga ?"
-                      value={newSagaSynopsis}
-                      onChange={(e) => setNewSagaSynopsis(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="label-field">Synopsis du livre</label>
-                    <textarea
-                      className="textarea-field"
-                      placeholder="De quoi parle ce premier tome ?"
-                      value={newSynopsis}
-                      onChange={(e) => setNewSynopsis(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Standalone: title + synopsis */}
-            {sagaChoice === 'standalone' && (
-              <>
-                <div className="mb-6">
-                  <label className="label-field">Titre du livre *</label>
-                  <input
-                    className="input-field max-w-md"
-                    placeholder="Le titre de votre livre"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                    autoFocus
-                  />
-                </div>
-                <div className="mb-6">
-                  <label className="label-field">Synopsis</label>
-                  <textarea
-                    className="textarea-field"
-                    placeholder="De quoi parle votre livre ?"
-                    value={newSynopsis}
-                    onChange={(e) => setNewSynopsis(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Author + Genre — shown for standalone and new saga only */}
-            {sagaChoice !== 'existing' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                {/* Step 1: Type choice */}
                 <div>
-                  <label className="label-field">Auteur</label>
-                  <input
-                    className="input-field"
-                    placeholder="Votre nom"
-                    value={newAuthor}
-                    onChange={(e) => setNewAuthor(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="label-field">Genre</label>
-                  <input
-                    className="input-field"
-                    placeholder="Fantasy, SF, Romance..."
-                    value={newGenre}
-                    onChange={(e) => setNewGenre(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Writing mode — shown for standalone and new saga only */}
-            {sagaChoice !== 'existing' && (
-              <div className="mb-6">
-                <label className="label-field mb-3 flex items-center gap-1.5">
-                  Mode d'écriture <span className="text-red-400">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setWritingMode('count')}
-                    className={cn(
-                      'flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all',
-                      writingMode === 'count'
-                        ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
-                        : 'border-parchment-200 hover:border-parchment-400'
+                  <label className="label-field mb-3">Type de projet</label>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => { setSagaChoice('standalone'); setSelectedSagaId(''); setNewSagaTitle(''); }}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
+                        sagaChoice === 'standalone'
+                          ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                          : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+                      )}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      Livre indépendant
+                    </button>
+                    {sagas.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setSagaChoice('existing'); setNewSagaTitle(''); if (!selectedSagaId && sagas.length > 0) setSelectedSagaId(sagas[0].id); }}
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
+                          sagaChoice === 'existing'
+                            ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                            : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+                        )}
+                      >
+                        <Library className="w-4 h-4" />
+                        Saga existante
+                      </button>
                     )}
-                  >
-                    <div className={cn(
-                      'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
-                      writingMode === 'count' ? 'bg-bordeaux-100' : 'bg-parchment-200'
-                    )}>
-                      <Hash className={cn('w-5 h-5', writingMode === 'count' ? 'text-bordeaux-500' : 'text-ink-300')} />
+                    <button
+                      type="button"
+                      onClick={() => { setSagaChoice('new'); setSelectedSagaId(''); }}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
+                        sagaChoice === 'new'
+                          ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                          : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+                      )}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Nouvelle saga
+                    </button>
+                  </div>
+                  <p className="text-xs text-ink-200 mt-1.5">
+                    {sagaChoice === 'standalone'
+                      ? 'Ce livre aura sa propre encyclopédie (personnages, lieux, univers, cartes).'
+                      : 'Les livres d\'une saga partagent la même encyclopédie (personnages, lieux, univers, cartes).'}
+                  </p>
+                </div>
+
+                {/* Existing saga: select + saga info + book title only */}
+                {sagaChoice === 'existing' && sagas.length > 0 && (
+                  <>
+                    <div>
+                      <label className="label-field">Saga</label>
+                      <select
+                        className="input-field"
+                        value={selectedSagaId}
+                        onChange={(e) => setSelectedSagaId(e.target.value)}
+                      >
+                        {sagas.map((s) => (
+                          <option key={s.id} value={s.id}>{s.title}</option>
+                        ))}
+                      </select>
+                      {selectedSaga && (
+                        <div className="mt-3 text-xs text-ink-300 space-y-0.5">
+                          {selectedSaga.author && <p>Auteur : <span className="text-ink-400">{selectedSaga.author}</span></p>}
+                          {selectedSaga.genre && <p>Genre : <span className="text-ink-400">{selectedSaga.genre}</span></p>}
+                          <p>Mode : <span className="text-ink-400">{selectedSaga.writingMode === 'write' ? 'Écriture intégrée' : 'Comptage de mots'}</span></p>
+                          <p>Unité : <span className="text-ink-400">{selectedSaga.countUnit === 'characters' ? 'Signes' : 'Mots'}</span></p>
+                        </div>
+                      )}
                     </div>
                     <div>
-                      <p className="font-display font-semibold text-ink-500 text-sm">Comptage de mots</p>
-                      <p className="text-xs text-ink-300 mt-1 leading-relaxed">
-                        Vous écrivez sur papier ou dans un autre logiciel. Vous renseignez manuellement le nombre de mots par scène.
-                      </p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setWritingMode('write')}
-                    className={cn(
-                      'flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all',
-                      writingMode === 'write'
-                        ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
-                        : 'border-parchment-200 hover:border-parchment-400'
-                    )}
-                  >
-                    <div className={cn(
-                      'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
-                      writingMode === 'write' ? 'bg-bordeaux-100' : 'bg-parchment-200'
-                    )}>
-                      <PenLine className={cn('w-5 h-5', writingMode === 'write' ? 'text-bordeaux-500' : 'text-ink-300')} />
+                      <label className="label-field">Titre du livre *</label>
+                      <input
+                        className="input-field"
+                        placeholder="Le titre de ce nouveau tome"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                        autoFocus
+                      />
                     </div>
                     <div>
-                      <p className="font-display font-semibold text-ink-500 text-sm">Écriture intégrée</p>
-                      <p className="text-xs text-ink-300 mt-1 leading-relaxed">
-                        Vous rédigez directement dans l'application. Le nombre de mots est calculé automatiquement à partir de votre texte.
-                      </p>
+                      <label className="label-field">Synopsis</label>
+                      <textarea
+                        className="textarea-field"
+                        placeholder="De quoi parle ce tome ?"
+                        value={newSynopsis}
+                        onChange={(e) => setNewSynopsis(e.target.value)}
+                        rows={3}
+                      />
                     </div>
-                  </button>
-                </div>
-                {!writingMode && newTitle.trim() && (
-                  <p className="text-xs text-red-400 mt-2">Veuillez choisir un mode d'écriture pour continuer.</p>
+                  </>
+                )}
+
+                {/* New saga */}
+                {sagaChoice === 'new' && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label-field">Nom de la saga *</label>
+                        <input
+                          className="input-field"
+                          placeholder="Le nom de votre saga"
+                          value={newSagaTitle}
+                          onChange={(e) => setNewSagaTitle(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label className="label-field">Titre du premier livre *</label>
+                        <input
+                          className="input-field"
+                          placeholder="Le titre du premier tome"
+                          value={newTitle}
+                          onChange={(e) => setNewTitle(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label-field">Synopsis de la saga</label>
+                        <textarea
+                          className="textarea-field"
+                          placeholder="De quoi parle votre saga ?"
+                          value={newSagaSynopsis}
+                          onChange={(e) => setNewSagaSynopsis(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                      <div>
+                        <label className="label-field">Synopsis du livre</label>
+                        <textarea
+                          className="textarea-field"
+                          placeholder="De quoi parle ce premier tome ?"
+                          value={newSynopsis}
+                          onChange={(e) => setNewSynopsis(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Standalone: title + synopsis */}
+                {sagaChoice === 'standalone' && (
+                  <>
+                    <div>
+                      <label className="label-field">Titre du livre *</label>
+                      <input
+                        className="input-field"
+                        placeholder="Le titre de votre livre"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="label-field">Synopsis</label>
+                      <textarea
+                        className="textarea-field"
+                        placeholder="De quoi parle votre livre ?"
+                        value={newSynopsis}
+                        onChange={(e) => setNewSynopsis(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Author + Genre */}
+                {sagaChoice !== 'existing' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label-field">Auteur</label>
+                      <input
+                        className="input-field"
+                        placeholder="Votre nom"
+                        value={newAuthor}
+                        onChange={(e) => setNewAuthor(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="label-field">Genre</label>
+                      <input
+                        className="input-field"
+                        placeholder="Fantasy, SF, Romance..."
+                        value={newGenre}
+                        onChange={(e) => setNewGenre(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Writing mode */}
+                {sagaChoice !== 'existing' && (
+                  <div>
+                    <label className="label-field mb-3 flex items-center gap-1.5">
+                      Mode d'écriture <span className="text-red-400">*</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setWritingMode('count')}
+                        className={cn(
+                          'flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all',
+                          writingMode === 'count'
+                            ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
+                            : 'border-parchment-200 hover:border-parchment-400'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                          writingMode === 'count' ? 'bg-bordeaux-100' : 'bg-parchment-200'
+                        )}>
+                          <Hash className={cn('w-5 h-5', writingMode === 'count' ? 'text-bordeaux-500' : 'text-ink-300')} />
+                        </div>
+                        <div>
+                          <p className="font-display font-semibold text-ink-500 text-sm">Comptage de mots</p>
+                          <p className="text-xs text-ink-300 mt-1 leading-relaxed">
+                            Vous écrivez sur papier ou dans un autre logiciel. Vous renseignez manuellement le nombre de mots par scène.
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWritingMode('write')}
+                        className={cn(
+                          'flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all',
+                          writingMode === 'write'
+                            ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
+                            : 'border-parchment-200 hover:border-parchment-400'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                          writingMode === 'write' ? 'bg-bordeaux-100' : 'bg-parchment-200'
+                        )}>
+                          <PenLine className={cn('w-5 h-5', writingMode === 'write' ? 'text-bordeaux-500' : 'text-ink-300')} />
+                        </div>
+                        <div>
+                          <p className="font-display font-semibold text-ink-500 text-sm">Écriture intégrée</p>
+                          <p className="text-xs text-ink-300 mt-1 leading-relaxed">
+                            Vous rédigez directement dans l'application. Le nombre de mots est calculé automatiquement à partir de votre texte.
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+                    {!writingMode && newTitle.trim() && (
+                      <p className="text-xs text-red-400 mt-2">Veuillez choisir un mode d'écriture pour continuer.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Count unit */}
+                {sagaChoice !== 'existing' && (
+                  <div>
+                    <label className="label-field mb-3">Unité de comptage</label>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setCountUnit('words')}
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
+                          countUnit === 'words'
+                            ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                            : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+                        )}
+                      >
+                        Mots
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCountUnit('characters')}
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
+                          countUnit === 'characters'
+                            ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
+                            : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+                        )}
+                      >
+                        Signes (espaces compris)
+                      </button>
+                    </div>
+                    <p className="text-xs text-ink-200 mt-1.5">
+                      {countUnit === 'characters'
+                        ? 'Les objectifs et jauges seront basés sur le nombre de signes. Le nombre de mots sera affiché à titre informatif.'
+                        : 'Les objectifs et jauges seront basés sur le nombre de mots. Le nombre de signes sera affiché à titre informatif.'}
+                    </p>
+                  </div>
                 )}
               </div>
-            )}
-
-            {/* Count unit — shown for standalone and new saga only */}
-            {sagaChoice !== 'existing' && (
-              <div className="mb-6">
-                <label className="label-field mb-3">Unité de comptage</label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setCountUnit('words')}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
-                      countUnit === 'words'
-                        ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
-                        : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
-                    )}
-                  >
-                    Mots
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCountUnit('characters')}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm transition-all',
-                      countUnit === 'characters'
-                        ? 'border-bordeaux-400 bg-bordeaux-50/50 text-bordeaux-600 font-medium'
-                        : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
-                    )}
-                  >
-                    Signes (espaces compris)
-                  </button>
-                </div>
-                <p className="text-xs text-ink-200 mt-1.5">
-                  {countUnit === 'characters'
-                    ? 'Les objectifs et jauges seront basés sur le nombre de signes. Le nombre de mots sera affiché à titre informatif.'
-                    : 'Les objectifs et jauges seront basés sur le nombre de mots. Le nombre de signes sera affiché à titre informatif.'}
-                </p>
+              <div className="flex justify-end gap-3 p-6 border-t border-parchment-300 flex-shrink-0">
+                <button onClick={handleCloseCreate} className="btn-secondary">
+                  Annuler
+                </button>
+                <button
+                  onClick={handleCreate}
+                  className="btn-primary"
+                  disabled={!newTitle.trim() || !effectiveWritingMode || (sagaChoice === 'new' && !newSagaTitle.trim()) || (sagaChoice === 'existing' && !selectedSagaId)}
+                >
+                  Créer
+                </button>
               </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleCreate}
-                className="btn-primary"
-                disabled={!newTitle.trim() || !effectiveWritingMode || (sagaChoice === 'new' && !newSagaTitle.trim()) || (sagaChoice === 'existing' && !selectedSagaId)}
-              >
-                Créer
-              </button>
-              <button onClick={handleCancelCreate} className="btn-ghost">
-                Annuler
-              </button>
             </div>
           </div>
+
         )}
 
         {/* Book list */}
@@ -633,6 +657,21 @@ export function HomePage() {
         onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {showUnsavedConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnsavedConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg font-bold text-ink-500 mb-2">Modifications non enregistrées</h3>
+            <p className="text-sm text-ink-300 mb-6">Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowUnsavedConfirm(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); handleCancelCreate(); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-400 hover:bg-parchment-100 transition-colors">Quitter</button>
+              <button onClick={() => { setShowUnsavedConfirm(false); handleCreate(); }} className="btn-primary text-sm" disabled={!newTitle.trim() || !effectiveWritingMode || (sagaChoice === 'new' && !newSagaTitle.trim()) || (sagaChoice === 'existing' && !selectedSagaId)}>Créer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

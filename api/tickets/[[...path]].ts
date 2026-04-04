@@ -281,8 +281,6 @@ async function handleComments(req: VercelRequest, res: VercelResponse, auth: { u
   }
 
   if (req.method === 'POST') {
-    if (!admin) return res.status(403).json({ error: 'Seul un administrateur peut commenter' });
-
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: 'Contenu requis' });
 
@@ -290,8 +288,8 @@ async function handleComments(req: VercelRequest, res: VercelResponse, auth: { u
       id: generateId(),
       ticketId,
       userId: auth.userId,
-      userName: user?.name ?? 'Admin',
-      isAdmin: true,
+      userName: user?.name ?? 'Utilisateur',
+      isAdmin: admin,
       content: content.trim(),
       reactions: {},
       createdAt: new Date().toISOString(),
