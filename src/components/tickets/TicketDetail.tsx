@@ -194,7 +194,7 @@ export function TicketDetail({ ticketId, onBack }: Props) {
               </span>
               {ticket.visibility === 'private' && (
                 <span className="badge bg-gray-100 text-gray-500">
-                  <EyeOff className="w-3 h-3 mr-1" /> Priv\u00e9
+                  <EyeOff className="w-3 h-3 mr-1" /> Privé
                 </span>
               )}
               {isAdmin ? (
@@ -234,13 +234,13 @@ export function TicketDetail({ ticketId, onBack }: Props) {
                     onClick={() => handleStatusChange('closed_done')}
                     className="btn-ghost text-xs flex items-center gap-1 text-green-600 hover:bg-green-50"
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> Termin\u00e9
+                    <CheckCircle className="w-3.5 h-3.5" /> Terminé
                   </button>
                   <button
                     onClick={() => handleStatusChange('closed_duplicate')}
                     className="btn-ghost text-xs flex items-center gap-1 text-gray-500 hover:bg-gray-100"
                   >
-                    <Copy className="w-3.5 h-3.5" /> Dupliqu\u00e9
+                    <Copy className="w-3.5 h-3.5" /> Dupliqué
                   </button>
                 </div>
               )}
@@ -313,7 +313,7 @@ export function TicketDetail({ ticketId, onBack }: Props) {
             <button
               onClick={() => setShowReactions(showReactions === '__desc__' ? null : '__desc__')}
               className="p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100"
-              title="Ajouter une r\u00e9action"
+              title="Ajouter une réaction"
             >
               <SmilePlus className="w-4 h-4" />
             </button>
@@ -360,11 +360,11 @@ export function TicketDetail({ ticketId, onBack }: Props) {
       <div className="space-y-3 mb-6">
         <h2 className="text-sm font-medium text-ink-400 flex items-center gap-2">
           <MessageSquare className="w-4 h-4" />
-          Activit\u00e9 ({timeline.length})
+          Activité ({timeline.length})
         </h2>
 
         {timeline.length === 0 && (
-          <p className="text-sm text-ink-200 py-4 text-center">Aucune activit\u00e9 pour le moment</p>
+          <p className="text-sm text-ink-200 py-4 text-center">Aucune activité pour le moment</p>
         )}
 
         {timeline.map((entry) => {
@@ -382,7 +382,7 @@ export function TicketDetail({ ticketId, onBack }: Props) {
                 >
                   <ArrowRightLeft className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
                   <span className="font-medium">{sc.userName}</span>
-                  a chang\u00e9 le type de
+                  a changé le type de
                   {fromConf && <span className={cn('badge text-[10px]', fromConf.color)}>{fromConf.label}</span>}
                   vers
                   {toConf && <span className={cn('badge text-[10px]', toConf.color)}>{toConf.label}</span>}
@@ -406,10 +406,10 @@ export function TicketDetail({ ticketId, onBack }: Props) {
                   <span className="font-medium">{sc.userName}</span>
                   {toLabel
                     ? <>
-                        a chang\u00e9 la section vers
+                        a changé la section vers
                         <span className="badge bg-purple-50 text-purple-600 text-[10px]">{toLabel}</span>
                       </>
-                    : <>a retir\u00e9 la section <span className="badge bg-purple-50 text-purple-600 text-[10px]">{fromLabel}</span></>}
+                    : <>a retiré la section <span className="badge bg-purple-50 text-purple-600 text-[10px]">{fromLabel}</span></>}
                   <span className="ml-auto text-ink-200">
                     {new Date(sc.createdAt).toLocaleDateString('fr-FR')}
                   </span>
@@ -428,10 +428,10 @@ export function TicketDetail({ ticketId, onBack }: Props) {
                   <span className="font-medium">{sc.userName}</span>
                   {sc.releaseId
                     ? <>
-                        a planifi\u00e9 ce ticket dans la version
+                        a planifié ce ticket dans la version
                         <span className="badge bg-blue-100 text-blue-700 text-[10px]">{sc.releaseName || sc.releaseId}</span>
                       </>
-                    : <>a retir\u00e9 ce ticket de sa version</>}
+                    : <>a retiré ce ticket de sa version</>}
                   <span className="ml-auto text-ink-200">
                     {new Date(sc.createdAt).toLocaleDateString('fr-FR')}
                   </span>
@@ -449,7 +449,7 @@ export function TicketDetail({ ticketId, onBack }: Props) {
               >
                 <ArrowRightLeft className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                 <span className="font-medium">{sc.userName}</span>
-                a chang\u00e9 le statut de
+                a changé le statut de
                 {fromConf && <span className={cn('badge text-[10px]', fromConf.color)}>{fromConf.label}</span>}
                 vers
                 {toConf && <span className={cn('badge text-[10px]', toConf.color)}>{toConf.label}</span>}
@@ -490,7 +490,7 @@ export function TicketDetail({ ticketId, onBack }: Props) {
                     <button
                       onClick={() => setShowReactions(showReactions === comment.id ? null : comment.id)}
                       className="p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100"
-                      title="Ajouter une r\u00e9action"
+                      title="Ajouter une réaction"
                     >
                       <SmilePlus className="w-3.5 h-3.5" />
                     </button>
@@ -570,37 +570,37 @@ export function TicketDetail({ ticketId, onBack }: Props) {
               <MiniToolbarButton active={commentEditor.isActive('italic')} onClick={() => commentEditor.chain().focus().toggleItalic().run()} title="Italique">
                 <Italic size={14} />
               </MiniToolbarButton>
-              <MiniToolbarButton active={commentEditor.isActive('underline')} onClick={() => commentEditor.chain().focus().toggleUnderline().run()} title="Soulign\u00e9">
+              <MiniToolbarButton active={commentEditor.isActive('underline')} onClick={() => commentEditor.chain().focus().toggleUnderline().run()} title="Souligné">
                 <UnderlineIcon size={14} />
               </MiniToolbarButton>
-              <MiniToolbarButton active={commentEditor.isActive('strike')} onClick={() => commentEditor.chain().focus().toggleStrike().run()} title="Barr\u00e9">
+              <MiniToolbarButton active={commentEditor.isActive('strike')} onClick={() => commentEditor.chain().focus().toggleStrike().run()} title="Barré">
                 <Strikethrough size={14} />
               </MiniToolbarButton>
               <div className="w-px bg-parchment-300 mx-1 h-5" />
-              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'left' })} onClick={() => commentEditor.chain().focus().setTextAlign('left').run()} title="Aligner \u00e0 gauche">
+              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'left' })} onClick={() => commentEditor.chain().focus().setTextAlign('left').run()} title="Aligner à gauche">
                 <AlignLeft size={14} />
               </MiniToolbarButton>
               <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'center' })} onClick={() => commentEditor.chain().focus().setTextAlign('center').run()} title="Centrer">
                 <AlignCenter size={14} />
               </MiniToolbarButton>
-              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'right' })} onClick={() => commentEditor.chain().focus().setTextAlign('right').run()} title="Aligner \u00e0 droite">
+              <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'right' })} onClick={() => commentEditor.chain().focus().setTextAlign('right').run()} title="Aligner à droite">
                 <AlignRight size={14} />
               </MiniToolbarButton>
               <MiniToolbarButton active={commentEditor.isActive({ textAlign: 'justify' })} onClick={() => commentEditor.chain().focus().setTextAlign('justify').run()} title="Justifier">
                 <AlignJustify size={14} />
               </MiniToolbarButton>
               <div className="w-px bg-parchment-300 mx-1 h-5" />
-              <MiniToolbarButton active={commentEditor.isActive('bulletList')} onClick={() => commentEditor.chain().focus().toggleBulletList().run()} title="Liste \u00e0 puces">
+              <MiniToolbarButton active={commentEditor.isActive('bulletList')} onClick={() => commentEditor.chain().focus().toggleBulletList().run()} title="Liste à puces">
                 <List size={14} />
               </MiniToolbarButton>
-              <MiniToolbarButton active={commentEditor.isActive('orderedList')} onClick={() => commentEditor.chain().focus().toggleOrderedList().run()} title="Liste num\u00e9rot\u00e9e">
+              <MiniToolbarButton active={commentEditor.isActive('orderedList')} onClick={() => commentEditor.chain().focus().toggleOrderedList().run()} title="Liste numérotée">
                 <ListOrdered size={14} />
               </MiniToolbarButton>
               <MiniToolbarButton active={commentEditor.isActive('blockquote')} onClick={() => commentEditor.chain().focus().toggleBlockquote().run()} title="Citation">
                 <Quote size={14} />
               </MiniToolbarButton>
               <div className="w-px bg-parchment-300 mx-1 h-5" />
-              <MiniToolbarButton active={false} onClick={addImage} title="Ins\u00e9rer une image">
+              <MiniToolbarButton active={false} onClick={addImage} title="Insérer une image">
                 <ImagePlus size={14} />
               </MiniToolbarButton>
               <MiniToolbarButton active={commentEditor.isActive('link')} onClick={toggleLink} title={commentEditor.isActive('link') ? 'Retirer le lien' : 'Ajouter un lien'}>
@@ -632,7 +632,7 @@ export function TicketDetail({ ticketId, onBack }: Props) {
       <ConfirmDialog
         open={confirmDelete}
         title="Supprimer le ticket ?"
-        description="Cette action est irr\u00e9versible. Le ticket et tous ses commentaires seront supprim\u00e9s."
+        description="Cette action est irréversible. Le ticket et tous ses commentaires seront supprimés."
         confirmLabel="Supprimer"
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
@@ -641,7 +641,7 @@ export function TicketDetail({ ticketId, onBack }: Props) {
       <ConfirmDialog
         open={confirmDeleteCommentId !== null}
         title="Supprimer le commentaire ?"
-        description="Cette action est irr\u00e9versible."
+        description="Cette action est irréversible."
         confirmLabel="Supprimer"
         onConfirm={async () => {
           if (confirmDeleteCommentId) {

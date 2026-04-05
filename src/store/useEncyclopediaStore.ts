@@ -31,6 +31,10 @@ export function useEncyclopediaStore() {
   const sagaDeleteCharacter = useSagaStore((s) => s.deleteCharacter);
   const deleteCharacter = isSagaMode ? sagaDeleteCharacter : bookDeleteCharacter;
 
+  const bookReorderCharacters = useBookStore((s) => s.reorderCharacters);
+  const sagaReorderCharacters = useSagaStore((s) => s.reorderCharacters);
+  const reorderCharacters = isSagaMode ? sagaReorderCharacters : bookReorderCharacters;
+
   const bookAddRelationship = useBookStore((s) => s.addRelationship);
   const sagaAddRelationship = useSagaStore((s) => s.addRelationship);
   const addRelationship = isSagaMode ? sagaAddRelationship : bookAddRelationship;
@@ -149,6 +153,7 @@ export function useEncyclopediaStore() {
     addCharacter,
     updateCharacter,
     deleteCharacter,
+    reorderCharacters,
     addRelationship,
     updateRelationship,
     deleteRelationship,

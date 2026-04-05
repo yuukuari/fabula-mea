@@ -26,6 +26,7 @@ interface Edge {
   familyLabelSource?: string;
   familyLabelTarget?: string;
   bidirectional: boolean;
+  arrowTarget?: string; // actual target for unidirectional arrow (may differ from normalized target)
   index: number;
   total: number;
 }
@@ -177,7 +178,7 @@ export function RelationshipGraph() {
 
   // Build edges
   const edges = useMemo<Edge[]>(() => {
-    const edgeList: { source: string; target: string; type: string; label: string; familyLabelSource?: string; familyLabelTarget?: string; bidirectional: boolean }[] = [];
+    const edgeList: { source: string; target: string; type: string; label: string; familyLabelSource?: string; familyLabelTarget?: string; bidirectional: boolean; arrowTarget?: string }[] = [];
     const relMap = new Map<string, boolean>();
     for (const char of characters) {
       for (const rel of char.relationships) {
@@ -189,11 +190,15 @@ export function RelationshipGraph() {
     for (const char of characters) {
       for (const rel of char.relationships) {
         const reverseKey = `${rel.targetCharacterId}|${char.id}|${rel.type}`;
-        const dedupeKey = [char.id, rel.targetCharacterId].sort().join('-') + '|' + rel.type;
+        const [sortedA, sortedB] = [char.id, rel.targetCharacterId].sort();
+        const dedupeKey = `${sortedA}-${sortedB}|${rel.type}`;
         if (seen.has(dedupeKey)) continue;
         seen.add(dedupeKey);
 
         const isBidirectional = relMap.has(`${char.id}|${rel.targetCharacterId}|${rel.type}`) && relMap.has(reverseKey);
+
+        // Normalize source/target to sorted order so curve direction is consistent
+        const isFlipped = char.id !== sortedA;
 
         let familyLabelSource: string | undefined;
         let familyLabelTarget: string | undefined;
@@ -203,13 +208,14 @@ export function RelationshipGraph() {
         }
 
         edgeList.push({
-          source: char.id,
-          target: rel.targetCharacterId,
+          source: sortedA,
+          target: sortedB,
           type: rel.type,
           label: rel.type === 'custom' ? (rel.customType ?? '') : RELATIONSHIP_TYPE_LABELS[rel.type],
-          familyLabelSource,
-          familyLabelTarget,
+          familyLabelSource: isFlipped ? familyLabelTarget : familyLabelSource,
+          familyLabelTarget: isFlipped ? familyLabelSource : familyLabelTarget,
           bidirectional: isBidirectional,
+          arrowTarget: isBidirectional ? undefined : rel.targetCharacterId,
         });
       }
     }
@@ -364,11 +370,14 @@ export function RelationshipGraph() {
 
       // Arrow for unidirectional relationships
       if (!edge.bidirectional && dist > 50) {
-        const tArrow = 1 - (NODE_RADIUS + 4) / dist;
+        // Arrow points toward arrowTarget; if arrowTarget is the normalized source, reverse direction
+        const arrowAtSource = edge.arrowTarget === edge.source;
+        const tArrow = arrowAtSource ? (NODE_RADIUS + 4) / dist : 1 - (NODE_RADIUS + 4) / dist;
         const arrowX = quadBezier(source.x, cpx, target.x, tArrow);
         const arrowY = quadBezier(source.y, cpy, target.y, tArrow);
-        const tangentX = quadBezierTangent(source.x, cpx, target.x, tArrow);
-        const tangentY = quadBezierTangent(source.y, cpy, target.y, tArrow);
+        let tangentX = quadBezierTangent(source.x, cpx, target.x, tArrow);
+        let tangentY = quadBezierTangent(source.y, cpy, target.y, tArrow);
+        if (arrowAtSource) { tangentX = -tangentX; tangentY = -tangentY; }
         const angle = Math.atan2(tangentY, tangentX);
         const arrowLen = 10;
         const arrowAngle = Math.PI / 6;

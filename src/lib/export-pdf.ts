@@ -211,7 +211,7 @@ export function exportPdf(book: ExportBook): void {
         if (i > 0) {
           chaptersHtml += `<hr />\n`;
         }
-        if (scene.title && chapter.scenes.length > 1) {
+        if (scene.title) {
           chaptersHtml += `<p class="scene-title">${escapeXml(scene.title)}</p>\n`;
         }
         chaptersHtml += cleanHtml(scene.content || '<p></p>') + '\n';

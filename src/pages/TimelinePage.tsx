@@ -276,7 +276,9 @@ export function TimelinePage() {
   // Characters in events
   const timelineCharacters = useMemo(() => {
     const charIds = new Set(sortedEvents.flatMap((e) => e.characterIds));
-    return characters.filter((c) => charIds.has(c.id));
+    return characters
+      .filter((c) => charIds.has(c.id))
+      .sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
   }, [sortedEvents, characters]);
 
   // Places in events

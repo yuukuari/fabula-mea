@@ -90,6 +90,13 @@ export function deleteCharacter(characters: Character[], id: string): Character[
   return characters.filter((c) => c.id !== id);
 }
 
+export function reorderCharacters(characters: Character[], characterIds: string[]): Character[] {
+  return characterIds.map((id, i) => {
+    const char = characters.find((c) => c.id === id)!;
+    return { ...char, order: i };
+  });
+}
+
 // ─── Relationship CRUD ───────────────────────────────────────────────────────
 
 export function addRelationship(characters: Character[], charId: string, rel: Omit<Relationship, 'id'>): Character[] {

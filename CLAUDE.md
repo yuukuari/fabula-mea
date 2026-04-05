@@ -199,7 +199,7 @@ Choisir le layout adapté :
 │   │   ├── useLibraryStore.ts   ← Bibliothèque multi-livres + sagas (persist Zustand)
 │   │   ├── useBookStore.ts      ← ⭐ Store principal (~1450 lignes) : tout le contenu du livre
 │   │   ├── useSagaStore.ts      ← Données partagées de la saga (personnages, lieux, univers, cartes)
-│   │   ├── encyclopedia-helpers.ts ← CRUD partagé personnages/lieux/tags/worldNotes/maps (utilisé par useBookStore et useSagaStore)
+│   │   ├── encyclopedia-helpers.ts ← CRUD partagé personnages/lieux/tags/worldNotes/maps + reorderCharacters (utilisé par useBookStore et useSagaStore)
 │   │   ├── useEncyclopediaStore.ts ← Abstraction routant les données encyclopédie (saga vs livre)
 │   │   ├── useEditorStore.ts    ← État éditeur de scène (open/close/entrySceneId)
 │   │   ├── useSyncStore.ts      ← Statut synchronisation cloud
@@ -213,10 +213,10 @@ Choisir le layout adapté :
 │   │   ├── SagaPage.tsx         ← Gestion d'une saga (livres, encyclopédie partagée)
 │   │   ├── ProfilePage.tsx      ← Profil utilisateur (nom, email, avatar, mot de passe)
 │   │   ├── EncyclopediaPage.tsx ← ⭐ Tableau de bord du livre (stats, objectif du jour, manuscrit, relectures, encyclopédie)
-│   │   ├── CharactersPage.tsx   ← Gestion personnages
+│   │   ├── CharactersPage.tsx   ← Gestion personnages (drag-and-drop pour réordonner)
 │   │   ├── PlacesPage.tsx       ← Gestion lieux
 │   │   ├── ChaptersPage.tsx     ← Chapitres + scènes + éditeur
-│   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage OU par lieu, filtres croisés, filtrage doux par opacité)
+│   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage OU par lieu, filtres croisés, filtrage doux par opacité, rangées triées par order des personnages)
 │   │   ├── ProgressPage.tsx     ← Progression + objectifs + Pomodoro + suivi journalier
 │   │   ├── WorldPage.tsx        ← Notes de worldbuilding
 │   │   ├── MapsPage.tsx         ← Cartes interactives
@@ -262,7 +262,7 @@ Choisir le layout adapté :
 ### Entités d'un livre (`BookProject`)
 
 Un livre contient :
-- **Characters** — Personnages avec relations mutuelles, évolution, événements clés, avatar rond avec `imageOffsetY` (pourcentage 0-100 pour le centrage vertical de l'image)
+- **Characters** — Personnages avec relations mutuelles, évolution, événements clés, avatar rond avec `imageOffsetY` (pourcentage 0-100 pour le centrage vertical de l'image), `order?` (position dans la liste, définie par drag-and-drop)
 - **Places** — Lieux typés (ville, bâtiment, paysage...) avec connexions
 - **Chapters** — Chapitres ordonnés, contenant des scènes. Trois types via `ChapterType` :
   - `front_matter` — Section « Avant l'histoire » (dédicace, prologue, etc.) — number 0, créé automatiquement
@@ -472,3 +472,6 @@ npm run preview  # Preview du build en local
 27. **Pomodoro persistant** : le composant `FloatingPomodoro` persiste son état dans `localStorage` (`fabula-mea-pomodoro`). Au rechargement, il recalcule le temps restant via un timestamp `endsAt`. Si le timer a expiré pendant la fermeture, il avance automatiquement au mode suivant. **Alarmes sonores** : quand le timer atteint 0, une alarme distincte est jouée via Web Audio API — triple carillon ascendant pour la fin de travail, double tonalité douce pour la fin de pause.
 28. **Profil utilisateur** : page `/profile` accessible depuis HomeShell. Permet de modifier nom, email, avatar (avec recadrage rond), et mot de passe. Endpoints API : `PATCH /api/auth/profile`, `POST /api/auth/change-password`, `DELETE /api/auth/account`.
 29. **Page Édition** : page `/edition` dans AppShell. Regroupe la mise en page (polices, taille, interligne), les couvertures, la table des matières, et les exports (EPUB, PDF).
+30. **Ordre des personnages** : les personnages ont un champ `order?` qui définit leur position dans la liste. La page Personnages (`CharactersPage`) permet de les réordonner par drag-and-drop (`@dnd-kit`, `rectSortingStrategy`). Cet ordre est utilisé dans la chronologie (`TimelinePage`) pour afficher les rangées de personnages dans l'ordre choisi (personnages importants en premier). Le drag-and-drop est désactivé quand une recherche est active. Le `reorderCharacters` est disponible dans `useBookStore`, `useSagaStore` et `useEncyclopediaStore`.
+31. **Titres de scènes dans les exports** : les titres de scènes (`scene.title`) apparaissent dans les exports EPUB et PDF pour **tous les chapitres** (y compris ceux avec une seule scène), pas seulement pour les chapitres front/back matter. Dans les relectures, les titres de scènes sont toujours affichés.
+32. **Graphe des relations** : les edges du graphe (`RelationshipGraph`) normalisent `source`/`target` par tri d'ID pour garantir que les courbes entre une même paire de personnages aillent toujours dans la même direction perpendiculaire, quel que soit l'ordre d'itération des personnages. Le champ `arrowTarget` stocke la vraie cible des relations non réciproques pour dessiner la flèche dans le bon sens.

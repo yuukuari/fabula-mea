@@ -246,7 +246,7 @@ export async function exportEpub(book: ExportBook): Promise<void> {
         if (i > 0) {
           body += `<hr />\n`;
         }
-        if (scene.title && chapter.scenes.length > 1) {
+        if (scene.title) {
           body += `<p class="scene-title">${escapeXml(scene.title)}</p>\n`;
         }
         body += cleanHtml(scene.content || '<p></p>') + '\n';

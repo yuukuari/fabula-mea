@@ -34,6 +34,7 @@ export interface Character {
   evolution: CharacterEvolution;
   tags: EntityId[];
   notes?: string;
+  order?: number;
   createdAt: string;
   updatedAt: string;
 }

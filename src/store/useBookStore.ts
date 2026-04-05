@@ -64,6 +64,7 @@ interface BookStore extends BookProject {
   addCharacter: (char: Partial<Character> & { name: string }) => string;
   updateCharacter: (id: string, data: Partial<Character>) => void;
   deleteCharacter: (id: string) => void;
+  reorderCharacters: (characterIds: string[]) => void;
   addRelationship: (characterId: string, rel: Omit<Relationship, 'id'>) => void;
   updateRelationship: (characterId: string, relId: string, data: Partial<Relationship>) => void;
   deleteRelationship: (characterId: string, relId: string) => void;
@@ -484,6 +485,8 @@ export const useBookStore = create<BookStore>()(
           scenes: s.scenes.map((sc) => ({ ...sc, characterIds: sc.characterIds.filter((cid) => cid !== id) })),
           ...touchSave(),
         })),
+      reorderCharacters: (characterIds) =>
+        set((s) => ({ characters: enc.reorderCharacters(s.characters, characterIds), ...touchSave() })),
       addRelationship: (characterId, rel) =>
         set((s) => ({ characters: enc.addRelationship(s.characters, characterId, rel), ...touchSave() })),
       updateRelationship: (characterId, relId, data) =>
