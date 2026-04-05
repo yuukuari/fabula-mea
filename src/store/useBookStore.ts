@@ -954,7 +954,7 @@ export const useBookStore = create<BookStore>()(
         let startTime: string | undefined;
 
         const toDateStr = (d: Date) =>
-          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          `${String(d.getFullYear()).padStart(4, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const toTimeStr = (d: Date) =>
           `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
@@ -1058,7 +1058,7 @@ export const useBookStore = create<BookStore>()(
 
           const duration: EventDuration = { value: durationValue, unit };
           const partStart = new Date(partStartMs);
-          const partStartDate = `${partStart.getFullYear()}-${String(partStart.getMonth() + 1).padStart(2, '0')}-${String(partStart.getDate()).padStart(2, '0')}`;
+          const partStartDate = `${String(partStart.getFullYear()).padStart(4, '0')}-${String(partStart.getMonth() + 1).padStart(2, '0')}-${String(partStart.getDate()).padStart(2, '0')}`;
           const h = partStart.getHours();
           const m = partStart.getMinutes();
           const partStartTime = (original.startTime || h !== 0 || m !== 0)

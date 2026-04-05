@@ -162,7 +162,7 @@ export function TimelinePage() {
 
       // Convert new start to date string (local time)
       const newStart = new Date(newStartMs);
-      const newStartDate = `${newStart.getFullYear()}-${String(newStart.getMonth() + 1).padStart(2, '0')}-${String(newStart.getDate()).padStart(2, '0')}`;
+      const newStartDate = `${String(newStart.getFullYear()).padStart(4, '0')}-${String(newStart.getMonth() + 1).padStart(2, '0')}-${String(newStart.getDate()).padStart(2, '0')}`;
 
       // Duration in the original unit
       const durationMs = newEndMs - newStartMs;
