@@ -190,6 +190,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
         <button
           onClick={onMobileClose}
           className="md:hidden p-1.5 rounded-lg text-ink-300 hover:bg-parchment-200"
+          aria-label="Fermer le menu"
         >
           <X className="w-5 h-5" />
         </button>
@@ -318,6 +319,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
                 : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
             )
           }
+          aria-current={location.pathname === '/encyclopedia' ? 'page' : undefined}
         >
           <LayoutDashboard className="w-5 h-5" />
           <span>Vue d'ensemble</span>
@@ -362,6 +364,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
                           isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
                         )
                       }
+                      aria-current={location.pathname === to ? 'page' : undefined}
                     >
                       <Icon className="w-4 h-4" />
                       <span>{label}</span>
@@ -389,6 +392,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
                 isActive ? 'text-bordeaux-500' : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
               )
             }
+            aria-current={location.pathname === to ? 'page' : undefined}
           >
             <Icon className="w-5 h-5" />
             <span>{label}</span>
@@ -407,6 +411,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
               isActive ? 'text-bordeaux-500' : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
             )
           }
+          aria-current={location.pathname === '/profile' ? 'page' : undefined}
         >
           {user?.avatarUrl ? (
             <img
@@ -455,6 +460,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
                           isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
                         )
                       }
+                      aria-current={location.pathname === to ? 'page' : undefined}
                     >
                       <Icon className="w-4 h-4" />
                       <span className="flex-1">{label}</span>

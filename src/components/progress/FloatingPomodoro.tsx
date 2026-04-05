@@ -50,6 +50,46 @@ function initState(): { mode: TimerMode; secondsLeft: number; isRunning: boolean
   return { mode: saved.mode, secondsLeft: saved.secondsLeft, isRunning: false, sessionsCompleted: saved.sessionsCompleted };
 }
 
+/** Play a short synthesized alarm. Work end = bright triple chime, break end = gentle double tone. */
+function playAlarm(type: 'work' | 'break') {
+  try {
+    const ctx = new AudioContext();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+
+    if (type === 'work') {
+      // Triple chime — bright, celebratory
+      [0, 0.2, 0.4].forEach((delay, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = [660, 880, 1100][i];
+        g.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.4);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.4);
+      });
+    } else {
+      // Double soft tone — gentle nudge to resume work
+      [0, 0.25].forEach((delay, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = [440, 523][i];
+        g.gain.setValueAtTime(0.25, ctx.currentTime + delay);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.5);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.5);
+      });
+    }
+
+    // Clean up context after sounds finish
+    setTimeout(() => ctx.close(), 2000);
+  } catch { /* Audio not available */ }
+}
+
 export function FloatingPomodoro() {
   const initial = useRef(initState()).current;
   const [expanded, setExpanded] = useState(false);
@@ -102,9 +142,10 @@ export function FloatingPomodoro() {
             setIsRunning(false);
             if (mode === 'work') {
               setSessionsCompleted((s) => s + 1);
-              try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGiZwr+LYpFUbDSBes9/ep2AgEiRdq9XUmEwWBhJGkcvHklAhDQ0/h8S+hT0PAwE0b7u3eDgOBwIqa7OxcC0HBAA=').play(); } catch {}
+              playAlarm('work');
               switchMode('break');
             } else {
+              playAlarm('break');
               switchMode('work');
             }
             return 0;

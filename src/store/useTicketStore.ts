@@ -5,6 +5,7 @@ import type { Ticket, TicketComment, TicketStatusChange } from '@/types';
 interface TicketStore {
   tickets: Ticket[];
   statusChanges: TicketStatusChange[];
+  releaseContributors: Record<string, string[]>;
   currentTicket: Ticket | null;
   currentComments: TicketComment[];
   currentStatusChanges: TicketStatusChange[];
@@ -31,6 +32,7 @@ interface TicketStore {
 export const useTicketStore = create<TicketStore>()((set, get) => ({
   tickets: [],
   statusChanges: [],
+  releaseContributors: {},
   currentTicket: null,
   currentComments: [],
   currentStatusChanges: [],
@@ -40,8 +42,8 @@ export const useTicketStore = create<TicketStore>()((set, get) => ({
   loadTickets: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { tickets, statusChanges } = await api.tickets.list();
-      set({ tickets, statusChanges, isLoading: false });
+      const { tickets, statusChanges, releaseContributors } = await api.tickets.list();
+      set({ tickets, statusChanges, releaseContributors: releaseContributors ?? {}, isLoading: false });
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
     }

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List } from 'lucide-react';
+import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List, Globe, ExternalLink } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
@@ -54,7 +54,7 @@ export function ChaptersPage() {
     if (!isExpanded) return null;
 
     return (
-      <div className="px-4 pb-4 space-y-2">
+      <div className="px-4 pb-4 space-y-2 mt-4">
         {chapterScenes.map((scene, sceneIdx) => {
           const progress = getSceneProgress(scene);
           const sceneChars = scene.characterIds
@@ -256,9 +256,11 @@ export function ChaptersPage() {
                   <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: chapter.color }} />
                   {isExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
                   <div className="flex-1">
-                    <span className="text-xs text-ink-200 font-medium">Chapitre {chapter.number}</span>
-                    {chapter.title && (
-                      <h3 className="font-display font-bold text-ink-500">{chapter.title}</h3>
+                    <h3 className="font-display font-bold text-ink-400 italic">
+                      Chapitre {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
+                    </h3>
+                    {chapter.synopsis && (
+                      <p className="text-xs text-ink-200 mt-0.5 whitespace-pre-line">{chapter.synopsis}</p>
                     )}
                   </div>
                   <span className="text-xs text-ink-200">{completedScenes}/{chapterScenes.length} scènes</span>
@@ -275,10 +277,6 @@ export function ChaptersPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-
-                {chapter.synopsis && isExpanded && (
-                  <p className="px-4 pb-2 text-sm text-ink-300 italic whitespace-pre-line">{chapter.synopsis}</p>
-                )}
 
                 {renderSceneList(chapter)}
               </div>
@@ -348,7 +346,7 @@ export function ChaptersPage() {
               </div>
 
               {isGlossaryExpanded && (
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-4 mt-4">
                   {!glossaryEnabled && (
                     <p className="text-xs text-ink-200 italic mb-2">
                       Le glossaire est désactivé. Activez-le pour l'inclure dans votre livre.
@@ -361,26 +359,33 @@ export function ChaptersPage() {
                     </p>
                   ) : glossaryEntries.length > 0 ? (
                     <div className="space-y-1.5">
-                      {glossaryEntries.map((entry) => (
-                        <div
-                          key={`${entry.type}-${entry.id}`}
-                          className="flex items-center gap-3 bg-parchment-100 rounded-lg px-3 py-2 group"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm font-medium text-ink-500 truncate block">{entry.name}</span>
-                            {entry.description && (
-                              <p className="text-xs text-ink-200 mt-0.5 line-clamp-1">{entry.description}</p>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => handleRemoveFromGlossary(entry)}
-                            className="btn-ghost p-1 text-ink-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                            title="Retirer du glossaire"
+                      {glossaryEntries.map((entry) => {
+                        const IconComp = entry.type === 'character' ? User : entry.type === 'place' ? MapPin : Globe;
+                        const navigateTo = entry.type === 'character' ? `/characters/${entry.id}` : entry.type === 'place' ? `/places?placeId=${entry.id}` : `/world?noteId=${entry.id}`;
+                        return (
+                          <div
+                            key={`${entry.type}-${entry.id}`}
+                            className="flex items-center gap-3 bg-parchment-100 rounded-lg px-3 py-2 group"
                           >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
+                            <IconComp className="w-4 h-4 text-ink-300 flex-shrink-0" />
+                            <span className="flex-1 min-w-0 text-sm font-medium text-ink-500 truncate">{entry.name}</span>
+                            <button
+                              onClick={() => navigate(navigateTo)}
+                              className="btn-ghost p-1 text-ink-200 hover:text-bordeaux-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                              title="Voir la fiche"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveFromGlossary(entry)}
+                              className="btn-ghost p-1 text-ink-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                              title="Retirer du glossaire"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>

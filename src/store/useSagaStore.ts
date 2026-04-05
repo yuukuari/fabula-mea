@@ -7,7 +7,8 @@ import type {
 import { generateId, now } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
-import { isBase64, uploadImage } from '@/lib/upload';
+import * as enc from './encyclopedia-helpers';
+import { migrateEncyclopediaImages } from './encyclopedia-helpers';
 
 const shouldSync = () => !!localStorage.getItem('emlb-token');
 const IS_DEV = import.meta.env.DEV;
@@ -20,32 +21,7 @@ export function getSagaStorageKey(sagaId: string): string {
 
 async function migrateBase64ImagesSaga(data: SagaProject): Promise<boolean> {
   if (IS_DEV) return false;
-  const promises: Promise<void>[] = [];
-  let migrated = false;
-
-  for (const char of data.characters) {
-    if (char.imageUrl && isBase64(char.imageUrl)) {
-      promises.push(uploadImage(char.imageUrl, `char-${char.name}`).then((url) => { char.imageUrl = url; migrated = true; }));
-    }
-  }
-  for (const place of data.places) {
-    if (place.imageUrl && isBase64(place.imageUrl)) {
-      promises.push(uploadImage(place.imageUrl, `place-${place.name}`).then((url) => { place.imageUrl = url; migrated = true; }));
-    }
-  }
-  for (const note of data.worldNotes) {
-    if (note.imageUrl && isBase64(note.imageUrl)) {
-      promises.push(uploadImage(note.imageUrl, `world-${note.title}`).then((url) => { note.imageUrl = url; migrated = true; }));
-    }
-  }
-  for (const map of data.maps) {
-    if (map.imageUrl && isBase64(map.imageUrl)) {
-      promises.push(uploadImage(map.imageUrl, `map-${map.name}`).then((url) => { map.imageUrl = url; migrated = true; }));
-    }
-  }
-
-  await Promise.all(promises);
-  return migrated;
+  return migrateEncyclopediaImages(data);
 }
 
 function touchSave(extra: Record<string, unknown> = {}) {
@@ -228,7 +204,7 @@ export const useSagaStore = create<SagaStore>()(
           const data = extractSagaData(state);
           localStorage.setItem(getSagaStorageKey(state.id), JSON.stringify(data));
           if (shouldSync()) {
-            api.sagas.save(state.id, data).catch(console.error);
+            api.sagas.save(state.id, data).catch(() => useSyncStore.getState().setError('Échec sync saga'));
           }
         }
         set({
@@ -247,273 +223,81 @@ export const useSagaStore = create<SagaStore>()(
       // ─── Characters ───
 
       addCharacter: (char) => {
-        const id = generateId();
-        const timestamp = now();
-        const newChar: Character = {
-          id,
-          name: char.name,
-          surname: char.surname ?? '',
-          nickname: char.nickname ?? '',
-          sex: char.sex,
-          age: char.age,
-          imageUrl: char.imageUrl ?? '',
-          imageOffsetY: char.imageOffsetY ?? 50,
-          description: char.description ?? '',
-          personality: char.personality ?? '',
-          qualities: char.qualities ?? [],
-          flaws: char.flaws ?? [],
-          skills: char.skills ?? [],
-          profession: char.profession ?? '',
-          lifeGoal: char.lifeGoal ?? '',
-          likes: char.likes ?? [],
-          dislikes: char.dislikes ?? [],
-          keyEvents: char.keyEvents ?? [],
-          relationships: char.relationships ?? [],
-          evolution: char.evolution ?? { beforeStory: '', duringStory: '', endOfStory: '' },
-          tags: char.tags ?? [],
-          notes: char.notes ?? '',
-          inGlossary: char.inGlossary ?? false,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-        set((s) => ({ characters: [...s.characters, newChar], ...touchSave() }));
+        const { characters, id } = enc.createCharacter(get().characters, char);
+        set(() => ({ characters, ...touchSave() }));
         return id;
       },
-
       updateCharacter: (id, data) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === id ? { ...c, ...data, updatedAt: now() } : c
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ characters: enc.updateCharacter(s.characters, id, data), ...touchSave() })),
       deleteCharacter: (id) =>
-        set((s) => ({
-          characters: s.characters.filter((c) => c.id !== id),
-          ...touchSave(),
-        })),
-
-      addRelationship: (characterId, rel) => {
-        const id = generateId();
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, relationships: [...c.relationships, { ...rel, id }], updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        }));
-      },
-
+        set((s) => ({ characters: enc.deleteCharacter(s.characters, id), ...touchSave() })),
+      addRelationship: (characterId, rel) =>
+        set((s) => ({ characters: enc.addRelationship(s.characters, characterId, rel), ...touchSave() })),
       updateRelationship: (characterId, relId, data) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? {
-                  ...c,
-                  relationships: c.relationships.map((r) =>
-                    r.id === relId ? { ...r, ...data } : r
-                  ),
-                  updatedAt: now(),
-                }
-              : c
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ characters: enc.updateRelationship(s.characters, characterId, relId, data), ...touchSave() })),
       deleteRelationship: (characterId, relId) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, relationships: c.relationships.filter((r) => r.id !== relId), updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        })),
-
-      addKeyEvent: (characterId, event) => {
-        const id = generateId();
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, keyEvents: [...c.keyEvents, { ...event, id }], updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        }));
-      },
-
+        set((s) => ({ characters: enc.deleteRelationship(s.characters, characterId, relId), ...touchSave() })),
+      addKeyEvent: (characterId, event) =>
+        set((s) => ({ characters: enc.addKeyEvent(s.characters, characterId, event), ...touchSave() })),
       deleteKeyEvent: (characterId, eventId) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, keyEvents: c.keyEvents.filter((e) => e.id !== eventId), updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        })),
+        set((s) => ({ characters: enc.deleteKeyEvent(s.characters, characterId, eventId), ...touchSave() })),
 
       // ─── Places ───
 
       addPlace: (place) => {
-        const id = generateId();
-        const timestamp = now();
-        const newPlace: Place = {
-          id,
-          name: place.name,
-          type: place.type ?? 'other',
-          description: place.description ?? '',
-          imageUrl: place.imageUrl ?? '',
-          inspirations: place.inspirations ?? [],
-          connectedPlaceIds: place.connectedPlaceIds ?? [],
-          tags: place.tags ?? [],
-          notes: place.notes ?? '',
-          inGlossary: place.inGlossary ?? false,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-        set((s) => ({ places: [...s.places, newPlace], ...touchSave() }));
+        const { places, id } = enc.createPlace(get().places, place);
+        set(() => ({ places, ...touchSave() }));
         return id;
       },
-
       updatePlace: (id, data) =>
-        set((s) => ({
-          places: s.places.map((p) =>
-            p.id === id ? { ...p, ...data, updatedAt: now() } : p
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ places: enc.updatePlace(s.places, id, data), ...touchSave() })),
       deletePlace: (id) =>
-        set((s) => ({
-          places: s.places.filter((p) => p.id !== id),
-          ...touchSave(),
-        })),
+        set((s) => ({ places: enc.deletePlace(s.places, id), ...touchSave() })),
 
       // ─── Tags ───
 
       addTag: (tag) => {
-        const id = generateId();
-        set((s) => ({ tags: [...s.tags, { ...tag, id }], ...touchSave() }));
+        const { tags, id } = enc.createTag(get().tags, tag);
+        set(() => ({ tags, ...touchSave() }));
         return id;
       },
-
       updateTag: (id, data) =>
-        set((s) => ({
-          tags: s.tags.map((t) => (t.id === id ? { ...t, ...data } : t)),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ tags: enc.updateTag(s.tags, id, data), ...touchSave() })),
       deleteTag: (id) =>
-        set((s) => ({
-          tags: s.tags.filter((t) => t.id !== id),
-          ...touchSave(),
-        })),
+        set((s) => ({ tags: enc.deleteTag(s.tags, id), ...touchSave() })),
 
       // ─── World Notes ───
 
       addWorldNote: (note) => {
-        const id = generateId();
-        const timestamp = now();
-        const newNote: WorldNote = {
-          id,
-          title: note.title,
-          category: note.category ?? 'custom',
-          content: note.content ?? '',
-          imageUrl: note.imageUrl ?? '',
-          linkedNoteIds: note.linkedNoteIds ?? [],
-          tags: note.tags ?? [],
-          inGlossary: note.inGlossary ?? false,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-        set((s) => ({ worldNotes: [...s.worldNotes, newNote], ...touchSave() }));
+        const { worldNotes, id } = enc.createWorldNote(get().worldNotes, note);
+        set(() => ({ worldNotes, ...touchSave() }));
         return id;
       },
-
       updateWorldNote: (id, data) =>
-        set((s) => ({
-          worldNotes: s.worldNotes.map((n) =>
-            n.id === id ? { ...n, ...data, updatedAt: now() } : n
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ worldNotes: enc.updateWorldNote(s.worldNotes, id, data), ...touchSave() })),
       deleteWorldNote: (id) =>
-        set((s) => ({
-          worldNotes: s.worldNotes.filter((n) => n.id !== id),
-          ...touchSave(),
-        })),
+        set((s) => ({ worldNotes: enc.deleteWorldNote(s.worldNotes, id), ...touchSave() })),
 
       // ─── Maps ───
 
       addMap: (map) => {
-        const id = generateId();
-        const timestamp = now();
-        const newMap: MapItem = {
-          id,
-          name: map.name,
-          description: map.description ?? '',
-          imageUrl: map.imageUrl,
-          pins: map.pins ?? [],
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-        set((s) => ({ maps: [...s.maps, newMap], ...touchSave() }));
+        const { maps, id } = enc.createMap(get().maps, map);
+        set(() => ({ maps, ...touchSave() }));
         return id;
       },
-
       updateMap: (id, data) =>
-        set((s) => ({
-          maps: s.maps.map((m) =>
-            m.id === id ? { ...m, ...data, updatedAt: now() } : m
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ maps: enc.updateMap(s.maps, id, data), ...touchSave() })),
       deleteMap: (id) =>
-        set((s) => ({
-          maps: s.maps.filter((m) => m.id !== id),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ maps: enc.deleteMap(s.maps, id), ...touchSave() })),
       addMapPin: (mapId, pin) => {
-        const id = generateId();
-        set((s) => ({
-          maps: s.maps.map((m) =>
-            m.id === mapId
-              ? { ...m, pins: [...m.pins, { ...pin, id }], updatedAt: now() }
-              : m
-          ),
-          ...touchSave(),
-        }));
+        const { maps, id } = enc.addMapPin(get().maps, mapId, pin);
+        set(() => ({ maps, ...touchSave() }));
         return id;
       },
-
       updateMapPin: (mapId, pinId, data) =>
-        set((s) => ({
-          maps: s.maps.map((m) =>
-            m.id === mapId
-              ? {
-                  ...m,
-                  pins: m.pins.map((p) => (p.id === pinId ? { ...p, ...data } : p)),
-                  updatedAt: now(),
-                }
-              : m
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ maps: enc.updateMapPin(s.maps, mapId, pinId, data), ...touchSave() })),
       deleteMapPin: (mapId, pinId) =>
-        set((s) => ({
-          maps: s.maps.map((m) =>
-            m.id === mapId
-              ? { ...m, pins: m.pins.filter((p) => p.id !== pinId), updatedAt: now() }
-              : m
-          ),
-          ...touchSave(),
-        })),
+        set((s) => ({ maps: enc.deleteMapPin(s.maps, mapId, pinId), ...touchSave() })),
 
       // ─── Graph ───
 

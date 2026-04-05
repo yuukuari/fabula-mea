@@ -66,6 +66,87 @@ function setJson(key: string, value: unknown): void {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+// ─── Review session helpers ──────────────────────────────────────────────────
+
+function getSessionByToken(token: string): ReviewSession {
+  const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
+  if (!session) throw new Error('Session introuvable');
+  return session;
+}
+
+function saveSession(session: ReviewSession): void {
+  setJson(`emlb-dev:review:${session.id}`, session);
+  setJson(`emlb-dev:review:token:${session.token}`, session);
+}
+
+function addReviewCommentShared(sessionId: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>): { comment: ReviewComment; session: ReviewSession | null } {
+  const newComment: ReviewComment = {
+    ...comment,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+  comments.push(newComment);
+  setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+  const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
+  if (session) {
+    session.commentsCount = comments.filter((c) => !c.parentId).length;
+    saveSession(session);
+  }
+  return { comment: newComment, session };
+}
+
+function updateReviewCommentShared(sessionId: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>): { comment: ReviewComment } {
+  const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+  const idx = comments.findIndex((c) => c.id === commentId);
+  if (idx === -1) throw new Error('Commentaire introuvable');
+  comments[idx] = { ...comments[idx], ...data, updatedAt: new Date().toISOString() };
+  setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+  return { comment: comments[idx] };
+}
+
+function deleteReviewCommentShared(sessionId: string, commentId: string): void {
+  const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+  const filtered = comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
+  setJson(`emlb-dev:review:${sessionId}:comments`, filtered);
+  const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
+  if (session) {
+    session.commentsCount = filtered.filter((c) => !c.parentId).length;
+    saveSession(session);
+  }
+}
+
+function batchSendDrafts(sessionId: string, filterAuthorOnly: boolean): { sent: number; session: ReviewSession | null } {
+  const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
+  let sent = 0;
+  for (let i = 0; i < comments.length; i++) {
+    if (comments[i].status === 'draft' && (!filterAuthorOnly || comments[i].isAuthor)) {
+      comments[i] = { ...comments[i], status: 'sent', updatedAt: new Date().toISOString() };
+      sent++;
+    }
+  }
+  setJson(`emlb-dev:review:${sessionId}:comments`, comments);
+  const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
+  return { sent, session };
+}
+
+// ─── Ticket change helper ───────────────────────────────────────────────────
+
+function recordTicketChange(ticketId: string, change: Record<string, unknown>): void {
+  const user = getCurrentUser();
+  const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${ticketId}:statusChanges`, []);
+  changes.push({
+    id: generateId(),
+    ticketId,
+    userId: user.id,
+    userName: user.name,
+    ...change,
+    createdAt: new Date().toISOString(),
+  } as TicketStatusChange);
+  setJson(`emlb-dev:ticket:${ticketId}:statusChanges`, changes);
+}
+
 // ─── Dev email logging ───────────────────────────────────────────────────────
 
 function devEmailLog(opts: { to: string; subject: string; description: string; details?: Record<string, string> }): void {
@@ -168,10 +249,22 @@ export const devDb = {
   // ─── Tickets ─────────────────────────────────────────────────────────────
 
   tickets: {
-    async list(): Promise<{ tickets: Ticket[]; statusChanges: TicketStatusChange[] }> {
+    async list(): Promise<{ tickets: Ticket[]; statusChanges: TicketStatusChange[]; releaseContributors: Record<string, string[]> }> {
       const uid = requireUserId();
       const user = getCurrentUser();
       const allTickets = getJson<Ticket[]>('emlb-dev:tickets', []);
+
+      // Build releaseContributors from ALL tickets (including private ones)
+      const releaseContributors: Record<string, string[]> = {};
+      for (const t of allTickets) {
+        if (t.releaseId) {
+          if (!releaseContributors[t.releaseId]) releaseContributors[t.releaseId] = [];
+          if (!releaseContributors[t.releaseId].includes(t.userName)) {
+            releaseContributors[t.releaseId].push(t.userName);
+          }
+        }
+      }
+
       // User can see public tickets + their own private tickets
       const visible = allTickets.filter(
         (t) => t.visibility === 'public' || t.userId === uid || user.isAdmin
@@ -184,7 +277,7 @@ export const devDb = {
         const comments = getJson<TicketComment[]>(`emlb-dev:ticket:${t.id}:comments`, []);
         return { ...t, commentCount: comments.length };
       });
-      return { tickets: ticketsWithCounts, statusChanges: allChanges };
+      return { tickets: ticketsWithCounts, statusChanges: allChanges, releaseContributors };
     },
 
     async create(data: {
@@ -263,74 +356,23 @@ export const devDb = {
       tickets[idx] = updated;
       setJson('emlb-dev:tickets', tickets);
 
-      // If status changed, add a status change entry
       if (data.status && data.status !== oldTicket.status) {
-        const user = getCurrentUser();
-        const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${id}:statusChanges`, []);
-        changes.push({
-          id: generateId(),
-          ticketId: id,
-          userId: user.id,
-          userName: user.name,
-          type: 'status_change',
-          fromStatus: oldTicket.status,
-          toStatus: data.status,
-          createdAt: new Date().toISOString(),
-        });
-        setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
+        recordTicketChange(id, { type: 'status_change', fromStatus: oldTicket.status, toStatus: data.status });
       }
-
-      // If release changed, add a release assignment entry
       if (data.releaseId !== undefined && data.releaseId !== oldTicket.releaseId) {
-        const user = getCurrentUser();
-        const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${id}:statusChanges`, []);
         const releases = getJson<Release[]>('emlb-dev:releases', []);
         const release = releases.find((r) => r.id === data.releaseId);
-        changes.push({
-          id: generateId(),
-          ticketId: id,
-          userId: user.id,
-          userName: user.name,
+        recordTicketChange(id, {
           type: 'release_assign',
           releaseId: data.releaseId || undefined,
           releaseName: release ? `v${release.version}${release.title ? ' — ' + release.title : ''}` : undefined,
-          createdAt: new Date().toISOString(),
         });
-        setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
       }
-
-      // If type changed, add a type change entry
       if (data.type && data.type !== oldTicket.type) {
-        const user = getCurrentUser();
-        const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${id}:statusChanges`, []);
-        changes.push({
-          id: generateId(),
-          ticketId: id,
-          userId: user.id,
-          userName: user.name,
-          type: 'type_change',
-          fromType: oldTicket.type,
-          toType: data.type,
-          createdAt: new Date().toISOString(),
-        });
-        setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
+        recordTicketChange(id, { type: 'type_change', fromType: oldTicket.type, toType: data.type });
       }
-
-      // If module changed, add a module change entry
       if (data.module !== undefined && (data.module || null) !== (oldTicket.module || null)) {
-        const user = getCurrentUser();
-        const changes = getJson<TicketStatusChange[]>(`emlb-dev:ticket:${id}:statusChanges`, []);
-        changes.push({
-          id: generateId(),
-          ticketId: id,
-          userId: user.id,
-          userName: user.name,
-          type: 'module_change',
-          fromModule: oldTicket.module || null,
-          toModule: data.module || null,
-          createdAt: new Date().toISOString(),
-        });
-        setJson(`emlb-dev:ticket:${id}:statusChanges`, changes);
+        recordTicketChange(id, { type: 'module_change', fromModule: oldTicket.module || null, toModule: data.module || null });
       }
 
       return { ticket: updated };
@@ -499,9 +541,10 @@ export const devDb = {
       for (const sid of sessionIds) {
         const s = getJson<ReviewSession | null>(`emlb-dev:review:${sid}`, null);
         if (s) {
-          // Compute pendingCommentsCount from actual comments
+          // Compute pendingCommentsCount and authorDraftCount from actual comments
           const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sid}:comments`, []);
           s.pendingCommentsCount = comments.filter(c => !c.parentId && c.status === 'sent' && !c.isAuthor).length;
+          s.authorDraftCount = comments.filter(c => c.status === 'draft' && c.isAuthor).length;
           sessions.push(s);
         }
       }
@@ -534,10 +577,7 @@ export const devDb = {
         pendingCommentsCount: 0,
         createdAt: new Date().toISOString(),
       };
-      // Store session by token (for public access)
-      setJson(`emlb-dev:review:token:${token}`, session);
-      // Store session by id (for author access)
-      setJson(`emlb-dev:review:${session.id}`, session);
+      saveSession(session);
       // Add to the author's session list
       const sessionIds = getJson<string[]>(`emlb-dev:u:${uid}:reviews`, []);
       sessionIds.push(session.id);
@@ -585,124 +625,51 @@ export const devDb = {
       return { ok: true };
     },
 
-    /** Close a review session (author => marks as 'closed', hides content from reader) */
     async closeSession(id: string): Promise<{ session: ReviewSession }> {
       const session = getJson<ReviewSession | null>(`emlb-dev:review:${id}`, null);
       if (!session) throw new Error('Session introuvable');
       session.status = 'closed';
       session.closedAt = new Date().toISOString();
-      setJson(`emlb-dev:review:${id}`, session);
-      setJson(`emlb-dev:review:token:${session.token}`, session);
+      saveSession(session);
       return { session };
     },
 
-    /** Author replies to a comment or closes it */
     async addComment(sessionId: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ comment: ReviewComment }> {
-      const newComment: ReviewComment = {
-        ...comment,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
-      comments.push(newComment);
-      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
-      // Update comments count on session
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
-      if (session) {
-        session.commentsCount = comments.filter((c) => !c.parentId).length;
-        setJson(`emlb-dev:review:${sessionId}`, session);
-        setJson(`emlb-dev:review:token:${session.token}`, session);
-      }
-      return { comment: newComment };
+      return addReviewCommentShared(sessionId, comment);
     },
 
-    /** Update a comment (content or status) */
     async updateComment(sessionId: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>): Promise<{ comment: ReviewComment }> {
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
-      const idx = comments.findIndex((c) => c.id === commentId);
-      if (idx === -1) throw new Error('Commentaire introuvable');
-      comments[idx] = { ...comments[idx], ...data, updatedAt: new Date().toISOString() };
-      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
-      return { comment: comments[idx] };
+      return updateReviewCommentShared(sessionId, commentId, data);
     },
 
-    /** Delete a comment */
     async deleteComment(sessionId: string, commentId: string): Promise<{ ok: boolean }> {
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
-      const filtered = comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
-      setJson(`emlb-dev:review:${sessionId}:comments`, filtered);
-      // Update count
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
-      if (session) {
-        session.commentsCount = filtered.filter((c) => !c.parentId).length;
-        setJson(`emlb-dev:review:${sessionId}`, session);
-        setJson(`emlb-dev:review:token:${session.token}`, session);
-      }
+      deleteReviewCommentShared(sessionId, commentId);
       return { ok: true };
     },
 
-    /** Batch-send author draft comments — marks as sent and notifies reader */
     async sendAuthorComments(sessionId: string): Promise<{ sent: number }> {
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
-      let sent = 0;
-      for (let i = 0; i < comments.length; i++) {
-        if (comments[i].status === 'draft' && comments[i].isAuthor) {
-          comments[i] = { ...comments[i], status: 'sent', updatedAt: new Date().toISOString() };
-          sent++;
-        }
+      const { sent, session } = batchSendDrafts(sessionId, true);
+      if (sent > 0 && session?.readerEmail) {
+        devEmailLog({
+          to: session.readerEmail,
+          subject: `${session.authorName} a répondu à vos commentaires sur « ${session.bookTitle} »`,
+          description: 'Notification réponses auteur → relecteur',
+          details: { 'Auteur': session.authorName, 'Livre': session.bookTitle, 'Réponses': `${sent}` },
+        });
       }
-      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
-
-      // Log email that would be sent to reader in production
-      if (sent > 0) {
-        const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
-        if (session?.readerEmail) {
-          devEmailLog({
-            to: session.readerEmail,
-            subject: `${session.authorName} a répondu à vos commentaires sur « ${session.bookTitle} »`,
-            description: 'Notification réponses auteur → relecteur',
-            details: {
-              'Auteur': session.authorName,
-              'Livre': session.bookTitle,
-              'Réponses': `${sent}`,
-            },
-          });
-        }
-      }
-
       return { sent };
     },
 
-    /** Batch-send draft comments (reader side — mark as sent) */
     async sendComments(sessionId: string): Promise<{ sent: number }> {
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${sessionId}:comments`, []);
-      let sent = 0;
-      for (let i = 0; i < comments.length; i++) {
-        if (comments[i].status === 'draft') {
-          comments[i] = { ...comments[i], status: 'sent', updatedAt: new Date().toISOString() };
-          sent++;
-        }
+      const { sent, session } = batchSendDrafts(sessionId, false);
+      if (sent > 0 && session?.authorEmail) {
+        devEmailLog({
+          to: session.authorEmail,
+          subject: `${session.readerName || 'Un relecteur'} a envoyé ${sent} commentaire${sent > 1 ? 's' : ''} sur « ${session.bookTitle} »`,
+          description: 'Notification commentaires relecture',
+          details: { 'Relecteur': session.readerName || 'Un relecteur', 'Livre': session.bookTitle, 'Commentaires': `${sent}` },
+        });
       }
-      setJson(`emlb-dev:review:${sessionId}:comments`, comments);
-
-      // Log email that would be sent to author in production
-      if (sent > 0) {
-        const session = getJson<ReviewSession | null>(`emlb-dev:review:${sessionId}`, null);
-        if (session?.authorEmail) {
-          devEmailLog({
-            to: session.authorEmail,
-            subject: `${session.readerName || 'Un relecteur'} a envoyé ${sent} commentaire${sent > 1 ? 's' : ''} sur « ${session.bookTitle} »`,
-            description: 'Notification commentaires relecture',
-            details: {
-              'Relecteur': session.readerName || 'Un relecteur',
-              'Livre': session.bookTitle,
-              'Commentaires': `${sent}`,
-            },
-          });
-        }
-      }
-
       return { sent };
     },
   },
@@ -710,130 +677,67 @@ export const devDb = {
   // ─── Review public (reader side, by token) ─────────────────────────────
 
   reviewPublic: {
-    /** Get session by public token */
     async getByToken(token: string): Promise<{ session: ReviewSession }> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
-      return { session };
+      return { session: getSessionByToken(token) };
     },
 
-    /** Start the review (reader chooses their name) */
     async start(token: string, data: { readerName: string }): Promise<{ session: ReviewSession }> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
+      const session = getSessionByToken(token);
       session.readerName = data.readerName;
       session.status = 'in_progress';
       session.startedAt = new Date().toISOString();
-      setJson(`emlb-dev:review:token:${token}`, session);
-      setJson(`emlb-dev:review:${session.id}`, session);
+      saveSession(session);
       return { session };
     },
 
-    /** Get comments for a session (by token) */
     async getComments(token: string): Promise<ReviewComment[]> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
+      const session = getSessionByToken(token);
       return getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
     },
 
-    /** Add a comment (reader side) */
     async addComment(token: string, comment: Omit<ReviewComment, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ comment: ReviewComment }> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
-      const newComment: ReviewComment = {
-        ...comment,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
-      comments.push(newComment);
-      setJson(`emlb-dev:review:${session.id}:comments`, comments);
-      // Update comments count
-      session.commentsCount = comments.filter((c) => !c.parentId).length;
-      setJson(`emlb-dev:review:token:${token}`, session);
-      setJson(`emlb-dev:review:${session.id}`, session);
-      return { comment: newComment };
+      const session = getSessionByToken(token);
+      return addReviewCommentShared(session.id, comment);
     },
 
-    /** Update a comment (reader side) */
     async updateComment(token: string, commentId: string, data: Partial<Pick<ReviewComment, 'content' | 'status'>>): Promise<{ comment: ReviewComment }> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
-      const idx = comments.findIndex((c) => c.id === commentId);
-      if (idx === -1) throw new Error('Commentaire introuvable');
-      comments[idx] = { ...comments[idx], ...data, updatedAt: new Date().toISOString() };
-      setJson(`emlb-dev:review:${session.id}:comments`, comments);
-      return { comment: comments[idx] };
+      const session = getSessionByToken(token);
+      return updateReviewCommentShared(session.id, commentId, data);
     },
 
-    /** Delete a comment (reader side) */
     async deleteComment(token: string, commentId: string): Promise<{ ok: boolean }> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
-      const filtered = comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
-      setJson(`emlb-dev:review:${session.id}:comments`, filtered);
-      session.commentsCount = filtered.filter((c) => !c.parentId).length;
-      setJson(`emlb-dev:review:token:${token}`, session);
-      setJson(`emlb-dev:review:${session.id}`, session);
+      const session = getSessionByToken(token);
+      deleteReviewCommentShared(session.id, commentId);
       return { ok: true };
     },
 
-    /** Send all draft comments (marks as sent) */
     async sendComments(token: string): Promise<{ sent: number }> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
-      const comments = getJson<ReviewComment[]>(`emlb-dev:review:${session.id}:comments`, []);
-      let sent = 0;
-      for (let i = 0; i < comments.length; i++) {
-        if (comments[i].status === 'draft') {
-          comments[i] = { ...comments[i], status: 'sent', updatedAt: new Date().toISOString() };
-          sent++;
-        }
-      }
-      setJson(`emlb-dev:review:${session.id}:comments`, comments);
-
-      // Log email that would be sent to author in production
+      const session = getSessionByToken(token);
+      const { sent } = batchSendDrafts(session.id, false);
       if (sent > 0 && session.authorEmail) {
         devEmailLog({
           to: session.authorEmail,
           subject: `${session.readerName || 'Un relecteur'} a envoyé ${sent} commentaire${sent > 1 ? 's' : ''} sur « ${session.bookTitle} »`,
           description: 'Notification commentaires relecture',
-          details: {
-            'Relecteur': session.readerName || 'Un relecteur',
-            'Livre': session.bookTitle,
-            'Commentaires': `${sent}`,
-          },
+          details: { 'Relecteur': session.readerName || 'Un relecteur', 'Livre': session.bookTitle, 'Commentaires': `${sent}` },
         });
       }
-
       return { sent };
     },
 
-    /** Mark the review as completed */
     async complete(token: string): Promise<{ session: ReviewSession }> {
-      const session = getJson<ReviewSession | null>(`emlb-dev:review:token:${token}`, null);
-      if (!session) throw new Error('Session introuvable');
+      const session = getSessionByToken(token);
       session.status = 'completed';
       session.completedAt = new Date().toISOString();
-      setJson(`emlb-dev:review:token:${token}`, session);
-      setJson(`emlb-dev:review:${session.id}`, session);
-
-      // Log email that would be sent to author in production
+      saveSession(session);
       if (session.authorEmail) {
         devEmailLog({
           to: session.authorEmail,
           subject: `${session.readerName || 'Un relecteur'} a terminé la relecture de « ${session.bookTitle} »`,
           description: 'Notification relecture terminée',
-          details: {
-            'Relecteur': session.readerName || 'Un relecteur',
-            'Livre': session.bookTitle,
-          },
+          details: { 'Relecteur': session.readerName || 'Un relecteur', 'Livre': session.bookTitle },
         });
       }
-
       return { session };
     },
   },

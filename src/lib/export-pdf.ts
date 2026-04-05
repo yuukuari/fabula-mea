@@ -6,32 +6,8 @@
  */
 import type { BookLayout } from '@/types';
 import { FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
-
-interface ExportChapter {
-  number: number;
-  title: string;
-  type?: 'front_matter' | 'chapter' | 'back_matter';
-  scenes: { title: string; content: string }[];
-}
-
-interface ExportBook {
-  title: string;
-  author: string;
-  genre: string;
-  synopsis: string;
-  chapters: ExportChapter[];
-  glossary?: { name: string; type: string; description: string }[];
-  layout?: BookLayout;
-  tableOfContents?: boolean;
-}
-
-function cleanHtml(html: string): string {
-  if (!html) return '<p></p>';
-  return html
-    .replace(/\s+class="[^"]*"/g, '')
-    .replace(/\s+data-[a-z-]+="[^"]*"/g, '')
-    .replace(/<span>\s*<\/span>/g, '');
-}
+import { escapeXml, cleanHtml } from '@/lib/export-shared';
+import type { ExportBook } from '@/lib/export-shared';
 
 function buildPdfStyles(layout?: BookLayout): string {
   const fontStack = FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily];
@@ -229,14 +205,14 @@ export function exportPdf(book: ExportBook): void {
 
     if (!isSpecial) {
       const chapterId = `chapter-${chapter.number}`;
-      chaptersHtml += `<h2 id="${chapterId}" class="chapter-break">Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}</h2>\n`;
+      chaptersHtml += `<h2 id="${chapterId}" class="chapter-break">Chapitre ${chapter.number}${chapter.title ? ` — ${escapeXml(chapter.title)}` : ''}</h2>\n`;
       for (let i = 0; i < chapter.scenes.length; i++) {
         const scene = chapter.scenes[i];
         if (i > 0) {
           chaptersHtml += `<hr />\n`;
         }
         if (scene.title && chapter.scenes.length > 1) {
-          chaptersHtml += `<p class="scene-title">${scene.title}</p>\n`;
+          chaptersHtml += `<p class="scene-title">${escapeXml(scene.title)}</p>\n`;
         }
         chaptersHtml += cleanHtml(scene.content || '<p></p>') + '\n';
       }
@@ -246,7 +222,7 @@ export function exportPdf(book: ExportBook): void {
         const scene = chapter.scenes[i];
         const sceneId = `special-${chapter.type}-${i}`;
         if (scene.title) {
-          chaptersHtml += `<h2 id="${sceneId}" class="special-scene-break">${scene.title}</h2>\n`;
+          chaptersHtml += `<h2 id="${sceneId}" class="special-scene-break">${escapeXml(scene.title)}</h2>\n`;
         } else {
           chaptersHtml += `<div id="${sceneId}" class="special-scene-break" style="display:none;"></div>`;
           if (i > 0) {
@@ -264,9 +240,9 @@ export function exportPdf(book: ExportBook): void {
   if (book.glossary && book.glossary.length > 0) {
     glossaryHtml += '<h2 id="glossaire" class="chapter-break">Glossaire</h2>\n';
     for (const entry of book.glossary) {
-      glossaryHtml += `<h3>${entry.name}</h3>\n`;
+      glossaryHtml += `<h3>${escapeXml(entry.name)}</h3>\n`;
       if (entry.description) {
-        glossaryHtml += `<p>${entry.description}</p>\n`;
+        glossaryHtml += `<p>${escapeXml(entry.description)}</p>\n`;
       }
     }
   }
@@ -282,12 +258,12 @@ export function exportPdf(book: ExportBook): void {
         ch.scenes.forEach((scene, i) => {
           if (scene.title) {
             const sceneId = `special-${ch.type}-${i}`;
-            tocItems.push(`<li><a href="#${sceneId}">${scene.title}</a></li>`);
+            tocItems.push(`<li><a href="#${sceneId}">${escapeXml(scene.title)}</a></li>`);
           }
         });
       } else {
         const chapterId = `chapter-${ch.number}`;
-        tocItems.push(`<li><a href="#${chapterId}"><span class="ch-num">Chapitre ${ch.number}</span> ${ch.title || ''}</a></li>`);
+        tocItems.push(`<li><a href="#${chapterId}"><span class="ch-num">Chapitre ${ch.number}</span> ${escapeXml(ch.title || '')}</a></li>`);
       }
     }
     if (book.glossary && book.glossary.length > 0) {
@@ -313,7 +289,7 @@ export function exportPdf(book: ExportBook): void {
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <title>${book.title} — PDF</title>
+  <title>${escapeXml(book.title)} — PDF</title>
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet" />
   <style>${buildPdfStyles(book.layout)}</style>
 </head>
@@ -323,9 +299,9 @@ export function exportPdf(book: ExportBook): void {
   ${frontCoverHtml}
 
   <div class="title-page">
-    <h1>${book.title}</h1>
-    <p class="author">${book.author}</p>
-    ${book.genre ? `<p class="genre">${book.genre}</p>` : ''}
+    <h1>${escapeXml(book.title)}</h1>
+    <p class="author">${escapeXml(book.author)}</p>
+    ${book.genre ? `<p class="genre">${escapeXml(book.genre)}</p>` : ''}
   </div>
 
   ${tocHtml}

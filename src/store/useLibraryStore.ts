@@ -3,9 +3,11 @@ import { persist } from 'zustand/middleware';
 import type { BookMeta, SagaMeta, WritingMode, CountUnit, BookLayout } from '@/types';
 import { generateId, now } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useSyncStore } from './useSyncStore';
 
 // Sync to cloud (or dev-db in dev mode) when logged in
 const shouldSync = () => !!localStorage.getItem('emlb-token');
+
 
 interface LibraryStore {
   books: BookMeta[];
@@ -60,13 +62,13 @@ export const useLibraryStore = create<LibraryStore>()(
             ),
           }));
           if (shouldSync()) {
-            api.sagas.saveMeta(get().sagas).catch(console.error);
+            api.sagas.saveMeta(get().sagas).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
           }
         }
 
         if (shouldSync()) {
           const books = [...get().books];
-          api.library.save(books).catch(console.error);
+          api.library.save(books).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
         }
         return id;
       },
@@ -89,14 +91,14 @@ export const useLibraryStore = create<LibraryStore>()(
             ),
           }));
           if (shouldSync()) {
-            api.sagas.saveMeta(get().sagas).catch(console.error);
+            api.sagas.saveMeta(get().sagas).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
           }
         }
 
         if (shouldSync()) {
-          api.books.delete(id).catch(console.error);
+          api.books.delete(id).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
           const books = get().books.filter((b) => b.id !== id);
-          api.library.save(books).catch(console.error);
+          api.library.save(books).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
         }
       },
 
@@ -110,7 +112,7 @@ export const useLibraryStore = create<LibraryStore>()(
         }));
         if (shouldSync()) {
           const books = get().books;
-          api.library.save(books).catch(console.error);
+          api.library.save(books).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
         }
       },
 
@@ -170,7 +172,7 @@ export const useLibraryStore = create<LibraryStore>()(
         };
         set((s) => ({ sagas: [...s.sagas, meta] }));
         if (shouldSync()) {
-          api.sagas.saveMeta(get().sagas).catch(console.error);
+          api.sagas.saveMeta(get().sagas).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
         }
         return id;
       },
@@ -185,9 +187,9 @@ export const useLibraryStore = create<LibraryStore>()(
         }));
         localStorage.removeItem(`fabula-mea-saga-${id}`);
         if (shouldSync()) {
-          api.sagas.delete(id).catch(console.error);
-          api.sagas.saveMeta(get().sagas).catch(console.error);
-          api.library.save(get().books).catch(console.error);
+          api.sagas.delete(id).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
+          api.sagas.saveMeta(get().sagas).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
+          api.library.save(get().books).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
         }
       },
 
@@ -204,7 +206,7 @@ export const useLibraryStore = create<LibraryStore>()(
           ),
         }));
         if (shouldSync()) {
-          api.sagas.saveMeta(get().sagas).catch(console.error);
+          api.sagas.saveMeta(get().sagas).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
         }
       },
 
@@ -222,8 +224,8 @@ export const useLibraryStore = create<LibraryStore>()(
           ),
         }));
         if (shouldSync()) {
-          api.sagas.saveMeta(get().sagas).catch(console.error);
-          api.library.save(get().books).catch(console.error);
+          api.sagas.saveMeta(get().sagas).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
+          api.library.save(get().books).catch(() => useSyncStore.getState().setError('Échec sync bibliothèque'));
         }
       },
     }),

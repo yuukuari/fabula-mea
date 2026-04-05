@@ -2,19 +2,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { redis } from '../_lib/redis';
 import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
+import { getPathSegments, generateId, isAdmin } from '../_lib/utils';
 
-function getPathSegments(req: VercelRequest, base: string): string[] {
-  const url = (req.url || '').split('?')[0];
-  const after = url.startsWith(base) ? url.slice(base.length) : '';
-  const segments = after.split('/').filter(Boolean);
-  // __index is a sentinel from vercel.json rewrites for bare routes
-  if (segments.length === 1 && segments[0] === '__index') return [];
-  return segments;
-}
-
-function generateId(): string {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-}
+const VALID_RELEASE_STATUSES = ['planned', 'current', 'released'] as const;
 
 interface Release {
   id: string;
@@ -27,18 +17,6 @@ interface Release {
   releasedAt?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-interface User {
-  id: string;
-  isAdmin?: boolean;
-}
-
-async function isAdmin(userId: string): Promise<boolean> {
-  const json = await redis.get(`emlb:user:${userId}`);
-  if (!json) return false;
-  const user = JSON.parse(json) as User;
-  return user.isAdmin === true;
 }
 
 // --- Handlers ---
@@ -59,6 +37,9 @@ async function handleIndex(req: VercelRequest, res: VercelResponse) {
 
     const { version, title, description, status, items, ticketIds, releasedAt } = req.body;
     if (!version) return res.status(400).json({ error: 'Version requise' });
+    if (status && !VALID_RELEASE_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `Statut invalide: ${status}` });
+    }
 
     const release: Release = {
       id: generateId(),
@@ -109,6 +90,9 @@ async function handleById(req: VercelRequest, res: VercelResponse, id: string) {
   if (releaseIdx === -1) return res.status(404).json({ error: 'Release introuvable' });
 
   if (req.method === 'PATCH') {
+    if (req.body.status && !VALID_RELEASE_STATUSES.includes(req.body.status)) {
+      return res.status(400).json({ error: `Statut invalide: ${req.body.status}` });
+    }
     // Auto-demote: if setting this release to 'current', previous 'current' becomes 'released'
     if (req.body.status === 'current' && releases[releaseIdx].status !== 'current') {
       for (let i = 0; i < releases.length; i++) {

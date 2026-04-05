@@ -16,6 +16,8 @@ Ce dossier contient les **serverless functions Vercel** qui forment le backend d
 | `UPSTASH_REDIS_REST_URL` | URL de l'instance Upstash Redis |
 | `UPSTASH_REDIS_REST_TOKEN` | Token d'accès Upstash Redis |
 | `RESEND_API_KEY` | Clé API Resend pour l'envoi d'emails de notification |
+| `BLOB_READ_WRITE_TOKEN` | Token Vercel Blob pour l'upload d'images (CDN) |
+| `TURNSTILE_SECRET_KEY` | (optionnel) Clé secrète Cloudflare Turnstile pour CAPTCHA à l'inscription |
 
 > ⚠️ Ces variables n'ont **PAS** le préfixe `VITE_` — elles sont côté serveur uniquement. Le fichier `src/lib/redis.ts` (côté client) utilise `VITE_UPSTASH_*` — c'est un résidu historique pour la sync directe.
 
@@ -73,6 +75,7 @@ sendCommentsNotificationEmail({to, ...})                        // Relecteur →
 sendReviewCompletedEmail({to, ...})                             // Relecteur → auteur : relecture terminée
 sendTicketCreatedEmail({to, ticketType, ticketModule, ...})     // Ticket créé → notification aux admins
 sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → relecteur : réponses envoyées
+sendPasswordResetEmail({to, resetUrl})                          // Lien de réinitialisation de mot de passe
 ```
 
 ---
@@ -94,6 +97,9 @@ sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → re
 | `emlb:review:token:{token}` | JSON d'une `ReviewSession` (accès par token public) |
 | `emlb:u:{userId}:reviews` | JSON Array des IDs de sessions de relecture de l'auteur |
 | `emlb:review:{id}:comments` | JSON Array des `ReviewComment[]` d'une session |
+| `emlb:saga:{sagaId}` | JSON complet du `SagaProject` (données partagées) |
+| `emlb:saga:{sagaId}:meta` | JSON des `SagaMeta` (métadonnées de la saga) |
+| `emlb:password-reset:{token}` | JSON du token de réinitialisation de mot de passe |
 
 > **Toutes les listes sont stockées dans une seule clé Redis** (pas de listes Redis natives). Pour modifier un élément, on `GET` la liste, on modifie en mémoire, puis `SET` la liste entière. Ce pattern est simple mais ne scale pas pour des milliers d'éléments — c'est adapté à l'usage actuel (quelques dizaines d'items max).
 
@@ -105,9 +111,14 @@ sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → re
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| POST | `/api/auth/signup` | Non | Inscription (email, password, name) |
+| POST | `/api/auth/signup` | Non | Inscription (email, password, name) — CAPTCHA Turnstile optionnel |
 | POST | `/api/auth/login` | Non | Connexion (email, password) → token JWT |
 | GET | `/api/auth/me` | Oui | Vérification du token → user info |
+| PATCH | `/api/auth/profile` | Oui | Modification du profil (name, email, avatarUrl, avatarOffsetY) |
+| POST | `/api/auth/change-password` | Oui | Changement de mot de passe (vérification ancien mot de passe) |
+| DELETE | `/api/auth/account` | Oui | Suppression du compte (supprime toutes les données Redis) |
+| POST | `/api/auth/forgot-password` | Non | Demande de réinitialisation de mot de passe → email avec lien |
+| POST | `/api/auth/reset-password` | Non | Réinitialisation du mot de passe via token |
 
 ### Bibliothèque
 
@@ -124,11 +135,25 @@ sendAuthorRepliedEmail({to, authorName, bookTitle, reviewUrl})  // Auteur → re
 | POST | `/api/book/{bookId}` | Oui | Sauvegarde les données complètes d'un livre |
 | DELETE | `/api/book/{bookId}` | Oui | Supprime un livre |
 
+### Sagas
+
+| Méthode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| GET | `/api/saga/{sagaId}` | Oui | Récupère les données d'une saga |
+| POST | `/api/saga/{sagaId}` | Oui | Sauvegarde les données d'une saga |
+| DELETE | `/api/saga/{sagaId}` | Oui | Supprime une saga |
+
+### Upload
+
+| Méthode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| POST | `/api/upload` | Oui | Upload d'une image vers Vercel Blob (CDN) → retourne l'URL publique |
+
 ### Tickets
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| GET | `/api/tickets` | Oui | Liste les tickets visibles (public + propres privés) |
+| GET | `/api/tickets` | Oui | Liste les tickets visibles (public + propres privés) + `releaseContributors` (tous tickets) |
 | POST | `/api/tickets` | Oui | Crée un ticket + email aux admins |
 | GET | `/api/tickets/{id}` | Oui | Détail d'un ticket + commentaires + statusChanges |
 | PATCH | `/api/tickets/{id}` | Admin | Modifie le statut ou la release d'un ticket |
@@ -199,14 +224,16 @@ Les routes relecteur sont dans le **même fichier** que les routes auteur (`api/
 
 Pour respecter la **limite de 12 serverless functions** du plan Hobby Vercel, les endpoints sont regroupés par domaine via des **catch-all routes** (`[[...path]].ts`). Chaque fichier catch-all route en interne selon les segments d'URL via parsing de `req.url`.
 
-### Fichiers actuels (8 fonctions)
+### Fichiers actuels (10 fonctions)
 
 ```
 api/library.ts                → /api/library
 api/migrate.ts                → /api/migrate
+api/upload.ts                 → /api/upload
 api/admin/members.ts          → /api/admin/members
 api/book/[bookId].ts          → /api/book/{bookId}
-api/auth/[[...path]].ts       → /api/auth/login, /api/auth/signup, /api/auth/me, /api/auth/forgot-password, /api/auth/reset-password
+api/saga/[sagaId].ts          → /api/saga/{sagaId}
+api/auth/[[...path]].ts       → /api/auth/login, /api/auth/signup, /api/auth/me, /api/auth/profile, /api/auth/change-password, /api/auth/account, /api/auth/forgot-password, /api/auth/reset-password
 api/releases/[[...path]].ts   → /api/releases, /api/releases/{id}
 api/reviews/[[...path]].ts    → /api/reviews (auteur) + /api/reviews/reader/{token} (relecteur)
 api/tickets/[[...path]].ts    → /api/tickets, /api/tickets/{id}, /api/tickets/{id}/comments, etc.

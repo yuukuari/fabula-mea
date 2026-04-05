@@ -54,6 +54,7 @@ export function ReviewAuthorView() {
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const skipBlockerRef = useRef(false);
 
   useEffect(() => {
     if (id) loadSession(id);
@@ -199,7 +200,7 @@ export function ReviewAuthorView() {
   // Block in-app navigation when there are unsent comments
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      authorDraftCount > 0 && currentLocation.pathname !== nextLocation.pathname
+      !skipBlockerRef.current && authorDraftCount > 0 && currentLocation.pathname !== nextLocation.pathname
   );
 
   // Show the unsaved confirm dialog when blocker fires
@@ -267,6 +268,7 @@ export function ReviewAuthorView() {
 
   const handleConfirmLeave = () => {
     setShowUnsavedConfirm(false);
+    skipBlockerRef.current = true;
     if (blocker.state === 'blocked') {
       blocker.proceed();
     } else {
@@ -391,7 +393,7 @@ export function ReviewAuthorView() {
   );
 
   return (
-    <div className="h-[calc(100vh-73px)] flex flex-col">
+    <div className="h-screen flex flex-col">
       {/* Sub-header with session info */}
       <div className="border-b border-parchment-200 bg-parchment-50/50 px-4 py-2.5 flex items-center gap-2 sm:gap-3 flex-shrink-0">
         <button onClick={handleBack} className="flex items-center gap-1 text-sm text-ink-300 hover:text-ink-500 transition-colors flex-shrink-0">
@@ -648,7 +650,7 @@ export function ReviewAuthorView() {
                 Quitter
               </button>
               <button
-                onClick={async () => { await handleSendAuthorComments(); if (blocker.state === 'blocked') blocker.proceed(); }}
+                onClick={async () => { await handleSendAuthorComments(); skipBlockerRef.current = true; if (blocker.state === 'blocked') blocker.proceed(); else navigate('/reviews'); }}
                 className="btn-primary text-sm flex items-center gap-1.5"
               >
                 <Send className="w-3.5 h-3.5" />

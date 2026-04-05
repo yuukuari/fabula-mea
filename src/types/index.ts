@@ -443,6 +443,7 @@ export interface ReviewSession {
   };
   commentsCount: number;
   pendingCommentsCount: number;
+  authorDraftCount?: number;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;

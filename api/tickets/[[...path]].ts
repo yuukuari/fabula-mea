@@ -3,19 +3,15 @@ import { redis } from '../_lib/redis';
 import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { sendTicketCreatedEmail } from '../_lib/email';
+import { getPathSegments, generateId, getUser, isAdmin, getRedisJson } from '../_lib/utils';
 
-function getPathSegments(req: VercelRequest, base: string): string[] {
-  const url = (req.url || '').split('?')[0];
-  const after = url.startsWith(base) ? url.slice(base.length) : '';
-  const segments = after.split('/').filter(Boolean);
-  // __index is a sentinel from vercel.json rewrites for bare routes
-  if (segments.length === 1 && segments[0] === '__index') return [];
-  return segments;
-}
-
-function generateId(): string {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-}
+const VALID_TICKET_TYPES = ['bug', 'question', 'improvement'] as const;
+const VALID_TICKET_STATUSES = ['open', 'closed_done', 'closed_duplicate'] as const;
+const VALID_TICKET_VISIBILITIES = ['public', 'private'] as const;
+const VALID_TICKET_MODULES = [
+  'auth', 'characters', 'places', 'chapters', 'timeline', 'writing',
+  'progress', 'world', 'maps', 'notes', 'reviews', 'settings', 'export', 'other',
+] as const;
 
 interface Ticket {
   id: string;
@@ -33,13 +29,6 @@ interface Ticket {
   updatedAt: string;
 }
 
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  isAdmin?: boolean;
-}
-
 interface TicketComment {
   id: string;
   ticketId: string;
@@ -52,14 +41,11 @@ interface TicketComment {
   updatedAt: string;
 }
 
-async function getUser(userId: string): Promise<User | null> {
-  const json = await redis.get(`emlb:user:${userId}`);
-  return json ? JSON.parse(json) : null;
-}
-
-async function isAdmin(userId: string): Promise<boolean> {
-  const user = await getUser(userId);
-  return user?.isAdmin === true;
+/** Record a status/type/module/release change for a ticket. */
+async function recordChange(ticketId: string, change: Record<string, unknown>) {
+  const changes = await getRedisJson<unknown[]>(`emlb:ticket:${ticketId}:statusChanges`, []);
+  changes.push({ id: generateId(), ticketId, ...change, createdAt: new Date().toISOString() });
+  await redis.set(`emlb:ticket:${ticketId}:statusChanges`, JSON.stringify(changes));
 }
 
 // --- Handlers ---
@@ -70,6 +56,17 @@ async function handleIndex(req: VercelRequest, res: VercelResponse, auth: { user
     const ticketsJson = await redis.get('emlb:tickets');
     const allTickets: Ticket[] = ticketsJson ? JSON.parse(ticketsJson) : [];
     const admin = await isAdmin(auth.userId);
+
+    // Build releaseContributors from ALL tickets (including private ones)
+    const releaseContributors: Record<string, string[]> = {};
+    for (const t of allTickets) {
+      if (t.releaseId) {
+        if (!releaseContributors[t.releaseId]) releaseContributors[t.releaseId] = [];
+        if (!releaseContributors[t.releaseId].includes(t.userName)) {
+          releaseContributors[t.releaseId].push(t.userName);
+        }
+      }
+    }
 
     const visible = allTickets.filter(
       (t) => t.visibility === 'public' || t.userId === auth.userId || admin
@@ -87,13 +84,22 @@ async function handleIndex(req: VercelRequest, res: VercelResponse, auth: { user
       ticketsWithCounts.push({ ...t, commentCount: comments.length });
     }
 
-    return res.json({ tickets: ticketsWithCounts, statusChanges });
+    return res.json({ tickets: ticketsWithCounts, statusChanges, releaseContributors });
   }
 
   if (req.method === 'POST') {
     const { type, title, description, visibility, module } = req.body;
     if (!type || !title || !description) {
       return res.status(400).json({ error: 'Type, titre et description requis' });
+    }
+    if (!VALID_TICKET_TYPES.includes(type)) {
+      return res.status(400).json({ error: `Type invalide: ${type}` });
+    }
+    if (visibility && !VALID_TICKET_VISIBILITIES.includes(visibility)) {
+      return res.status(400).json({ error: `Visibilité invalide: ${visibility}` });
+    }
+    if (module && !VALID_TICKET_MODULES.includes(module)) {
+      return res.status(400).json({ error: `Module invalide: ${module}` });
     }
 
     const user = await getUser(auth.userId);
@@ -174,6 +180,15 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
     if (!admin) return res.status(403).json({ error: 'Réservé aux administrateurs' });
 
     const { status, releaseId, type: ticketType, module: ticketModule } = req.body;
+    if (status && !VALID_TICKET_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `Statut invalide: ${status}` });
+    }
+    if (ticketType && !VALID_TICKET_TYPES.includes(ticketType)) {
+      return res.status(400).json({ error: `Type invalide: ${ticketType}` });
+    }
+    if (ticketModule && !VALID_TICKET_MODULES.includes(ticketModule)) {
+      return res.status(400).json({ error: `Module invalide: ${ticketModule}` });
+    }
     const oldStatus = ticket.status;
     const oldReleaseId = ticket.releaseId;
     const oldType = ticket.type;
@@ -187,71 +202,28 @@ async function handleById(req: VercelRequest, res: VercelResponse, auth: { userI
     tickets[ticketIdx] = ticket;
     await redis.set('emlb:tickets', JSON.stringify(tickets));
 
+    const userName = user?.name ?? 'Admin';
+
     if (status && status !== oldStatus) {
-      const changesJson = await redis.get(`emlb:ticket:${id}:statusChanges`);
-      const changes = changesJson ? JSON.parse(changesJson) : [];
-      changes.push({
-        id: generateId(),
-        ticketId: id,
-        userId: auth.userId,
-        userName: user?.name ?? 'Admin',
-        type: 'status_change',
-        fromStatus: oldStatus,
-        toStatus: status,
-        createdAt: new Date().toISOString(),
-      });
-      await redis.set(`emlb:ticket:${id}:statusChanges`, JSON.stringify(changes));
+      await recordChange(id, { userId: auth.userId, userName, type: 'status_change', fromStatus: oldStatus, toStatus: status });
     }
 
     if (releaseId !== undefined && releaseId !== oldReleaseId) {
-      const changesJson = await redis.get(`emlb:ticket:${id}:statusChanges`);
-      const changes = changesJson ? JSON.parse(changesJson) : [];
-      const releasesJson = await redis.get('emlb:releases');
-      const releases = releasesJson ? JSON.parse(releasesJson) : [];
-      const release = releases.find((r: any) => r.id === releaseId);
-      changes.push({
-        id: generateId(),
-        ticketId: id,
-        userId: auth.userId,
-        userName: user?.name ?? 'Admin',
-        type: 'release_assign',
+      const releases = await getRedisJson<Array<{ id: string; version: string; title?: string }>>('emlb:releases', []);
+      const release = releases.find((r) => r.id === releaseId);
+      await recordChange(id, {
+        userId: auth.userId, userName, type: 'release_assign',
         releaseId: releaseId || undefined,
         releaseName: release ? `v${release.version}${release.title ? ' — ' + release.title : ''}` : undefined,
-        createdAt: new Date().toISOString(),
       });
-      await redis.set(`emlb:ticket:${id}:statusChanges`, JSON.stringify(changes));
     }
 
     if (ticketType && ticketType !== oldType) {
-      const changesJson = await redis.get(`emlb:ticket:${id}:statusChanges`);
-      const changes = changesJson ? JSON.parse(changesJson) : [];
-      changes.push({
-        id: generateId(),
-        ticketId: id,
-        userId: auth.userId,
-        userName: user?.name ?? 'Admin',
-        type: 'type_change',
-        fromType: oldType,
-        toType: ticketType,
-        createdAt: new Date().toISOString(),
-      });
-      await redis.set(`emlb:ticket:${id}:statusChanges`, JSON.stringify(changes));
+      await recordChange(id, { userId: auth.userId, userName, type: 'type_change', fromType: oldType, toType: ticketType });
     }
 
     if (ticketModule !== undefined && (ticketModule || null) !== (oldModule || null)) {
-      const changesJson = await redis.get(`emlb:ticket:${id}:statusChanges`);
-      const changes = changesJson ? JSON.parse(changesJson) : [];
-      changes.push({
-        id: generateId(),
-        ticketId: id,
-        userId: auth.userId,
-        userName: user?.name ?? 'Admin',
-        type: 'module_change',
-        fromModule: oldModule || null,
-        toModule: ticketModule || null,
-        createdAt: new Date().toISOString(),
-      });
-      await redis.set(`emlb:ticket:${id}:statusChanges`, JSON.stringify(changes));
+      await recordChange(id, { userId: auth.userId, userName, type: 'module_change', fromModule: oldModule || null, toModule: ticketModule || null });
     }
 
     return res.json({ ticket });

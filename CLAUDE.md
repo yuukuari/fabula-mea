@@ -2,7 +2,7 @@
 
 ## Vue d'ensemble
 
-**Fabula Mea** est une application web d'aide à l'écriture de livres. Elle permet de structurer un projet de roman : personnages, lieux, chapitres, scènes, worldbuilding, cartes, timeline, objectifs de progression, export EPUB/PDF. L'application inclut aussi un système de tickets (bug/amélioration/question), de releases, et un panneau d'administration.
+**Fabula Mea** est une application web d'aide à l'écriture de livres. Elle permet de structurer un projet de roman : personnages, lieux, chapitres, scènes, worldbuilding, cartes, timeline, objectifs de progression, export EPUB/PDF. L'application supporte les **sagas** (regroupement de plusieurs livres partageant une encyclopédie commune). Elle inclut aussi un système de tickets (bug/amélioration/question), de releases, et un panneau d'administration.
 
 L'application est une **SPA React** déployée sur **Vercel**, avec des serverless functions pour l'API et **Upstash Redis** pour la persistance en production. En développement local, tout fonctionne en **localStorage** sans aucun backend.
 
@@ -44,6 +44,7 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
   - `UPSTASH_REDIS_REST_TOKEN` — Token d'accès Upstash Redis
   - `RESEND_API_KEY` — Clé API Resend pour l'envoi d'emails
   - `BLOB_READ_WRITE_TOKEN` — Token Vercel Blob pour l'upload d'images
+  - `TURNSTILE_SECRET_KEY` — (optionnel) Clé secrète Cloudflare Turnstile pour le CAPTCHA à l'inscription
 
 ### Clés localStorage (dev) vs Redis (prod)
 
@@ -61,6 +62,8 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
 | Commentaires relecture | `emlb-dev:review:{id}:comments` | `emlb:review:{id}:comments` |
 | Utilisateurs | `emlb-dev-users` / `emlb-dev-emails` | `emlb:user:{id}` / `emlb:email:{email}` |
 | Index membres | — | `emlb:member-ids` |
+| Saga (métadonnées) | `emlb-dev:saga:{sagaId}:meta` | `emlb:saga:{sagaId}:meta` |
+| Saga (données partagées) | `emlb-dev:saga:{sagaId}` | `emlb:saga:{sagaId}` |
 
 ---
 
@@ -116,9 +119,8 @@ export const useMyStore = create<MyStore>((set, get) => ({
 ### 7. Route (`src/App.tsx`)
 Choisir le layout adapté :
 - `AppShell` — Pages liées à un livre (sidebar avec navigation livre)
-- `StandaloneShell` — Pages indépendantes du livre (header compact avec logo)
-- `AdminShell` — Pages d'administration
-- Route directe sous `RootLayout` — Pages plein écran (ex: `HomePage`)
+- `HomeShell` — Pages indépendantes du livre (accueil, tickets, releases, admin, profil, sagas)
+- Route directe sous `RootLayout` — Pages plein écran (ex: `ForgotPasswordPage`, `ReviewReaderPage`, `ReviewAuthorView`)
 
 ---
 
@@ -157,9 +159,10 @@ Choisir le layout adapté :
 ├── api/                         ← Serverless functions (Vercel) — CommonJS, catch-all routes
 │   ├── CLAUDE.md                ← Doc spécifique API
 │   ├── package.json             ← { "type": "commonjs" }
-│   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis, email)
-│   ├── auth/[[...path]].ts      ← signup, login, me, forgot-password, reset-password (catch-all)
+│   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis, email, utils)
+│   ├── auth/[[...path]].ts      ← signup, login, me, profile, change-password, account, forgot-password, reset-password (catch-all)
 │   ├── book/[bookId].ts         ← CRUD livre par utilisateur
+│   ├── saga/[sagaId].ts         ← CRUD saga (métadonnées + données partagées)
 │   ├── tickets/[[...path]].ts   ← CRUD tickets + commentaires + réactions (catch-all)
 │   ├── releases/[[...path]].ts  ← CRUD releases (catch-all)
 │   ├── admin/members.ts         ← Endpoints admin (membres)
@@ -174,34 +177,41 @@ Choisir le layout adapté :
 │   ├── index.css                ← Tailwind directives + styles globaux
 │   │
 │   ├── types/
-│   │   └── index.ts             ← Tous les types TypeScript (~422 lignes)
+│   │   └── index.ts             ← Tous les types TypeScript (~523 lignes)
 │   │
 │   ├── lib/
 │   │   ├── api.ts               ← ⭐ Façade API (IS_DEV ternaire)
 │   │   ├── dev-auth.ts          ← Mock auth localStorage
 │   │   ├── dev-db.ts            ← Mock DB localStorage
 │   │   ├── redis.ts             ← Client Upstash côté client (sync directe)
-│   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS, countCharacters, countUnitLabel, isSpecialChapter, getChapterLabel...)
+│   │   ├── utils.ts             ← Helpers (generateId, now, CHAPTER_COLORS, countCharacters, countWordsFromHtml, formatCount, countUnitLabel, isSpecialChapter, getChapterLabel, getChapterShortLabel, convertToSimpleDuration, computeEventEndDate, formatDuration...)
 │   │   ├── calculations.ts      ← Calculs progression (mots/jour, scènes/jour, getTodayProgress, dailySnapshot)
 │   │   ├── fonts.ts             ← Config polices (FONT_STACKS, AVAILABLE_FONTS, DEFAULT_LAYOUT)
 │   │   ├── upload.ts            ← Helper upload images (CDN en prod, base64 en dev)
+│   │   ├── export-shared.ts     ← Types et helpers partagés (cleanHtml, escapeXml) pour les exports
 │   │   ├── export-epub.ts       ← Génération EPUB 3
 │   │   ├── export-pdf.ts        ← Export PDF via window.print()
-│   │   ├── migration.ts         ← Migration single-book → multi-book
+│   │   ├── migration.ts         ← Migrations (single-book → multi-book, clés localStorage, scènes → TimelineEvents)
 │   │   └── spellcheck-extension.ts ← Extension TipTap correcteur
 │   │
 │   ├── store/
-│   │   ├── useAuthStore.ts      ← Authentification (login/signup/logout)
-│   │   ├── useLibraryStore.ts   ← Bibliothèque multi-livres (persist Zustand)
-│   │   ├── useBookStore.ts      ← ⭐ Store principal (~965 lignes) : tout le contenu du livre
+│   │   ├── useAuthStore.ts      ← Authentification (login/signup/logout/profil)
+│   │   ├── useLibraryStore.ts   ← Bibliothèque multi-livres + sagas (persist Zustand)
+│   │   ├── useBookStore.ts      ← ⭐ Store principal (~1450 lignes) : tout le contenu du livre
+│   │   ├── useSagaStore.ts      ← Données partagées de la saga (personnages, lieux, univers, cartes)
+│   │   ├── encyclopedia-helpers.ts ← CRUD partagé personnages/lieux/tags/worldNotes/maps (utilisé par useBookStore et useSagaStore)
+│   │   ├── useEncyclopediaStore.ts ← Abstraction routant les données encyclopédie (saga vs livre)
 │   │   ├── useEditorStore.ts    ← État éditeur de scène (open/close/entrySceneId)
 │   │   ├── useSyncStore.ts      ← Statut synchronisation cloud
 │   │   ├── useTicketStore.ts    ← CRUD tickets + commentaires + réactions
+│   │   ├── useTicketFormStore.ts ← État du formulaire de ticket (open/close)
 │   │   ├── useReleaseStore.ts   ← CRUD releases
 │   │   └── useReviewStore.ts    ← CRUD sessions de relecture + commentaires
 │   │
 │   ├── pages/                   ← Pages de l'application
-│   │   ├── HomePage.tsx         ← Accueil / sélection de livre (badge commentaires en attente)
+│   │   ├── HomePage.tsx         ← Accueil / sélection de livre + sagas (badge commentaires en attente)
+│   │   ├── SagaPage.tsx         ← Gestion d'une saga (livres, encyclopédie partagée)
+│   │   ├── ProfilePage.tsx      ← Profil utilisateur (nom, email, avatar, mot de passe)
 │   │   ├── EncyclopediaPage.tsx ← ⭐ Tableau de bord du livre (stats, objectif du jour, manuscrit, relectures, encyclopédie)
 │   │   ├── CharactersPage.tsx   ← Gestion personnages
 │   │   ├── PlacesPage.tsx       ← Gestion lieux
@@ -211,11 +221,17 @@ Choisir le layout adapté :
 │   │   ├── WorldPage.tsx        ← Notes de worldbuilding
 │   │   ├── MapsPage.tsx         ← Cartes interactives
 │   │   ├── NotesIdeasPage.tsx   ← Notes & idées (grille de cartes, TipTap avec toolbar complète + checklists)
-│   │   ├── SettingsPage.tsx     ← Paramètres + export + import
-│   │   ├── TicketsPage.tsx      ← Tickets/feedback
+│   │   ├── EditionPage.tsx      ← Édition / mise en page / export (EPUB, PDF)
+│   │   ├── SettingsPage.tsx     ← Paramètres + import
+│   │   ├── TicketsPage.tsx      ← Tickets/feedback (filtre ouvert par défaut)
 │   │   ├── ReleaseNotesPage.tsx ← Notes de version
 │   │   ├── ReviewsPage.tsx      ← Liste des sessions de relecture (auteur, filtres par statut)
 │   │   ├── AuthPage.tsx         ← Login/Inscription
+│   │   ├── ForgotPasswordPage.tsx ← Mot de passe oublié
+│   │   ├── ResetPasswordPage.tsx  ← Réinitialisation mot de passe (via token email)
+│   │   ├── admin/
+│   │   │   ├── AdminMembersPage.tsx  ← Gestion des membres (admin)
+│   │   │   └── AdminReleasesPage.tsx ← Gestion des releases (admin)
 │   │   ├── review/
 │   │   │   └── ReviewReaderPage.tsx ← Page publique relecteur (sans auth)
 │   │   └── reviews/
@@ -225,16 +241,17 @@ Choisir le layout adapté :
 │       ├── layout/
 │       │   ├── AppShell.tsx     ← Layout livre (sidebar + contenu)
 │       │   ├── Sidebar.tsx      ← Navigation livre
-│       │   ├── StandaloneShell.tsx ← Layout autonome (tickets, releases)
-│       │   ├── AdminShell.tsx   ← Layout admin
+│       │   ├── HomeShell.tsx    ← Layout pages hors-livre (accueil, tickets, releases, admin, profil, sagas)
+│       │   ├── HomeSidebar.tsx  ← Navigation hors-livre
 │       │   └── SearchDialog.tsx ← Recherche globale (Cmd+K)
-│       ├── editor/              ← Éditeur TipTap (SceneEditor, SceneInlineEditor, EditorTabs)
+│       ├── editor/              ← Éditeur TipTap (SceneEditor, SceneInlineEditor, EditorTabs, SelfCommentPanel)
 │       ├── characters/          ← Fiches personnages, relations, graphe, CharacterAvatar (composant réutilisable avatar rond)
 │       ├── maps/                ← Viewer de cartes, épingles
-│       ├── progress/            ← Pomodoro, stats
-│       ├── shared/              ← ConfirmDialog, EmptyState, ImageUpload (mode rond avec recadrage), TagBadge
-│       ├── tickets/             ← TicketBubble (affichée uniquement sur la HomePage), TicketForm
-│       ├── releases/            ← NewReleaseModal, composants release
+│       ├── progress/            ← Pomodoro (persistant en localStorage), stats
+│       ├── shared/              ← ConfirmDialog, EmptyState, ImageUpload (mode rond avec recadrage), PasswordInput, TagBadge
+│       ├── tickets/             ← TicketForm, TicketDetail, ticket-constants
+│       ├── timeline/            ← EventEditorDialog, SplitDialog, NewEventDialog, InsertEventDialog, TimelineTooltip, DurationInput, TimelineRow
+│       ├── releases/            ← NewReleaseModal, ReleaseVersionFooter
 │       └── reviews/             ← NewReviewDialog, ReviewCommentPanel, ReviewContentViewer
 ```
 
@@ -253,7 +270,7 @@ Un livre contient :
   - `back_matter` — Section « Après l'histoire » (épilogue, remerciements, etc.) — number 99999, créé automatiquement
   - Les chapitres front/back matter ne peuvent pas être supprimés ni réordonnés. Ils s'affichent avant/après les chapitres normaux dans l'UI et les exports.
 - **Scenes** — Scènes avec statut (outline/draft/revision/complete), personnages, lieu, contenu TipTap
-- **TimelineEvents** — Événements chronologiques indépendants des scènes. Chaque événement a une date de début (`startDate` YYYY-MM-DD), une heure optionnelle (`startTime` HH:mm), une durée (`EventDuration` : valeur + unité heures/jours/mois/années), un ordre, des personnages, un lieu, et optionnellement une référence à un chapitre (`chapterId?`) et une seule scène (`sceneId?`). Si une scène est liée, elle partage les mêmes dates/durées que l'événement (modifier l'un modifie l'autre). Les événements sont stockés dans `BookProject.timelineEvents[]`. Migration automatique depuis les anciens champs `startDateTime`/`endDateTime` des scènes (arrondis : ≤24h→heures, >24h→jours, >60j→mois, >18mois→années). Les événements peuvent être insérés avant/après un autre, découpés en N parties, et convertis en chapitre+scène.
+- **TimelineEvents** — Événements chronologiques indépendants des scènes. Chaque événement a une date de début (`startDate` YYYY-MM-DD), une heure optionnelle (`startTime` HH:mm), une durée (`EventDuration` : valeur + unité heures/jours/mois/années), un ordre, des personnages, un lieu, et optionnellement une référence à un chapitre (`chapterId?`) et une seule scène (`sceneId?`). Si une scène est liée, elle partage les mêmes dates/durées que l'événement (modifier l'un modifie l'autre). Les événements sont stockés dans `BookProject.timelineEvents[]`. Migration automatique depuis les anciens champs `startDateTime`/`endDateTime` des scènes (arrondis : ≤24h→heures, >24h→jours, >60j→mois, >18mois→années). Les événements peuvent être insérés avant/après un autre, découpés en N parties, et convertis en chapitre+scène. La création d'un événement (`NewEventDialog`) permet directement de rattacher ou créer un chapitre/scène (titre + description transférés). Les boutons « + Chapitre » et « + Scène » n'apparaissent que si aucun n'est sélectionné.
 - **Tags** — Système d'étiquettes réutilisables
 - **WorldNotes** — Notes de worldbuilding catégorisées
 - **NoteIdeas** — Notes et idées libres avec éditeur TipTap (toolbar complète : titres, formatage, alignement, listes, checklists, citations, images, liens), affichées en grille de cartes avec aperçu HTML du contenu (titre facultatif, contenu obligatoire), vue détail au clic
@@ -265,6 +282,17 @@ Un livre contient :
 - **TableOfContents** — Booléen (`tableOfContents?` dans BookProject) pour inclure une table des matières dans les exports PDF et EPUB. N'apparaît pas dans le mode d'écriture. Les scènes des chapitres front/back matter apparaissent individuellement dans la TDM (uniquement si elles ont un titre). Configurable dans la page Chapitres & Scènes.
 - **Layout** — Paramètres de mise en page du livre (`BookLayout`) : police (`BookFont`), taille (`BookFontSize` : 10-18pt), interligne (`BookLineHeight` : 1.0-2.0), et images de couverture (1ère de couverture et 4ème en base64 ; la tranche a été supprimée). Par défaut : Times New Roman 12pt, interligne 1.5. Ces paramètres s'appliquent à l'éditeur TipTap, au mode relecture, et aux exports EPUB/PDF. Polices disponibles : Times New Roman, Georgia, Garamond, Crimson Text, Lora, Merriweather, EB Garamond, Libre Baskerville (chargées via Google Fonts). L'éditeur permet de changer la police (`FontFamily`) ET la taille (`FontSize`, via `src/lib/font-size-extension.ts`) d'un texte sélectionné. Les titres h1/h2/h3 ont été retirés de la barre d'outils de l'éditeur de scènes. Un `onSelectionUpdate` force le re-rendu des sélecteurs police/taille pour refléter la sélection courante.
 
+### Sagas
+
+Les sagas permettent de regrouper plusieurs livres partageant une encyclopédie commune :
+- **SagaMeta** — Métadonnées : id, titre, description, auteur, genre, nombre de livres, dates, writingMode, countUnit
+- **SagaProject** — Données partagées : personnages, lieux, notes univers, cartes (même structure que dans BookProject)
+- **Lien livre ↔ saga** : `BookProject.sagaId?` et `BookMeta.sagaId?` référencent la saga parente
+- **useEncyclopediaStore** — Hook d'abstraction qui route les données encyclopédie vers `useSagaStore` (si le livre appartient à une saga) ou `useBookStore` (sinon). Les pages personnages, lieux, univers et cartes utilisent ce hook au lieu d'accéder directement aux stores.
+- **useSagaStore** — Store Zustand dédié aux données partagées de la saga, avec sync cloud
+- **Persistance** : `fabula-mea-saga-{sagaId}` en localStorage, `emlb:saga:{sagaId}` / `emlb:saga:{sagaId}:meta` en Redis
+- **HomePage** : les livres peuvent être affichés par saga ou en liste plate
+
 ### Modes d'écriture (`WritingMode`)
 
 - **`count`** — L'utilisateur renseigne manuellement le nombre de mots écrits par scène
@@ -274,13 +302,14 @@ Un livre contient :
 
 Les tickets sont globaux (pas liés à un livre). Système de feedback avec :
 - Types : `bug`, `question`, `improvement`
-- Module concerné : `TicketModule` — catégorise le ticket par section de l'application (auth, characters, places, chapters, timeline, progress, world, maps, notes, reviews, settings, export, other)
+- Module concerné : `TicketModule` — catégorise le ticket par section de l'application (auth, characters, places, chapters, timeline, writing, progress, world, maps, notes, reviews, settings, export, other)
 - Visibilité : `public` (visible par tous) ou `private` (visible seulement par l'auteur et les admins)
 - Statuts : `open`, `closed_done`, `closed_duplicate`
 - Commentaires avec éditeur TipTap riche
 - Réactions emoji
 - Assignation optionnelle à une release
 - Timeline d'activité (changements de statut, assignation release)
+- **Filtres** : par type, statut (ouvert par défaut), module, et version (release). Le filtre version peut être pré-sélectionné via le paramètre URL `?releaseId={id}` (utilisé par le lien depuis ReleaseNotesPage)
 - **Notification email** : à la création d'un ticket, un email est envoyé à tous les admins (via `sendTicketCreatedEmail`)
 
 ### Reviews (Relecture)
@@ -311,6 +340,8 @@ Système de relecture permettant à un auteur de partager des extraits de son li
 - **Confirmation commentaires non envoyés** : l'auteur et le relecteur voient une modale de confirmation s'ils tentent de quitter avec des brouillons non envoyés. Côté auteur, `useBlocker` (react-router) intercepte toute navigation in-app + `beforeunload` pour la fermeture d'onglet
 - **Filtres de statut** : la liste des relectures (auteur) dispose de filtres par statut (en attente, en cours, terminée, clôturée)
 - **Indicateur commentaires en attente** : la page d'accueil (HomePage) et la sidebar affichent un badge sur les livres/relectures ayant des commentaires en attente (les sessions clôturées sont exclues du décompte)
+- **Indicateur brouillons auteur** : la liste des relectures (ReviewsPage) affiche un indicateur amber « N réponse(s) non envoyée(s) » sur les sessions ayant des brouillons auteur (`authorDraftCount` dans `ReviewSession`, calculé côté API)
+- **Vue auteur plein écran** : la page `ReviewAuthorView` (`/reviews/:id`) est routée directement sous `RootLayout` (pas de HomeShell) pour occuper tout l'écran, comme la page relecteur
 - **Confirmation de clôture** : le bouton « Clôturer » côté auteur demande confirmation via une modale
 - **TicketBubble masquée** : la bulle de création de ticket est affichée uniquement sur la HomePage. La création de ticket est accessible via le menu « Aide & Support » dans la sidebar
 
@@ -322,6 +353,8 @@ Système de gestion des versions de l'application :
 - Auto-demotion : quand une release passe en `current`, l'ancienne `current` devient `released`
 - Chaque release a des items typés (`bugfix`, `improvement`, `feature`)
 - Peut être liée à des tickets
+- **Contributeurs** : l'API `/tickets` retourne un champ `releaseContributors` (mapping `releaseId → userName[]`) calculé à partir de **tous** les tickets (y compris privés), pour que la section « Merci aux contributeurs » dans ReleaseNotesPage affiche tous les noms, même ceux ayant uniquement créé des tickets privés
+- **Tickets liés** : chaque release dans ReleaseNotesPage affiche le nombre de tickets liés avec un lien vers `/tickets?releaseId={id}` pour voir la liste filtrée
 
 ---
 
@@ -338,11 +371,13 @@ saveBook() → localStorage.setItem(key, json)   ← toujours
 
 ### Clés localStorage (côté client, indépendant du mode dev/prod)
 
-- `fabula-mea-library` — Bibliothèque (persist Zustand, contient les BookMeta[])
+- `fabula-mea-library` — Bibliothèque (persist Zustand, contient les BookMeta[] et SagaMeta[])
 - `fabula-mea-book-{bookId}` — Données complètes d'un livre
+- `fabula-mea-saga-{sagaId}` — Données partagées d'une saga (SagaProject)
 - `emlb-token` — Token JWT (prod) ou token dev (dev)
 - `emlb-last-seen-version` — Dernière version vue (pour badge "Nouveau" sur releases)
 - `emlb-daily-snapshot:{bookId}` — Snapshot du total de mots/signes en début de journée (suivi progression journalière)
+- `fabula-mea-pomodoro` — État persistant du Pomodoro (mode, sessions, isRunning, endsAt, secondsLeft)
 
 ### Synchronisation cloud
 
@@ -411,10 +446,10 @@ npm run preview  # Preview du build en local
 1. **Toujours modifier les deux côtés** : `dev-db.ts` ET le endpoint `api/` correspondant pour toute fonctionnalité data.
 2. **La façade `api.ts`** doit avoir le ternaire `IS_DEV` pour chaque nouvelle méthode.
 3. **Les clés Redis** en prod n'ont PAS le préfixe `dev:` — voir `api/_lib/redis.ts` vs `src/lib/dev-db.ts`.
-4. **Les serverless functions** sont en **CommonJS** (`module.exports`, pas `export default`). Le `tsconfig.json` dans `api/` gère ça. Les endpoints sont regroupés en **catch-all routes** (`[[...path]].ts`) pour respecter la limite de 12 fonctions du plan Hobby Vercel (9 fonctions actuellement). Voir `api/CLAUDE.md` pour le détail du routing interne.
+4. **Les serverless functions** sont en **CommonJS** (`module.exports`, pas `export default`). Le `tsconfig.json` dans `api/` gère ça. Les endpoints sont regroupés en **catch-all routes** (`[[...path]].ts`) pour respecter la limite de 12 fonctions du plan Hobby Vercel (10 fonctions actuellement). Voir `api/CLAUDE.md` pour le détail du routing interne.
 5. **CORS** : chaque endpoint prod doit appeler `handleCors(req, res)` en premier.
 6. **Auth** : chaque endpoint protégé doit appeler `requireAuth(req, res)` qui retourne `{ userId }` ou `null`.
-7. **Le `useBookStore`** est le store le plus complexe (~965 lignes). Il gère tout le contenu d'un livre et auto-save en local + cloud.
+7. **Le `useBookStore`** est le store le plus complexe (~1450 lignes). Il gère tout le contenu d'un livre et auto-save en local + cloud. Il interagit avec `useSagaStore` pour charger/décharger les données de saga quand un livre appartient à une saga.
 8. **TipTap** est utilisé pour l'éditeur de scènes, les descriptions de tickets, les notes & idées (avec checklists via TaskList/TaskItem), et les commentaires. Les toolbars sont dans les composants editor. Les styles TaskList sont dans `index.css`. Extensions `@tiptap/extension-text-style`, `@tiptap/extension-font-family` et `src/lib/font-size-extension.ts` (custom) permettent de changer la police et la taille d'un texte sélectionné dans l'éditeur de scènes. Les titres h1/h2/h3 ont été retirés de la barre d'outils. Le collage de texte externe est nettoyé (suppression des styles inline via `transformPastedHTML`).
 9. **La page relecteur** (`/review/:token`) est publique et accessible sans authentification. La `TicketBubble` et le `TicketForm` sont masqués pour les utilisateurs non connectés.
 10. **Les sessions de relecture** figent un snapshot des chapitres/scènes au moment de la création. Les modifications ultérieures du livre n'affectent pas les relectures en cours.
@@ -427,9 +462,13 @@ npm run preview  # Preview du build en local
 17. **ImageUpload rond** : le composant `ImageUpload` supporte un mode `round` avec un bouton « Recadrer » pour entrer en mode crop (drag-to-pan vertical, `offsetY`) et un bouton « Valider » pour confirmer. Utilisé pour les avatars de personnages. Un composant `CharacterAvatar` (`src/components/characters/CharacterAvatar.tsx`) affiche l'avatar rond avec `imageOffsetY` en différentes tailles (8/10/12/16/32), utilisé dans CharacterDetail, CharacterCard et RelationshipGraph.
 18. **Confirmation modifications non sauvegardées** : le formulaire de personnage (CharacterForm) affiche une modale à 3 boutons (Annuler/Quitter/Enregistrer) si l'utilisateur tente de fermer avec des modifications non sauvegardées.
 19. **Mettre à jour ce fichier** : après toute modification du code (nouvelle fonctionnalité, changement d'architecture, nouveau type, nouvel endpoint…), vérifier si des informations de ce `CLAUDE.md` (et `api/CLAUDE.md`) doivent être mises à jour pour rester en phase avec le code (structure des fichiers, modèle de données, clés de stockage, points d'attention, etc.).
-20. **Glossaire** : le glossaire est une fonctionnalité transversale activable par livre (`glossaryEnabled` dans `BookProject`). Les entités (Character, Place, WorldNote) ont un champ `inGlossary?: boolean`. Le glossaire est affiché dans : ChaptersPage (section collapsible après « Après l'histoire »), SceneEditor (entrée nav + section read-only en bas), relectures (nav + contenu via `snapshot.glossary`), et exports EPUB/PDF. **Le type de fiche n'est plus affiché dans le glossaire** (ni dans l'éditeur, ni dans les relectures, ni dans les exports). Un indicateur visuel (icône `BookText`) apparaît dans les listes et fiches des personnages, lieux et notes univers quand `inGlossary === true`.
+20. **Glossaire** : le glossaire est une fonctionnalité transversale activable par livre (`glossaryEnabled` dans `BookProject`). Les entités (Character, Place, WorldNote) ont un champ `inGlossary?: boolean`. Le glossaire est affiché dans : ChaptersPage (section collapsible après « Après l'histoire »), SceneEditor (entrée nav + section read-only en bas), relectures (nav + contenu via `snapshot.glossary`), et exports EPUB/PDF. **Le type de fiche n'est plus affiché en texte dans le glossaire** (ni dans l'éditeur, ni dans les relectures, ni dans les exports). Dans ChaptersPage, chaque entrée du glossaire affiche une **icône de type** à gauche (User/MapPin/Globe) et un **bouton de navigation** vers la fiche correspondante ; la description n'est pas affichée. Un indicateur visuel (icône `BookText`) apparaît dans les listes et fiches des personnages, lieux et notes univers quand `inGlossary === true`.
 21. **Création de relecture** : les scènes avec statut `outline` (plan) ou `draft` (brouillon) ne peuvent pas être sélectionnées. Le statut est affiché à côté de chaque scène.
 22. **Changement de statut de scène** : peut se faire directement depuis la liste des scènes (ChaptersPage) via un select inline, sans avoir à ouvrir la fiche de modification.
 23. **Couvertures et page de titre** : la 1ère de couverture et la page de titre (titre + auteur) apparaissent dans le manuscrit (ChaptersPage), les relectures (nav « Page de titre » + contenu), le PDF (avant la page de titre) et l'EPUB (métadonnées OPF `properties="cover-image"`). La 4ème de couverture apparaît à la fin dans le manuscrit, les relectures (nav « 4ème de couverture ») et le PDF. Dans l'EPUB, seule la 1ère de couverture est intégrée aux métadonnées. La tranche a été supprimée des paramètres.
 24. **Table des matières** : activable via `tableOfContents` dans `BookProject` (checkbox tout en haut de la page ChaptersPage, avant « Avant l'histoire »). Apparaît dans PDF et EPUB uniquement. Les chapitres front/back matter sont éclatés en entrées individuelles par scène (seulement celles avec titre). Les numéros de page sont générés via CSS `target-counter()` dans le PDF.
 25. **Images et CDN** : les images (avatars personnages, lieux, notes univers, cartes, couvertures) sont stockées sur **Vercel Blob** (CDN) en production et en **base64 dans localStorage** en développement. Le helper `src/lib/upload.ts` (`uploadImage()`) gère la logique : en dev → retourne le base64 tel quel, en prod → upload vers `/api/upload` → retourne l'URL CDN publique. La **migration lazy** dans `useBookStore.saveBook()` détecte les images base64 restantes et les upload automatiquement au CDN avant la sync cloud. Les champs `imageUrl` et `coverFront`/`coverBack` acceptent indifféremment un base64 ou une URL HTTP (rétrocompatibilité). L'export EPUB utilise `resolveImageData()` qui gère les deux formats (fetch URL ou parse base64). L'export PDF fonctionne nativement avec les URLs via `<img src="...">`. Variable d'environnement requise : `BLOB_READ_WRITE_TOKEN`.
+26. **Sagas** : le système de sagas permet de regrouper plusieurs livres dans une collection avec une encyclopédie partagée (personnages, lieux, univers, cartes). Le `useEncyclopediaStore` est un hook d'abstraction critique qui route les données encyclopédie vers `useSagaStore` ou `useBookStore` selon que le livre appartient à une saga. La HomePage affiche les livres regroupés par saga.
+27. **Pomodoro persistant** : le composant `FloatingPomodoro` persiste son état dans `localStorage` (`fabula-mea-pomodoro`). Au rechargement, il recalcule le temps restant via un timestamp `endsAt`. Si le timer a expiré pendant la fermeture, il avance automatiquement au mode suivant. **Alarmes sonores** : quand le timer atteint 0, une alarme distincte est jouée via Web Audio API — triple carillon ascendant pour la fin de travail, double tonalité douce pour la fin de pause.
+28. **Profil utilisateur** : page `/profile` accessible depuis HomeShell. Permet de modifier nom, email, avatar (avec recadrage rond), et mot de passe. Endpoints API : `PATCH /api/auth/profile`, `POST /api/auth/change-password`, `DELETE /api/auth/account`.
+29. **Page Édition** : page `/edition` dans AppShell. Regroupe la mise en page (polices, taille, interligne), les couvertures, la table des matières, et les exports (EPUB, PDF).

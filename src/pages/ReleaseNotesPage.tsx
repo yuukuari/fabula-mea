@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bug, Sparkles, Zap, Users } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Bug, Sparkles, Zap, Users, Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useReleaseStore } from '@/store/useReleaseStore';
 import { useTicketStore } from '@/store/useTicketStore';
@@ -29,7 +29,7 @@ const ITEM_TYPE_CONFIG: Record<ReleaseItemType, { icon: typeof Bug; label: strin
 export function ReleaseNotesPage() {
   const navigate = useNavigate();
   const { releases, loadReleases, isLoading } = useReleaseStore();
-  const { tickets, loadTickets } = useTicketStore();
+  const { tickets, loadTickets, releaseContributors } = useTicketStore();
 
   useEffect(() => {
     loadReleases();
@@ -65,7 +65,7 @@ export function ReleaseNotesPage() {
 
           <div className="space-y-8">
             {sorted.map((release, idx) => (
-              <ReleaseEntry key={release.id} release={release} tickets={tickets} isFirst={idx === 0} />
+              <ReleaseEntry key={release.id} release={release} tickets={tickets} releaseContributors={releaseContributors} isFirst={idx === 0} />
             ))}
           </div>
         </div>
@@ -77,20 +77,28 @@ export function ReleaseNotesPage() {
 function ReleaseEntry({
   release,
   tickets,
+  releaseContributors,
   isFirst,
 }: {
   release: Release;
   tickets: Array<{ id: string; userName: string; releaseId?: string }>;
+  releaseContributors: Record<string, string[]>;
   isFirst: boolean;
 }) {
   const isCurrent = release.status === 'current';
 
-  // Find contributors: users who created tickets linked to this release
-  // Tickets can be linked via release.ticketIds OR ticket.releaseId
-  const linkedTickets = tickets.filter(
+  // Use pre-computed contributors from ALL tickets (including private ones)
+  // Fall back to visible tickets for ticketIds linkage
+  const fromRelease = releaseContributors[release.id] ?? [];
+  const fromTicketIds = tickets
+    .filter((t) => release.ticketIds.includes(t.id))
+    .map((t) => t.userName);
+  const uniqueContributors = [...new Set([...fromRelease, ...fromTicketIds])];
+
+  // Count linked tickets (visible ones)
+  const linkedTicketCount = tickets.filter(
     (t) => t.releaseId === release.id || release.ticketIds.includes(t.id)
-  );
-  const uniqueContributors = [...new Set(linkedTickets.map((t) => t.userName))];
+  ).length;
 
   return (
     <div className="relative pl-12">
@@ -161,14 +169,27 @@ function ReleaseEntry({
           </div>
         )}
 
-        {/* Contributors */}
-        {uniqueContributors.length > 0 && (
-          <div className="pt-3 border-t border-parchment-200">
-            <div className="flex items-center gap-2 text-xs text-ink-300">
-              <Users className="w-3.5 h-3.5 text-gold-500" />
-              <span className="font-medium text-gold-600">Merci aux contributeurs :</span>
-              <span>{uniqueContributors.join(', ')}</span>
-            </div>
+        {/* Footer: tickets + contributors */}
+        {(linkedTicketCount > 0 || uniqueContributors.length > 0) && (
+          <div className="pt-3 border-t border-parchment-200 space-y-1.5">
+            {linkedTicketCount > 0 && (
+              <div className="flex items-center gap-2 text-xs text-ink-300">
+                <Ticket className="w-3.5 h-3.5 text-bordeaux-400" />
+                <Link
+                  to={`/tickets?releaseId=${release.id}`}
+                  className="font-medium text-bordeaux-500 hover:text-bordeaux-700 transition-colors"
+                >
+                  {linkedTicketCount} ticket{linkedTicketCount > 1 ? 's' : ''} lié{linkedTicketCount > 1 ? 's' : ''}
+                </Link>
+              </div>
+            )}
+            {uniqueContributors.length > 0 && (
+              <div className="flex items-center gap-2 text-xs text-ink-300">
+                <Users className="w-3.5 h-3.5 text-gold-500" />
+                <span className="font-medium text-gold-600">Merci aux contributeurs :</span>
+                <span>{uniqueContributors.join(', ')}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

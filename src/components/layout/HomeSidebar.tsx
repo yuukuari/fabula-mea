@@ -69,6 +69,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
         <button
           onClick={onMobileClose}
           className="md:hidden p-1.5 rounded-lg text-ink-300 hover:bg-parchment-200"
+          aria-label="Fermer le menu"
         >
           <X className="w-5 h-5" />
         </button>
@@ -88,6 +89,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                 : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
             )
           }
+          aria-current={location.pathname === '/' ? 'page' : undefined}
         >
           <BookMarked className="w-5 h-5" />
           <span>Livres</span>
@@ -119,6 +121,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                       isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
                     )
                   }
+                  aria-current={location.pathname === '/admin/members' ? 'page' : undefined}
                 >
                   <Users className="w-4 h-4" />
                   <span>Membres</span>
@@ -133,6 +136,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                       isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
                     )
                   }
+                  aria-current={location.pathname === '/admin/releases' ? 'page' : undefined}
                 >
                   <Tag className="w-4 h-4" />
                   <span>Versions</span>
@@ -156,6 +160,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                 : 'text-ink-300 hover:bg-parchment-200 hover:text-ink-500'
             )
           }
+          aria-current={location.pathname === '/profile' ? 'page' : undefined}
         >
           {user?.avatarUrl ? (
             <img
@@ -199,6 +204,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                     isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
                   )
                 }
+                aria-current={location.pathname === '/releases' ? 'page' : undefined}
               >
                 <Tag className="w-4 h-4" />
                 <span className="flex-1">Versions</span>
@@ -218,6 +224,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                     isActive && 'bg-parchment-200 text-bordeaux-500 border-l-[3px] border-bordeaux-500'
                   )
                 }
+                aria-current={location.pathname === '/tickets' ? 'page' : undefined}
               >
                 <List className="w-4 h-4" />
                 <span>Tickets</span>

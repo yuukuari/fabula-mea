@@ -41,8 +41,7 @@ const TYPE_LABELS: Record<ResultType, string> = {
 // Static shortcuts that always appear when matched
 const STATIC_RESULTS: SearchResult[] = [
   { type: 'settings', id: 'settings', title: 'Paramètres', subtitle: 'Configuration du projet', navigateTo: '/settings' },
-  { type: 'settings', id: 'export', title: 'Exporter', subtitle: 'Export JSON / EPUB / PDF', navigateTo: '/settings' },
-  { type: 'settings', id: 'import', title: 'Importer', subtitle: 'Importer un JSON', navigateTo: '/settings' },
+  { type: 'settings', id: 'export', title: 'Exporter', subtitle: 'Export EPUB / PDF', navigateTo: '/edition' },
   { type: 'settings', id: 'save', title: 'Sauvegarder', subtitle: 'Sauvegarde du projet', navigateTo: '/settings' },
 ];
 

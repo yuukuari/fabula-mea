@@ -53,13 +53,13 @@ const router = createBrowserRouter([
       { path: 'forgot-password', element: <ForgotPasswordPage /> },
       { path: 'reset-password/:token', element: <ResetPasswordPage /> },
       { path: 'review/:token', element: <ReviewReaderPage /> },
+      { path: 'reviews/:id', element: <ReviewAuthorView /> },
       {
         element: <HomeShell />,
         children: [
           { path: '/', element: <HomePage /> },
           { path: 'tickets', element: <TicketsPage /> },
           { path: 'releases', element: <ReleaseNotesPage /> },
-          { path: 'reviews/:id', element: <ReviewAuthorView /> },
           { path: 'admin/members', element: <AdminMembersPage /> },
           { path: 'admin/releases', element: <AdminReleasesPage /> },
           { path: 'profile', element: <ProfilePage /> },

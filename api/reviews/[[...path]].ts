@@ -3,26 +3,7 @@ import { redis } from '../_lib/redis';
 import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { sendReviewInviteEmail, sendAuthorRepliedEmail, sendCommentsNotificationEmail, sendReviewCompletedEmail } from '../_lib/email';
-
-function getPathSegments(req: VercelRequest, base: string): string[] {
-  const url = (req.url || '').split('?')[0];
-  const after = url.startsWith(base) ? url.slice(base.length) : '';
-  const segments = after.split('/').filter(Boolean);
-  // __index is a sentinel from vercel.json rewrites for bare routes
-  if (segments.length === 1 && segments[0] === '__index') return [];
-  return segments;
-}
-
-function generateId(): string {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-}
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  isAdmin?: boolean;
-}
+import { getPathSegments, generateId, getUser } from '../_lib/utils';
 
 interface ReviewComment {
   id: string;
@@ -38,11 +19,6 @@ interface ReviewComment {
   parentId?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-async function getUser(userId: string): Promise<User | null> {
-  const json = await redis.get(`emlb:user:${userId}`);
-  return json ? JSON.parse(json) : null;
 }
 
 // ============================================================
@@ -63,6 +39,7 @@ async function handleIndex(req: VercelRequest, res: VercelResponse, auth: { user
         const commentsJson = await redis.get(`emlb:review:${sid}:comments`);
         const comments: Array<{ parentId?: string; status: string; isAuthor: boolean }> = commentsJson ? JSON.parse(commentsJson) : [];
         session.pendingCommentsCount = comments.filter((c) => !c.parentId && c.status === 'sent' && !c.isAuthor).length;
+        session.authorDraftCount = comments.filter((c) => c.status === 'draft' && c.isAuthor).length;
         sessions.push(session);
       }
     }

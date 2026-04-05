@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, Trash2, Clock, CheckCircle2, PlayCircle, Copy, Check, Mail, BookOpen, Lock, MessageSquare, Archive } from 'lucide-react';
+import { Plus, Eye, Trash2, Clock, CheckCircle2, PlayCircle, Copy, Check, Mail, BookOpen, Lock, MessageSquare, Archive, Send } from 'lucide-react';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useBookStore } from '@/store/useBookStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -182,12 +182,20 @@ export function ReviewsPage() {
                 </div>
 
                 {/* Comment counts */}
-                {session.commentsCount > 0 && (
+                {(session.commentsCount > 0 || (session.authorDraftCount ?? 0) > 0) && (
                   <div className="space-y-1">
                     <div className="flex items-center gap-1.5 text-xs font-medium text-ink-400">
                       <MessageSquare className="w-3 h-3" />
                       <span>Commentaires</span>
                     </div>
+                    {(session.authorDraftCount ?? 0) > 0 && session.status !== 'closed' && (
+                      <div className="text-xs pl-[18px]">
+                        <p className="font-semibold text-amber-600 flex items-center gap-1">
+                          <Send className="w-3 h-3" />
+                          {session.authorDraftCount} réponse{(session.authorDraftCount ?? 0) > 1 ? 's' : ''} non envoyée{(session.authorDraftCount ?? 0) > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    )}
                     {session.status === 'closed' ? (
                       <div className="text-xs pl-[18px] space-y-0.5">
                         <p className="text-ink-400">{session.commentsCount - (session.pendingCommentsCount ?? 0)} traité{(session.commentsCount - (session.pendingCommentsCount ?? 0)) > 1 ? 's' : ''}</p>
@@ -198,12 +206,12 @@ export function ReviewsPage() {
                         <p className="font-semibold text-bordeaux-500">{session.pendingCommentsCount} à traiter</p>
                         <p className="text-ink-300">{session.commentsCount} au total</p>
                       </div>
-                    ) : (
+                    ) : session.commentsCount > 0 ? (
                       <div className="text-xs pl-[18px] space-y-0.5">
                         <p className="text-green-500 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Tous traités</p>
                         <p className="text-ink-300">{session.commentsCount} au total</p>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
 

@@ -3,16 +3,7 @@ import { redis } from '../_lib/redis';
 import { hashPassword, comparePassword, signToken, requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { sendPasswordResetEmail } from '../_lib/email';
-
-function getPathSegments(req: VercelRequest, base: string): string[] {
-  const url = (req.url || '').split('?')[0];
-  const after = url.startsWith(base) ? url.slice(base.length) : '';
-  return after.split('/').filter(Boolean);
-}
-
-function generateId(): string {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-}
+import { getPathSegments, generateId } from '../_lib/utils';
 
 interface User {
   id: string;
@@ -255,11 +246,47 @@ async function handleDeleteAccount(req: VercelRequest, res: VercelResponse) {
 
   const user = JSON.parse(userJson) as User;
 
-  // Delete user data
+  // Load library to find all books and sagas to clean up
+  const libraryJson = await redis.get(`emlb:u:${user.id}:library`);
+  const library: { id: string; sagaId?: string }[] = libraryJson ? JSON.parse(libraryJson) : [];
+
+  // Load review session IDs
+  const reviewIdsJson = await redis.get(`emlb:u:${user.id}:reviews`);
+  const reviewIds: string[] = reviewIdsJson ? JSON.parse(reviewIdsJson) : [];
+
+  // Delete all user books
+  const bookDeletes = library.map((b) => redis.del(`emlb:u:${user.id}:book:${b.id}`));
+
+  // Delete all review sessions and their data
+  const reviewDeletes: Promise<void>[] = [];
+  for (const rid of reviewIds) {
+    const sessionJson = await redis.get(`emlb:review:${rid}`);
+    if (sessionJson) {
+      const session = JSON.parse(sessionJson) as { token?: string };
+      if (session.token) {
+        reviewDeletes.push(redis.del(`emlb:review:token:${session.token}`));
+      }
+    }
+    reviewDeletes.push(redis.del(`emlb:review:${rid}`));
+    reviewDeletes.push(redis.del(`emlb:review:${rid}:comments`));
+  }
+
+  // Find unique saga IDs owned by this user
+  const sagaIds = [...new Set(library.map((b) => b.sagaId).filter(Boolean))] as string[];
+  const sagaDeletes = sagaIds.flatMap((sid) => [
+    redis.del(`emlb:saga:${sid}`),
+    redis.del(`emlb:saga:${sid}:meta`),
+  ]);
+
+  // Delete core user data + all related data
   await Promise.all([
     redis.del(`emlb:user:${user.id}`),
     redis.del(`emlb:email:${user.email}`),
     redis.del(`emlb:u:${user.id}:library`),
+    redis.del(`emlb:u:${user.id}:reviews`),
+    ...bookDeletes,
+    ...reviewDeletes,
+    ...sagaDeletes,
   ]);
 
   // Remove from member-ids index

@@ -15,70 +15,8 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { BookLayout } from '@/types';
 import { FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
-
-interface ExportChapter {
-  id: string;
-  number: number;
-  title: string;
-  type?: 'front_matter' | 'chapter' | 'back_matter';
-  scenes: { title: string; content: string }[];
-}
-
-interface ExportMap {
-  id: string;
-  name: string;
-  imageUrl: string; // base64 data URL or CDN URL
-}
-
-interface ExportBook {
-  title: string;
-  author: string;
-  genre: string;
-  synopsis: string;
-  chapters: ExportChapter[];
-  glossary?: { name: string; type: string; description: string }[];
-  maps?: ExportMap[];
-  layout?: BookLayout;
-  tableOfContents?: boolean;
-}
-
-// ── Helpers ──────────────────────────────────────────────────────
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-/** Nettoie le HTML TipTap pour le rendre XHTML-compatible */
-function cleanHtml(html: string): string {
-  if (!html) return '<p></p>';
-  return html
-    // Fermer les balises auto-fermantes
-    .replace(/<br>/g, '<br/>')
-    .replace(/<hr>/g, '<hr/>')
-    .replace(/<img([^>]*?)>/g, '<img$1/>')
-    // Supprimer les attributs class (spécifiques à l'éditeur)
-    .replace(/\s+class="[^"]*"/g, '')
-    // Supprimer les data-attributes
-    .replace(/\s+data-[a-z-]+="[^"]*"/g, '')
-    // Nettoyer les spans vides laissés par TipTap
-    .replace(/<span>\s*<\/span>/g, '')
-    // Convertir text-align en attribut style
-    .replace(/style="text-align:\s*(center|right|justify|left)"/g, 'style="text-align: $1"')
-    // Convertir &nbsp; en espace insécable XHTML valide
-    .replace(/&nbsp;/g, '&#160;')
-    // Nettoyer d'autres entités HTML qui ne sont pas valides en XHTML
-    .replace(/&mdash;/g, '&#8212;')
-    .replace(/&ndash;/g, '&#8211;')
-    .replace(/&laquo;/g, '&#171;')
-    .replace(/&raquo;/g, '&#187;')
-    .replace(/&hellip;/g, '&#8230;')
-    .replace(/&amp;nbsp;/g, '&#160;');
-}
+import { escapeXml, cleanHtml } from '@/lib/export-shared';
+import type { ExportBook } from '@/lib/export-shared';
 
 function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {

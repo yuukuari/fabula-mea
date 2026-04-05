@@ -13,6 +13,8 @@ import { useSyncStore } from './useSyncStore';
 import { useSagaStore } from './useSagaStore';
 import { isBase64, uploadImage } from '@/lib/upload';
 import { migrateScenesToTimelineEvents } from '@/lib/migration';
+import * as enc from './encyclopedia-helpers';
+import { migrateEncyclopediaImages } from './encyclopedia-helpers';
 
 const shouldSync = () => !!localStorage.getItem('emlb-token');
 
@@ -23,53 +25,19 @@ const IS_DEV = import.meta.env.DEV;
  * Mutates the project data in-place and returns true if any migration occurred.
  */
 async function migrateBase64Images(data: BookProject): Promise<boolean> {
-  // In dev mode, skip migration (no CDN available)
   if (IS_DEV) return false;
 
-  const promises: Promise<void>[] = [];
-  let migrated = false;
+  let migrated = await migrateEncyclopediaImages(data);
 
-  // Characters
-  for (const char of data.characters) {
-    const img = char.imageUrl;
-    if (img && isBase64(img)) {
-      promises.push(uploadImage(img, `char-${char.name}`).then((url) => { char.imageUrl = url; migrated = true; }));
-    }
-  }
-
-  // Places
-  for (const place of data.places) {
-    const img = place.imageUrl;
-    if (img && isBase64(img)) {
-      promises.push(uploadImage(img, `place-${place.name}`).then((url) => { place.imageUrl = url; migrated = true; }));
-    }
-  }
-
-  // World Notes
-  for (const note of data.worldNotes) {
-    const img = note.imageUrl;
-    if (img && isBase64(img)) {
-      promises.push(uploadImage(img, `world-${note.title}`).then((url) => { note.imageUrl = url; migrated = true; }));
-    }
-  }
-
-  // Maps
-  for (const map of (data.maps ?? [])) {
-    const img = map.imageUrl;
-    if (img && isBase64(img)) {
-      promises.push(uploadImage(img, `map-${map.name}`).then((url) => { map.imageUrl = url; migrated = true; }));
-    }
-  }
-
-  // Layout covers
+  // Layout covers (book-specific, not in encyclopedia helper)
+  const coverPromises: Promise<void>[] = [];
   if (data.layout?.coverFront && isBase64(data.layout.coverFront)) {
-    promises.push(uploadImage(data.layout.coverFront, 'cover-front').then((url) => { data.layout!.coverFront = url; migrated = true; }));
+    coverPromises.push(uploadImage(data.layout.coverFront, 'cover-front').then((url) => { data.layout!.coverFront = url; migrated = true; }));
   }
   if (data.layout?.coverBack && isBase64(data.layout.coverBack)) {
-    promises.push(uploadImage(data.layout.coverBack, 'cover-back').then((url) => { data.layout!.coverBack = url; migrated = true; }));
+    coverPromises.push(uploadImage(data.layout.coverBack, 'cover-back').then((url) => { data.layout!.coverBack = url; migrated = true; }));
   }
-
-  await Promise.all(promises);
+  await Promise.all(coverPromises);
   return migrated;
 }
 
@@ -440,7 +408,7 @@ export const useBookStore = create<BookStore>()(
           const json = JSON.stringify(projectData);
           localStorage.setItem(getBookStorageKey(state.id), json);
           if (shouldSync()) {
-            api.books.save(state.id, projectData).catch(console.error);
+            api.books.save(state.id, projectData).catch(() => useSyncStore.getState().setError('Échec sync cloud'));
           }
           useLibraryStore.getState().updateBookMeta(state.id, {
             title: state.title,
@@ -503,154 +471,43 @@ export const useBookStore = create<BookStore>()(
 
       // ─── Characters ───
       addCharacter: (char) => {
-        const id = generateId();
-        const timestamp = now();
-        set((s) => ({
-          characters: [...s.characters, {
-            id,
-            name: char.name,
-            surname: char.surname ?? '',
-            nickname: char.nickname ?? '',
-            sex: char.sex,
-            age: char.age,
-            imageUrl: char.imageUrl ?? '',
-            description: char.description ?? '',
-            personality: char.personality ?? '',
-            qualities: char.qualities ?? [],
-            flaws: char.flaws ?? [],
-            skills: char.skills ?? [],
-            profession: char.profession ?? '',
-            lifeGoal: char.lifeGoal ?? '',
-            likes: char.likes ?? [],
-            dislikes: char.dislikes ?? [],
-            keyEvents: char.keyEvents ?? [],
-            relationships: char.relationships ?? [],
-            evolution: char.evolution ?? { beforeStory: '', duringStory: '', endOfStory: '' },
-            tags: char.tags ?? [],
-            notes: char.notes ?? '',
-            inGlossary: char.inGlossary ?? false,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          }],
-          updatedAt: timestamp,
-          lastSavedAt: timestamp,
-        }));
+        const { characters, id } = enc.createCharacter(get().characters, char);
+        set(() => ({ characters, ...touchSave() }));
         return id;
       },
-
       updateCharacter: (id, data) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === id ? { ...c, ...data, updatedAt: now() } : c
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ characters: enc.updateCharacter(s.characters, id, data), ...touchSave() })),
       deleteCharacter: (id) =>
         set((s) => ({
-          characters: s.characters.filter((c) => c.id !== id),
-          scenes: s.scenes.map((sc) => ({
-            ...sc,
-            characterIds: sc.characterIds.filter((cid) => cid !== id),
-          })),
+          characters: enc.deleteCharacter(s.characters, id),
+          // Book-specific: clean scene references
+          scenes: s.scenes.map((sc) => ({ ...sc, characterIds: sc.characterIds.filter((cid) => cid !== id) })),
           ...touchSave(),
         })),
-
       addRelationship: (characterId, rel) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, relationships: [...c.relationships, { ...rel, id: generateId() }], updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ characters: enc.addRelationship(s.characters, characterId, rel), ...touchSave() })),
       updateRelationship: (characterId, relId, data) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? {
-                  ...c,
-                  relationships: c.relationships.map((r) =>
-                    r.id === relId ? { ...r, ...data } : r
-                  ),
-                  updatedAt: now(),
-                }
-              : c
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ characters: enc.updateRelationship(s.characters, characterId, relId, data), ...touchSave() })),
       deleteRelationship: (characterId, relId) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, relationships: c.relationships.filter((r) => r.id !== relId), updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ characters: enc.deleteRelationship(s.characters, characterId, relId), ...touchSave() })),
       addKeyEvent: (characterId, event) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, keyEvents: [...c.keyEvents, { ...event, id: generateId() }], updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ characters: enc.addKeyEvent(s.characters, characterId, event), ...touchSave() })),
       deleteKeyEvent: (characterId, eventId) =>
-        set((s) => ({
-          characters: s.characters.map((c) =>
-            c.id === characterId
-              ? { ...c, keyEvents: c.keyEvents.filter((e) => e.id !== eventId), updatedAt: now() }
-              : c
-          ),
-          ...touchSave(),
-        })),
+        set((s) => ({ characters: enc.deleteKeyEvent(s.characters, characterId, eventId), ...touchSave() })),
 
       // ─── Places ───
       addPlace: (place) => {
-        const id = generateId();
-        const timestamp = now();
-        set((s) => ({
-          places: [...s.places, {
-            id,
-            name: place.name,
-            type: place.type ?? 'other',
-            description: place.description ?? '',
-            imageUrl: place.imageUrl ?? '',
-            inspirations: place.inspirations ?? [],
-            connectedPlaceIds: place.connectedPlaceIds ?? [],
-            tags: place.tags ?? [],
-            notes: place.notes ?? '',
-            inGlossary: place.inGlossary ?? false,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          }],
-          updatedAt: timestamp,
-          lastSavedAt: timestamp,
-        }));
+        const { places, id } = enc.createPlace(get().places, place);
+        set(() => ({ places, ...touchSave() }));
         return id;
       },
-
       updatePlace: (id, data) =>
-        set((s) => ({
-          places: s.places.map((p) =>
-            p.id === id ? { ...p, ...data, updatedAt: now() } : p
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ places: enc.updatePlace(s.places, id, data), ...touchSave() })),
       deletePlace: (id) =>
         set((s) => ({
-          places: s.places.filter((p) => p.id !== id),
-          scenes: s.scenes.map((sc) =>
-            sc.placeId === id ? { ...sc, placeId: undefined } : sc
-          ),
+          places: enc.deletePlace(s.places, id),
+          // Book-specific: clean scene references
+          scenes: s.scenes.map((sc) => sc.placeId === id ? { ...sc, placeId: undefined } : sc),
           ...touchSave(),
         })),
 
@@ -854,31 +711,18 @@ export const useBookStore = create<BookStore>()(
 
       // ─── Tags ───
       addTag: (tag) => {
-        const id = generateId();
-        set((s) => ({
-          tags: [...s.tags, { ...tag, id }],
-          ...touchSave(),
-        }));
+        const { tags, id } = enc.createTag(get().tags, tag);
+        set(() => ({ tags, ...touchSave() }));
         return id;
       },
-
       updateTag: (id, data) =>
-        set((s) => ({
-          tags: s.tags.map((t) => (t.id === id ? { ...t, ...data } : t)),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ tags: enc.updateTag(s.tags, id, data), ...touchSave() })),
       deleteTag: (id) =>
         set((s) => ({
-          tags: s.tags.filter((t) => t.id !== id),
-          characters: s.characters.map((c) => ({
-            ...c,
-            tags: c.tags.filter((tid) => tid !== id),
-          })),
-          places: s.places.map((p) => ({
-            ...p,
-            tags: p.tags.filter((tid) => tid !== id),
-          })),
+          tags: enc.deleteTag(s.tags, id),
+          // Book-specific: cascade tag removal to characters and places
+          characters: s.characters.map((c) => ({ ...c, tags: c.tags.filter((tid) => tid !== id) })),
+          places: s.places.map((p) => ({ ...p, tags: p.tags.filter((tid) => tid !== id) })),
           ...touchSave(),
         })),
 
@@ -922,106 +766,34 @@ export const useBookStore = create<BookStore>()(
 
       // ─── World Notes ───
       addWorldNote: (note) => {
-        const id = generateId();
-        const timestamp = now();
-        set((s) => ({
-          worldNotes: [...s.worldNotes, {
-            id,
-            title: note.title,
-            category: note.category ?? 'custom',
-            content: note.content ?? '',
-            imageUrl: note.imageUrl ?? '',
-            linkedNoteIds: note.linkedNoteIds ?? [],
-            tags: note.tags ?? [],
-            inGlossary: note.inGlossary ?? false,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          }],
-          updatedAt: timestamp,
-          lastSavedAt: timestamp,
-        }));
+        const { worldNotes, id } = enc.createWorldNote(get().worldNotes, note);
+        set(() => ({ worldNotes, ...touchSave() }));
         return id;
       },
-
       updateWorldNote: (id, data) =>
-        set((s) => ({
-          worldNotes: s.worldNotes.map((n) =>
-            n.id === id ? { ...n, ...data, updatedAt: now() } : n
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ worldNotes: enc.updateWorldNote(s.worldNotes, id, data), ...touchSave() })),
       deleteWorldNote: (id) =>
-        set((s) => ({
-          worldNotes: s.worldNotes.filter((n) => n.id !== id),
-          ...touchSave(),
-        })),
+        set((s) => ({ worldNotes: enc.deleteWorldNote(s.worldNotes, id), ...touchSave() })),
 
       // ─── Maps ───
       addMap: (map) => {
-        const id = generateId();
-        const timestamp = now();
-        set((s) => ({
-          maps: [...(s.maps ?? []), {
-            id,
-            name: map.name,
-            description: map.description ?? '',
-            imageUrl: map.imageUrl,
-            pins: map.pins ?? [],
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          }],
-          ...touchSave(),
-        }));
+        const { maps, id } = enc.createMap(get().maps ?? [], map);
+        set(() => ({ maps, ...touchSave() }));
         return id;
       },
-
       updateMap: (id, data) =>
-        set((s) => ({
-          maps: (s.maps ?? []).map((m) =>
-            m.id === id ? { ...m, ...data, updatedAt: now() } : m
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ maps: enc.updateMap(s.maps ?? [], id, data), ...touchSave() })),
       deleteMap: (id) =>
-        set((s) => ({
-          maps: (s.maps ?? []).filter((m) => m.id !== id),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ maps: enc.deleteMap(s.maps ?? [], id), ...touchSave() })),
       addMapPin: (mapId, pin) => {
-        const id = generateId();
-        set((s) => ({
-          maps: (s.maps ?? []).map((m) =>
-            m.id === mapId
-              ? { ...m, pins: [...m.pins, { ...pin, id }], updatedAt: now() }
-              : m
-          ),
-          ...touchSave(),
-        }));
+        const { maps, id } = enc.addMapPin(get().maps ?? [], mapId, pin);
+        set(() => ({ maps, ...touchSave() }));
         return id;
       },
-
       updateMapPin: (mapId, pinId, data) =>
-        set((s) => ({
-          maps: (s.maps ?? []).map((m) =>
-            m.id === mapId
-              ? { ...m, pins: m.pins.map((p) => p.id === pinId ? { ...p, ...data } : p), updatedAt: now() }
-              : m
-          ),
-          ...touchSave(),
-        })),
-
+        set((s) => ({ maps: enc.updateMapPin(s.maps ?? [], mapId, pinId, data), ...touchSave() })),
       deleteMapPin: (mapId, pinId) =>
-        set((s) => ({
-          maps: (s.maps ?? []).map((m) =>
-            m.id === mapId
-              ? { ...m, pins: m.pins.filter((p) => p.id !== pinId), updatedAt: now() }
-              : m
-          ),
-          ...touchSave(),
-        })),
+        set((s) => ({ maps: enc.deleteMapPin(s.maps ?? [], mapId, pinId), ...touchSave() })),
 
       // ─── Self-comments ───
       addSelfComment: (comment) => {
