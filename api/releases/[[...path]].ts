@@ -4,14 +4,14 @@ import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { getPathSegments, generateId, isAdmin } from '../_lib/utils';
 
-const VALID_RELEASE_STATUSES = ['planned', 'current', 'released'] as const;
+const VALID_RELEASE_STATUSES = ['draft', 'planned', 'current', 'released'] as const;
 
 interface Release {
   id: string;
   version: string;
   title: string;
   description: string;
-  status: 'planned' | 'current' | 'released';
+  status: 'draft' | 'planned' | 'current' | 'released';
   items: Array<{ id: string; type: string; description: string }>;
   ticketIds: string[];
   releasedAt?: string;
