@@ -33,9 +33,7 @@ export function EventEditorDialog({ event, onClose }: EventEditorDialogProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
-  const normalChapters = chapters
-    .filter((c) => (c.type ?? 'chapter') === 'chapter')
-    .sort((a, b) => a.number - b.number);
+  const allChapters = [...chapters].sort((a, b) => a.number - b.number);
 
   // Scenes available for linking (from selected chapter)
   const availableScenes = selectedChapterId
@@ -239,7 +237,7 @@ export function EventEditorDialog({ event, onClose }: EventEditorDialogProps) {
                     className="input-field text-sm flex-1"
                   >
                     <option value="">Aucun chapitre</option>
-                    {normalChapters.map((c) => (
+                    {allChapters.map((c) => (
                       <option key={c.id} value={c.id}>{getChapterShortLabel(c)}</option>
                     ))}
                   </select>

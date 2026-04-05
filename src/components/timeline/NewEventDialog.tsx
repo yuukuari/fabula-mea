@@ -36,9 +36,7 @@ export function NewEventDialog({ onClose, onCreate }: NewEventDialogProps) {
   const [selectedChapterId, setSelectedChapterId] = useState('');
   const [selectedSceneId, setSelectedSceneId] = useState('');
 
-  const normalChapters = chapters
-    .filter((c) => (c.type ?? 'chapter') === 'chapter')
-    .sort((a, b) => a.number - b.number);
+  const allChapters = [...chapters].sort((a, b) => a.number - b.number);
 
   const availableScenes = selectedChapterId
     ? scenes.filter((s) => s.chapterId === selectedChapterId)
@@ -228,14 +226,14 @@ export function NewEventDialog({ onClose, onCreate }: NewEventDialogProps) {
                 <div>
                   <label className="text-xs text-ink-300 mb-1 block">Chapitre</label>
                   <div className="flex items-center gap-2">
-                    {normalChapters.length > 0 ? (
+                    {allChapters.length > 0 ? (
                       <select
                         value={selectedChapterId}
                         onChange={(e) => handleChapterChange(e.target.value)}
                         className="input-field text-sm flex-1"
                       >
                         <option value="">Aucun chapitre</option>
-                        {normalChapters.map((c) => (
+                        {allChapters.map((c) => (
                           <option key={c.id} value={c.id}>{getChapterShortLabel(c)}</option>
                         ))}
                       </select>

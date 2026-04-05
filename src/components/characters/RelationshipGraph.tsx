@@ -2,6 +2,7 @@ import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
+import { useBookStore } from '@/store/useBookStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
 import type { Character, CharacterSex, Relationship } from '@/types';
 
@@ -85,9 +86,26 @@ interface TooltipData {
   relationships: { rel: Relationship; target: Character | undefined }[];
 }
 
+function getViewportKey(bookId: string) {
+  return `fabula-mea-graph-viewport:${bookId}`;
+}
+
+function loadSavedViewport(bookId: string): { scale: number; panX: number; panY: number } | null {
+  try {
+    const raw = sessionStorage.getItem(getViewportKey(bookId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.scale === 'number' && typeof parsed.panX === 'number' && typeof parsed.panY === 'number') {
+      return parsed;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 export function RelationshipGraph() {
   const navigate = useNavigate();
   const { characters, graphNodePositions: rawGraphNodePositions, saveGraphNodePositions } = useEncyclopediaStore();
+  const bookId = useBookStore((s) => s.id);
   const graphNodePositions = rawGraphNodePositions ?? {};
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,12 +119,22 @@ export function RelationshipGraph() {
   const mouseDraggedRef = useRef(false);
 
   // Zoom & pan state (refs for animation loop performance)
-  const scaleRef = useRef(1);
-  const panRef = useRef({ x: 0, y: 0 });
+  const savedViewport = bookId ? loadSavedViewport(bookId) : null;
+  const scaleRef = useRef(savedViewport?.scale ?? 1);
+  const panRef = useRef({ x: savedViewport?.panX ?? 0, y: savedViewport?.panY ?? 0 });
   const isPanningRef = useRef(false);
   const lastPanPosRef = useRef({ x: 0, y: 0 });
   // State mirror to trigger re-render for zoom buttons display
-  const [scaleDisplay, setScaleDisplay] = useState(1);
+  const [scaleDisplay, setScaleDisplay] = useState(scaleRef.current);
+
+  const saveViewport = useCallback(() => {
+    if (!bookId) return;
+    sessionStorage.setItem(getViewportKey(bookId), JSON.stringify({
+      scale: scaleRef.current,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
+    }));
+  }, [bookId]);
 
   // Convert screen coordinates to world coordinates
   const screenToWorld = useCallback((sx: number, sy: number) => {
@@ -132,7 +160,8 @@ export function RelationshipGraph() {
     scaleRef.current = clamped;
     setScaleDisplay(clamped);
     setTooltip(null);
-  }, []);
+    saveViewport();
+  }, [saveViewport]);
 
   // Fit all nodes into the viewport with padding
   const fitToView = useCallback(() => {
@@ -162,7 +191,8 @@ export function RelationshipGraph() {
     panRef.current.y = h / 2 - cy * scale;
     setScaleDisplay(scale);
     setTooltip(null);
-  }, []);
+    saveViewport();
+  }, [saveViewport]);
 
   // Load images for characters with avatars
   useEffect(() => {
@@ -316,8 +346,17 @@ export function RelationshipGraph() {
       }
     }
 
-    // Fit to view immediately
-    needsFitRef.current = true;
+    // Fit to view only if no saved viewport
+    const saved = bookId ? loadSavedViewport(bookId) : null;
+    if (saved) {
+      scaleRef.current = saved.scale;
+      panRef.current.x = saved.panX;
+      panRef.current.y = saved.panY;
+      setScaleDisplay(saved.scale);
+      needsFitRef.current = false;
+    } else {
+      needsFitRef.current = true;
+    }
   }, [characters, edges]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
@@ -615,6 +654,9 @@ export function RelationshipGraph() {
       }
       saveGraphNodePositions(positions);
     }
+    if (isPanningRef.current) {
+      saveViewport();
+    }
     setDragNode(null);
     isPanningRef.current = false;
     const canvas = canvasRef.current;
@@ -777,6 +819,9 @@ export function RelationshipGraph() {
         setDragNode(null);
       }
 
+      if (isPanningRef.current || touchMovedRef.current) {
+        saveViewport();
+      }
       isPanningRef.current = false;
 
       if (!touchMovedRef.current && touchStartRef.current) {
@@ -822,7 +867,7 @@ export function RelationshipGraph() {
       canvas.removeEventListener('touchend', onTouchEnd);
       canvas.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, [characters, navigate, saveGraphNodePositions, applyZoom, findNodeAt, screenToWorld, buildTooltip]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [characters, navigate, saveGraphNodePositions, applyZoom, findNodeAt, screenToWorld, buildTooltip, saveViewport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleZoomIn = () => {
     const w = sizeRef.current.w;

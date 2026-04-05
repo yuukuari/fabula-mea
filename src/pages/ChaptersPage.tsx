@@ -1,14 +1,14 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List, Globe, ExternalLink } from 'lucide-react';
+import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List, Globe, ExternalLink, CalendarDays } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, WORLD_NOTE_CATEGORY_LABELS, PLACE_TYPE_LABELS } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, WORLD_NOTE_CATEGORY_LABELS, PLACE_TYPE_LABELS, formatDuration } from '@/lib/utils';
 import { getSceneProgress } from '@/lib/calculations';
-import type { Scene, SceneStatus, Chapter, GlossaryEntry, EventDuration, DurationUnit } from '@/types';
+import type { Scene, SceneStatus, Chapter, GlossaryEntry, EventDuration, DurationUnit, TimelineEvent } from '@/types';
 
 export function ChaptersPage() {
   const chapters = useBookStore((s) => s.chapters);
@@ -29,6 +29,7 @@ export function ChaptersPage() {
   const deleteScene = useBookStore((s) => s.deleteScene);
   const navigate = useNavigate();
   const openEditorAt = useEditorStore((s) => s.open);
+  const timelineEvents = useBookStore((s) => s.timelineEvents) ?? [];
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showChapterForm, setShowChapterForm] = useState(false);
@@ -36,6 +37,7 @@ export function ChaptersPage() {
   const [showSceneForm, setShowSceneForm] = useState<string | null>(null);
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'chapter' | 'scene'; id: string } | null>(null);
+  const [eventsDialog, setEventsDialog] = useState<{ title: string; events: TimelineEvent[] } | null>(null);
 
   const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
@@ -114,6 +116,27 @@ export function ChaptersPage() {
                     {scene.startDate && (
                       <span>{new Date(scene.startDate + 'T00:00:00').toLocaleDateString('fr-FR')}</span>
                     )}
+                    {(() => {
+                      const sceneEvents = timelineEvents.filter((e) => e.sceneId === scene.id);
+                      if (sceneEvents.length === 0) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEventsDialog({
+                              title: scene.title || (isSpecial ? 'Sans titre' : `Scène ${sceneIdx + 1}`),
+                              events: sceneEvents,
+                            });
+                          }}
+                          className="flex items-center gap-1 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                          title={`${sceneEvents.length} événement${sceneEvents.length > 1 ? 's' : ''}`}
+                        >
+                          <CalendarDays className="w-3 h-3" />
+                          {sceneEvents.length}
+                        </button>
+                      );
+                    })()}
                   </div>
                   {/* Progress bar */}
                   <div className="mt-2 flex items-center gap-2">
@@ -186,6 +209,27 @@ export function ChaptersPage() {
           {chapterScenes.length > 0 && (
             <span className="text-xs text-ink-200">{chapterScenes.length} page{chapterScenes.length > 1 ? 's' : ''}</span>
           )}
+          {(() => {
+            const sectionEvents = timelineEvents.filter((e) => e.chapterId === chapter.id);
+            if (sectionEvents.length === 0) return null;
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEventsDialog({
+                    title: label,
+                    events: sectionEvents,
+                  });
+                }}
+                className="flex items-center gap-1 text-xs text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                title={`${sectionEvents.length} événement${sectionEvents.length > 1 ? 's' : ''}`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                {sectionEvents.length}
+              </button>
+            );
+          })()}
         </div>
         {renderSceneList(chapter)}
       </div>
@@ -264,6 +308,27 @@ export function ChaptersPage() {
                     )}
                   </div>
                   <span className="text-xs text-ink-200">{completedScenes}/{chapterScenes.length} scènes</span>
+                  {(() => {
+                    const chapterEvents = timelineEvents.filter((e) => e.chapterId === chapter.id);
+                    if (chapterEvents.length === 0) return null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEventsDialog({
+                            title: `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`,
+                            events: chapterEvents,
+                          });
+                        }}
+                        className="flex items-center gap-1 text-xs text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                        title={`${chapterEvents.length} événement${chapterEvents.length > 1 ? 's' : ''}`}
+                      >
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        {chapterEvents.length}
+                      </button>
+                    );
+                  })()}
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingChapterId(chapter.id); setShowChapterForm(true); }}
                     className="btn-ghost p-1"
@@ -417,6 +482,16 @@ export function ChaptersPage() {
           chapterId={showSceneForm ?? editingScene!.chapterId}
           scene={editingScene}
           onClose={() => { setShowSceneForm(null); setEditingScene(null); }}
+        />
+      )}
+
+      {eventsDialog && (
+        <EventsListDialog
+          title={eventsDialog.title}
+          events={eventsDialog.events}
+          characters={characters}
+          places={places}
+          onClose={() => setEventsDialog(null)}
         />
       )}
 
@@ -759,6 +834,75 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function EventsListDialog({ title, events, characters, places, onClose }: {
+  title: string;
+  events: TimelineEvent[];
+  characters: { id: string; name: string; surname?: string }[];
+  places: { id: string; name: string }[];
+  onClose: () => void;
+}) {
+  const sortedEvents = [...events].sort((a, b) => a.startDate.localeCompare(b.startDate) || a.order - b.order);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between p-5 border-b border-parchment-300 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-bordeaux-500" />
+            <h3 className="font-display text-lg font-bold text-ink-500">
+              {events.length} événement{events.length > 1 ? 's' : ''}
+            </h3>
+          </div>
+          <button onClick={onClose} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
+        </div>
+        <p className="px-5 pt-3 text-sm text-ink-300">{title}</p>
+        <div className="p-5 space-y-3 overflow-y-auto flex-1">
+          {sortedEvents.map((event) => {
+            const eventChars = event.characterIds
+              .map((cid) => characters.find((c) => c.id === cid))
+              .filter(Boolean);
+            const eventPlace = event.placeId ? places.find((p) => p.id === event.placeId) : null;
+
+            return (
+              <div key={event.id} className="bg-parchment-100 rounded-lg p-3 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="font-medium text-ink-500 text-sm">{event.title}</h4>
+                  <span className="text-xs text-ink-300 whitespace-nowrap flex-shrink-0">
+                    {new Date(event.startDate + 'T00:00:00').toLocaleDateString('fr-FR')}
+                    {event.startTime ? ` ${event.startTime}` : ''}
+                  </span>
+                </div>
+                <p className="text-xs text-ink-200">{formatDuration(event.duration)}</p>
+                {event.description && (
+                  <p className="text-xs text-ink-300 whitespace-pre-line">{event.description}</p>
+                )}
+                <div className="flex items-center gap-3 text-xs text-ink-200">
+                  {eventChars.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <User className="w-3 h-3" />
+                      {eventChars.map((c) => c!.name).join(', ')}
+                    </span>
+                  )}
+                  {eventPlace && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {eventPlace.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex justify-end p-5 border-t border-parchment-300 flex-shrink-0">
+          <button onClick={onClose} className="btn-secondary">Fermer</button>
+        </div>
+      </div>
     </div>
   );
 }
