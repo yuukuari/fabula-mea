@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard, FileText, Library, UserCircle } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard, FileText, Library, UserCircle, TrendingUp, BarChart3 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -33,13 +33,21 @@ const navGroups: NavGroup[] = [
   {
     label: 'Manuscrit',
     icon: ScrollText,
-    basePaths: ['/chapters', '/timeline', '/progress', '/reviews', '/edition'],
+    basePaths: ['/chapters', '/timeline', '/reviews', '/edition'],
     items: [
       { to: '/timeline', icon: Clock, label: 'Chronologie' },
       { to: '/chapters', icon: BookOpen, label: 'Chapitres' },
-      { to: '/progress', icon: Target, label: 'Avancement' },
       { to: '/reviews', icon: Eye, label: 'Relectures' },
       { to: '/edition', icon: FileText, label: 'Édition' },
+    ],
+  },
+  {
+    label: 'Suivi',
+    icon: BarChart3,
+    basePaths: ['/progression', '/objectifs'],
+    items: [
+      { to: '/progression', icon: TrendingUp, label: 'Progression' },
+      { to: '/objectifs', icon: Target, label: 'Objectifs' },
     ],
   },
 ];

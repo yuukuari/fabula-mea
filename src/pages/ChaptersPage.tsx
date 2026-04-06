@@ -7,7 +7,7 @@ import { useEditorStore } from '@/store/useEditorStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countCharacters, countWordsFromHtml, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, WORLD_NOTE_CATEGORY_LABELS, PLACE_TYPE_LABELS, formatDuration } from '@/lib/utils';
-import { getSceneProgress } from '@/lib/calculations';
+import { getSceneProgress, getSceneTarget } from '@/lib/calculations';
 import type { Scene, SceneStatus, Chapter, GlossaryEntry, EventDuration, DurationUnit, TimelineEvent } from '@/types';
 
 export function ChaptersPage() {
@@ -29,6 +29,7 @@ export function ChaptersPage() {
   const deleteScene = useBookStore((s) => s.deleteScene);
   const navigate = useNavigate();
   const openEditorAt = useEditorStore((s) => s.open);
+  const goals = useBookStore((s) => s.goals);
   const timelineEvents = useBookStore((s) => s.timelineEvents) ?? [];
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -58,7 +59,8 @@ export function ChaptersPage() {
     return (
       <div className="px-4 pb-4 space-y-2 mt-4">
         {chapterScenes.map((scene, sceneIdx) => {
-          const progress = getSceneProgress(scene);
+          const progress = getSceneProgress(scene, scenes, goals);
+          const sceneTarget = getSceneTarget(scene, scenes, goals);
           const sceneChars = scene.characterIds
             .map((cid) => characters.find((c) => c.id === cid))
             .filter(Boolean);
@@ -150,7 +152,9 @@ export function ChaptersPage() {
                       />
                     </div>
                     <span className="text-xs text-ink-200 text-right">
-                      {scene.currentWordCount}/{scene.targetWordCount} {countUnitLabel(countUnit)}
+                      {sceneTarget != null
+                        ? `${scene.currentWordCount}/${sceneTarget} ${countUnitLabel(countUnit)}`
+                        : `${scene.currentWordCount} ${countUnitLabel(countUnit)}`}
                     </span>
                   </div>
                 </div>
@@ -288,7 +292,7 @@ export function ChaptersPage() {
               .map((sid) => scenes.find((s) => s.id === sid))
               .filter(Boolean) as Scene[];
             const isExpanded = expanded[chapter.id] === true;
-            const completedScenes = chapterScenes.filter((s) => getSceneProgress(s) >= 1).length;
+            const completedScenes = chapterScenes.filter((s) => getSceneProgress(s, scenes, goals) >= 1).length;
 
             return (
               <div key={chapter.id} className="card-fantasy overflow-hidden">
@@ -581,14 +585,17 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
   const [includeTime, setIncludeTime] = useState(!!(scene?.startTime ?? linkedEvent?.startTime));
   const [startTime, setStartTime] = useState(scene?.startTime ?? linkedEvent?.startTime ?? '00:00');
   const [duration, setDuration] = useState<EventDuration>(scene?.duration ?? linkedEvent?.duration ?? { value: 1, unit: 'days' });
-  const [targetWordCount, setTargetWordCount] = useState(scene?.targetWordCount ?? goals.defaultWordsPerScene);
+  const allScenes = useBookStore((s) => s.scenes);
+  const [targetWordCount, setTargetWordCount] = useState(scene?.targetWordCount ?? 0);
   const [currentWordCount, setCurrentWordCount] = useState(scene?.currentWordCount ?? 0);
   const [status, setStatus] = useState<SceneStatus>(scene?.status ?? 'outline');
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
+  const hasBookLevelGoal = goals.mode !== 'none';
+
   const isDirty = useCallback(() => {
     if (!scene) {
-      return !!(title || description || characterIds.length > 0 || placeId || status !== 'outline' || targetWordCount !== goals.defaultWordsPerScene || currentWordCount > 0);
+      return !!(title || description || characterIds.length > 0 || placeId || status !== 'outline' || (!hasBookLevelGoal && targetWordCount !== 0) || currentWordCount > 0);
     }
     return (
       title !== (scene.title ?? '') ||
@@ -596,7 +603,7 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
       JSON.stringify(characterIds) !== JSON.stringify(scene.characterIds ?? []) ||
       placeId !== (scene.placeId ?? '') ||
       status !== (scene.status ?? 'outline') ||
-      targetWordCount !== (scene.targetWordCount ?? goals.defaultWordsPerScene) ||
+      (!hasBookLevelGoal && targetWordCount !== (scene.targetWordCount ?? 0)) ||
       currentWordCount !== (scene.currentWordCount ?? 0) ||
       hasDate !== (!!(scene.startDate) || !!linkedEvent) ||
       (hasDate && startDate !== (scene.startDate ?? linkedEvent?.startDate ?? '')) ||
@@ -604,7 +611,7 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
       (hasDate && includeTime && startTime !== (scene.startTime ?? linkedEvent?.startTime ?? '00:00')) ||
       (hasDate && JSON.stringify(duration) !== JSON.stringify(scene.duration ?? linkedEvent?.duration ?? { value: 1, unit: 'days' }))
     );
-  }, [title, description, characterIds, placeId, status, targetWordCount, currentWordCount, hasDate, startDate, includeTime, startTime, duration, scene, linkedEvent, goals.defaultWordsPerScene]);
+  }, [title, description, characterIds, placeId, status, targetWordCount, currentWordCount, hasDate, startDate, includeTime, startTime, duration, scene, linkedEvent, hasBookLevelGoal]);
 
   const handleSave = () => {
     const data: Partial<Scene> & { chapterId?: string } = {
@@ -793,10 +800,19 @@ function SceneFormDialog({ chapterId, scene, onClose }: { chapterId: string; sce
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label-field">Objectif {countUnitLabel(countUnit)}</label>
-                <input type="number" value={targetWordCount} onChange={(e) => setTargetWordCount(Number(e.target.value))} className="input-field" min={0} />
-              </div>
+              {hasBookLevelGoal ? (
+                <div>
+                  <label className="label-field">Objectif {countUnitLabel(countUnit)}</label>
+                  <p className="input-field bg-parchment-100 text-ink-300 cursor-not-allowed select-none">
+                    {scene ? (getSceneTarget(scene, allScenes, goals) ?? '—') : '—'} <span className="text-xs">(calculé)</span>
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="label-field">Objectif {countUnitLabel(countUnit)}</label>
+                  <input type="number" value={targetWordCount} onChange={(e) => setTargetWordCount(Number(e.target.value))} className="input-field" min={0} />
+                </div>
+              )}
               {writingMode === 'count' && (
                 <div>
                   <label className="label-field">{countUnit === 'characters' ? 'Signes écrits' : 'Mots écrits'}</label>

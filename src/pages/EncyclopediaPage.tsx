@@ -1,12 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { Users, MapPin, Map, Globe, BookOpen, Target, Eye, Clock, Lightbulb, LayoutDashboard, Feather, Film, PenLine } from 'lucide-react';
+import { Users, MapPin, Map, Globe, BookOpen, Target, Eye, Lightbulb, LayoutDashboard, Timer } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useEffect, useMemo } from 'react';
-import { getTodayProgress } from '@/lib/calculations';
-import { countUnitLabel, isSpecialChapter } from '@/lib/utils';
+import { getTodayProgress, getDailyGoal, getOverallProgress } from '@/lib/calculations';
+import { countUnitLabel, isSpecialChapter, formatWritingTime } from '@/lib/utils';
 
 export function EncyclopediaPage() {
   const navigate = useNavigate();
@@ -18,6 +18,7 @@ export function EncyclopediaPage() {
   const noteIdeas = useBookStore((s) => s.noteIdeas ?? []);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const bookId = useBookStore((s) => s.id);
+  const dailySnapshots = useBookStore((s) => s.dailySnapshots);
 
   const user = useAuthStore((s) => s.user);
   const reviewSessions = useReviewStore((s) => s.sessions);
@@ -57,9 +58,13 @@ export function EncyclopediaPage() {
   );
 
   const unit = countUnitLabel(countUnit);
-  const dailyGoal = goals.dailyGoal ?? 0;
-  const dailyPct = dailyGoal > 0 ? Math.min(100, Math.round((todayProgress.todayCount / dailyGoal) * 100)) : 0;
+  const computedDailyGoal = getDailyGoal(scenes, goals);
+  const dailyPct = computedDailyGoal && computedDailyGoal > 0 ? Math.min(100, Math.round((todayProgress.todayCount / computedDailyGoal) * 100)) : 0;
+  const overallProgress = getOverallProgress(scenes, goals);
 
+  // Writing time today
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const writingMinutesToday = dailySnapshots.find((s) => s.date === todayDateStr)?.writingMinutesToday ?? 0;
   const encyclopediaCards = [
     { label: 'Personnages', count: characters.length, icon: Users, color: 'bg-bordeaux-100 text-bordeaux-500', to: '/characters' },
     { label: 'Lieux', count: places.length, icon: MapPin, color: 'bg-gold-100 text-gold-600', to: '/places' },
@@ -100,32 +105,56 @@ export function EncyclopediaPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Daily goal */}
-        <button onClick={() => navigate('/progress')} className="card-fantasy p-5 text-left hover:shadow-lg hover:border-bordeaux-300 transition-all duration-200 group">
+        {/* Progress + Daily goal */}
+        <button onClick={() => navigate('/progression')} className="card-fantasy p-5 text-left hover:shadow-lg hover:border-bordeaux-300 transition-all duration-200 group">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-bordeaux-100 flex items-center justify-center text-bordeaux-500 group-hover:scale-105 transition-transform">
               <Target className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-display font-bold text-ink-500">Objectif du jour</h3>
+              <h3 className="font-display font-bold text-ink-500">Avancement</h3>
               <p className="text-xs text-ink-300">
-                {dailyGoal > 0
-                  ? `${todayProgress.todayCount.toLocaleString('fr-FR')} / ${dailyGoal.toLocaleString('fr-FR')} ${unit}`
-                  : 'Non défini'}
+                {Math.round(overallProgress * 100)}%
               </p>
             </div>
           </div>
-          {dailyGoal > 0 && (
-            <div className="w-full bg-parchment-200 rounded-full h-2.5 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500 bg-bordeaux-400"
-                style={{ width: `${dailyPct}%` }}
-              />
+          <div className="w-full bg-parchment-200 rounded-full h-2.5 overflow-hidden mb-2">
+            <div
+              className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-bordeaux-500 to-gold-400"
+              style={{ width: `${overallProgress * 100}%` }}
+            />
+          </div>
+          <div className={`mt-3 pt-3 border-t border-parchment-200 grid gap-4 ${writingMinutesToday > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {/* Daily word goal */}
+            <div>
+              <p className="text-xs text-ink-400 font-medium mb-1">Objectif du jour</p>
+              {computedDailyGoal != null && computedDailyGoal > 0 ? (
+                <>
+                  <p className="text-xs text-ink-300">
+                    {todayProgress.todayCount.toLocaleString('fr-FR')} / {computedDailyGoal.toLocaleString('fr-FR')} {unit}
+                  </p>
+                  <div className="w-full bg-parchment-200 rounded-full h-1.5 overflow-hidden mt-1">
+                    <div
+                      className="h-full rounded-full transition-all duration-500 bg-bordeaux-400"
+                      style={{ width: `${dailyPct}%` }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-ink-200">Non défini</p>
+              )}
             </div>
-          )}
-          {dailyGoal > 0 && (
-            <p className="text-xs text-ink-200 mt-1.5 text-right">{dailyPct}%</p>
-          )}
+
+            {/* Writing time today */}
+            {writingMinutesToday > 0 && (
+              <div>
+                <p className="text-xs text-ink-400 font-medium mb-1 flex items-center gap-1">
+                  <Timer className="w-3 h-3" /> Écriture aujourd'hui
+                </p>
+                <p className="text-sm font-semibold text-ink-500">{formatWritingTime(writingMinutesToday)}</p>
+              </div>
+            )}
+          </div>
         </button>
 
         {/* Manuscript status */}

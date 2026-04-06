@@ -8,7 +8,8 @@ import { CharactersPage } from '@/pages/CharactersPage';
 import { PlacesPage } from '@/pages/PlacesPage';
 import { ChaptersPage } from '@/pages/ChaptersPage';
 import { TimelinePage } from '@/pages/TimelinePage';
-import { ProgressPage } from '@/pages/ProgressPage';
+import { ProgressionPage } from '@/pages/ProgressionPage';
+import { ObjectifsPage } from '@/pages/ObjectifsPage';
 import { WorldPage } from '@/pages/WorldPage';
 import { MapsPage } from '@/pages/MapsPage';
 import { NotesIdeasPage } from '@/pages/NotesIdeasPage';
@@ -75,7 +76,8 @@ const router = createBrowserRouter([
           { path: 'places', element: <PlacesPage /> },
           { path: 'chapters', element: <ChaptersPage /> },
           { path: 'timeline', element: <TimelinePage /> },
-          { path: 'progress', element: <ProgressPage /> },
+          { path: 'progression', element: <ProgressionPage /> },
+          { path: 'objectifs', element: <ObjectifsPage /> },
           { path: 'world', element: <WorldPage /> },
           { path: 'maps', element: <MapsPage /> },
           { path: 'notes', element: <NotesIdeasPage /> },

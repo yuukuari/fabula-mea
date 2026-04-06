@@ -278,3 +278,11 @@ export function getChapterShortLabel(chapter: { type?: string; number: number; t
   if (chapter.type === 'back_matter') return BACK_MATTER_LABEL;
   return `Ch. ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`;
 }
+
+/** Format a duration in minutes to a human-readable string (e.g. "45 min", "1h30", "2h") */
+export function formatWritingTime(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}

@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { SearchDialog, useSearchShortcut } from './SearchDialog';
-import { FloatingPomodoro } from '@/components/progress/FloatingPomodoro';
+import { FloatingWritingTimer } from '@/components/progress/FloatingWritingTimer';
 import { EditorTabs } from '@/components/editor/EditorTabs';
 import { SceneEditor } from '@/components/editor/SceneEditor';
 import { useLibraryStore } from '@/store/useLibraryStore';
@@ -64,7 +64,7 @@ export function AppShell() {
       </div>
 
       <SearchDialog open={open} onClose={() => setOpen(false)} />
-      <FloatingPomodoro />
+      <FloatingWritingTimer />
       {/* Full-screen scene editor */}
       <SceneEditor />
       {/* Floating editor tabs – fixed bottom center */}

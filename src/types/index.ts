@@ -168,13 +168,45 @@ export interface Scene {
 export type SceneStatus = 'outline' | 'draft' | 'revision' | 'complete';
 
 // ─── Goals & Progress ───
+export type GoalMode = 'total' | 'perScene' | 'none';
+export type ObjectiveType = 'wordCount' | 'time';
+
+export interface TimeObjective {
+  hoursPerDay?: number;
+  hoursPerWeek?: number;
+  hoursPerMonth?: number;
+}
+
 export interface ProjectGoals {
-  targetEndDate?: string;
-  startDate?: string;
-  defaultWordsPerScene: number;
-  dailyGoal?: number;
+  mode: GoalMode;                     // Longueur du livre (total/perScene/none)
+  targetTotalCount?: number;          // Cas 1 : objectif total du livre (mots ou signes)
+  targetCountPerScene?: number;       // Cas 2 : objectif par scène (mots ou signes)
+  // Section objectif d'écriture
+  objectiveEnabled: boolean;          // Je me fixe un objectif d'écriture
+  objectiveType?: ObjectiveType;      // Type d'objectif : mots/signes ou temps
+  targetEndDate?: string;             // Date cible de fin d'écriture
+  manualDailyGoal?: number;           // Objectif journalier manuel (mode 'none' ou sans date cible)
+  timeObjective?: TimeObjective;      // Objectif en temps d'écriture
   excludedPeriods: ExcludedPeriod[];
 }
+
+export interface DailySnapshot {
+  date: string;                // YYYY-MM-DD
+  totalWritten: number;        // Total mots/signes écrits à ce jour
+  writtenToday: number;        // Mots/signes écrits dans la journée
+  dailyGoal: number | null;    // Objectif journalier calculé ce jour-là
+  objectiveType?: ObjectiveType; // Type d'objectif en vigueur
+  timeGoal?: TimeObjective;    // Objectif en temps en vigueur
+  writingMinutesToday?: number; // Minutes d'écriture chronométrées aujourd'hui
+  targetTotal: number | null;  // Objectif total en vigueur
+  targetEndDate: string | null;// Date cible en vigueur
+  progress: number;            // Avancement global (0-1)
+  completedScenes: number;     // Nombre de scènes terminées
+  totalScenes: number;         // Nombre total de scènes
+}
+
+// ─── Writing Timer ───
+export type WritingTimerMode = 'free' | 'timed' | 'pomodoro';
 
 export interface ExcludedPeriod {
   id: EntityId;
@@ -513,7 +545,8 @@ export interface BookProject {
   scenes: Scene[];
   tags: Tag[];
   goals: ProjectGoals;
-  writingSessions: WritingSession[];
+  dailySnapshots: DailySnapshot[];
+  writingSessions?: WritingSession[]; // @deprecated — kept for compat, unused
   worldNotes: WorldNote[];
   maps: MapItem[];
   timelineEvents?: TimelineEvent[];

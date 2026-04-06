@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
-  WritingSession, WorldNote, ExcludedPeriod, ProjectGoals,
+  WorldNote, ExcludedPeriod, ProjectGoals, DailySnapshot,
   Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
   BookLayout, TimelineEvent, EventDuration, DurationUnit,
 } from '@/types';
@@ -13,6 +13,7 @@ import { useSyncStore } from './useSyncStore';
 import { useSagaStore } from './useSagaStore';
 import { isBase64, uploadImage } from '@/lib/upload';
 import { migrateScenesToTimelineEvents } from '@/lib/migration';
+import { getOverallProgress, getDailyGoal, getCompletedScenesCount, getTodayProgress as calcTodayProgress } from '@/lib/calculations';
 import * as enc from './encyclopedia-helpers';
 import { migrateEncyclopediaImages } from './encyclopedia-helpers';
 
@@ -98,10 +99,7 @@ interface BookStore extends BookProject {
   updateGoals: (data: Partial<ProjectGoals>) => void;
   addExcludedPeriod: (period: Omit<ExcludedPeriod, 'id'>) => void;
   deleteExcludedPeriod: (id: string) => void;
-
-  // Writing Sessions
-  addWritingSession: (session: Omit<WritingSession, 'id'>) => void;
-  deleteWritingSession: (id: string) => void;
+  recordWritingMinutes: (minutes: number) => void;
 
   // World Notes
   addWorldNote: (note: Partial<WorldNote> & { title: string }) => string;
@@ -162,10 +160,11 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     scenes: [],
     tags: [],
     goals: {
-      defaultWordsPerScene: 500,
+      mode: 'none',
+      objectiveEnabled: false,
       excludedPeriods: [],
     },
-    writingSessions: [],
+    dailySnapshots: [],
     worldNotes: [],
     maps: [],
     timelineEvents: [],
@@ -198,7 +197,7 @@ function extractProjectData(state: BookStore): BookProject {
     scenes: state.scenes,
     tags: state.tags,
     goals: state.goals,
-    writingSessions: state.writingSessions,
+    dailySnapshots: state.dailySnapshots,
     worldNotes: state.worldNotes,
     maps: state.maps,
     timelineEvents: state.timelineEvents,
@@ -211,6 +210,70 @@ function extractProjectData(state: BookStore): BookProject {
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
   };
+}
+
+/** Migrate old goals format to new format */
+function migrateGoals(project: BookProject): BookProject {
+  const g = project.goals as unknown as Record<string, unknown>;
+  if (!g.mode) {
+    project.goals = {
+      mode: 'none',
+      objectiveEnabled: false,
+      excludedPeriods: Array.isArray(g.excludedPeriods) ? g.excludedPeriods as ExcludedPeriod[] : [],
+    };
+  }
+  // Migrate dailyGoalEnabled → objectiveEnabled
+  if ('dailyGoalEnabled' in g && !('objectiveEnabled' in g)) {
+    const goals = project.goals as unknown as Record<string, unknown>;
+    goals.objectiveEnabled = !!g.dailyGoalEnabled;
+    if (g.dailyGoalEnabled) {
+      goals.objectiveType = 'wordCount';
+    }
+    delete goals.dailyGoalEnabled;
+    project.goals = goals as unknown as typeof project.goals;
+  }
+  if (!project.dailySnapshots) {
+    project.dailySnapshots = [];
+  }
+  return project;
+}
+
+/** Update or create today's daily snapshot */
+function updateDailySnapshot(state: BookProject): DailySnapshot[] {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const scenes = state.scenes;
+  const goals = state.goals;
+  const totalWritten = scenes.reduce((sum, s) => sum + s.currentWordCount, 0);
+
+  // Calculate today's written count using localStorage snapshot
+  const { todayCount } = calcTodayProgress(state.id, totalWritten);
+
+  const snapshot: DailySnapshot = {
+    date: todayStr,
+    totalWritten,
+    writtenToday: todayCount,
+    dailyGoal: getDailyGoal(scenes, goals),
+    objectiveType: goals.objectiveEnabled ? goals.objectiveType : undefined,
+    timeGoal: goals.objectiveType === 'time' ? goals.timeObjective : undefined,
+    targetTotal: goals.mode === 'total' ? (goals.targetTotalCount ?? null) : (goals.mode === 'perScene' && goals.targetCountPerScene ? goals.targetCountPerScene * scenes.length : null),
+    targetEndDate: goals.targetEndDate ?? null,
+    progress: getOverallProgress(scenes, goals),
+    completedScenes: getCompletedScenesCount(scenes),
+    totalScenes: scenes.length,
+  };
+
+  const snapshots = [...(state.dailySnapshots || [])];
+  const todayIdx = snapshots.findIndex((s) => s.date === todayStr);
+  if (todayIdx >= 0) {
+    // Preserve writing minutes tracked by the timer
+    if (snapshots[todayIdx].writingMinutesToday) {
+      snapshot.writingMinutesToday = snapshots[todayIdx].writingMinutesToday;
+    }
+    snapshots[todayIdx] = snapshot;
+  } else {
+    snapshots.push(snapshot);
+  }
+  return snapshots;
 }
 
 function touchSave(extra: Record<string, unknown> = {}) {
@@ -333,7 +396,7 @@ export const useBookStore = create<BookStore>()(
 
         const raw = localStorage.getItem(getBookStorageKey(bookId));
         if (raw) {
-          const project = migrateScenesToTimelineEvents(ensureSpecialChapters(JSON.parse(raw) as BookProject));
+          const project = migrateGoals(migrateScenesToTimelineEvents(ensureSpecialChapters(JSON.parse(raw) as BookProject)));
           set({ ...emptyState(), ...project, lastSavedAt: now(), _loaded: true });
           // Load saga if this book belongs to one
           if (project.sagaId) {
@@ -349,7 +412,7 @@ export const useBookStore = create<BookStore>()(
             const remote = remoteData as BookProject;
             const cur = get();
             if (!raw || remote.updatedAt > (cur.updatedAt ?? '')) {
-              const migrated = migrateScenesToTimelineEvents(ensureSpecialChapters(remote));
+              const migrated = migrateGoals(migrateScenesToTimelineEvents(ensureSpecialChapters(remote)));
               set({ ...emptyState(), ...migrated, lastSavedAt: now(), _loaded: true });
               localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(migrated));
               // Load saga from remote data if needed
@@ -368,7 +431,12 @@ export const useBookStore = create<BookStore>()(
       saveBook: () => {
         const state = get();
         if (!state._loaded || !state.id) return;
-        const data = extractProjectData(state);
+        // Update daily snapshot before saving
+        const snapshots = updateDailySnapshot(state);
+        if (snapshots !== state.dailySnapshots) {
+          set({ dailySnapshots: snapshots });
+        }
+        const data = extractProjectData({ ...state, dailySnapshots: snapshots });
         const json = JSON.stringify(data);
 
         // Sauvegarde locale (immédiate)
@@ -594,7 +662,7 @@ export const useBookStore = create<BookStore>()(
               duration: scene.duration,
               startDateTime: scene.startDateTime,
               endDateTime: scene.endDateTime,
-              targetWordCount: scene.targetWordCount ?? s.goals.defaultWordsPerScene,
+              targetWordCount: scene.targetWordCount ?? 0,
               currentWordCount: scene.currentWordCount ?? 0,
               status: scene.status ?? 'outline',
               tags: scene.tags ?? [],
@@ -664,7 +732,6 @@ export const useBookStore = create<BookStore>()(
             ...c,
             sceneIds: c.sceneIds.filter((sid) => sid !== id),
           })),
-          writingSessions: s.writingSessions.filter((ws) => ws.sceneId !== id),
           ...touchSave(),
         })),
 
@@ -754,18 +821,31 @@ export const useBookStore = create<BookStore>()(
           ...touchSave(),
         })),
 
-      // ─── Writing Sessions ───
-      addWritingSession: (session) =>
-        set((s) => ({
-          writingSessions: [...s.writingSessions, { ...session, id: generateId() }],
-          ...touchSave(),
-        })),
-
-      deleteWritingSession: (id) =>
-        set((s) => ({
-          writingSessions: s.writingSessions.filter((ws) => ws.id !== id),
-          ...touchSave(),
-        })),
+      recordWritingMinutes: (minutes) =>
+        set((s) => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const snapshots = [...(s.dailySnapshots || [])];
+          const idx = snapshots.findIndex((snap) => snap.date === todayStr);
+          if (idx >= 0) {
+            snapshots[idx] = { ...snapshots[idx], writingMinutesToday: minutes };
+          } else {
+            // Create a minimal snapshot; full snapshot will be rebuilt on next saveBook
+            const totalWritten = s.scenes.reduce((sum, sc) => sum + sc.currentWordCount, 0);
+            snapshots.push({
+              date: todayStr,
+              totalWritten,
+              writtenToday: 0,
+              dailyGoal: null,
+              targetTotal: null,
+              targetEndDate: null,
+              progress: 0,
+              completedScenes: 0,
+              totalScenes: s.scenes.length,
+              writingMinutesToday: minutes,
+            });
+          }
+          return { dailySnapshots: snapshots, ...touchSave() };
+        }),
 
       // ─── World Notes ───
       addWorldNote: (note) => {
@@ -1166,7 +1246,7 @@ export const useBookStore = create<BookStore>()(
           orderInChapter: chapter.sceneIds.length,
           characterIds: [...event.characterIds],
           placeId: event.placeId,
-          targetWordCount: state.goals.defaultWordsPerScene,
+          targetWordCount: 0,
           currentWordCount: 0,
           status: 'outline',
           tags: [...event.tags],

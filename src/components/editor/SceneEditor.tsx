@@ -7,7 +7,7 @@ import { SceneInlineEditor, countWords } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
 import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel, formatDuration } from '@/lib/utils';
-import { getTodayProgress } from '@/lib/calculations';
+import { getTodayProgress, getDailyGoal, getSceneTarget } from '@/lib/calculations';
 import type { Scene, Chapter, GlossaryEntry } from '@/types';
 
 const STATUS_DOT: Record<string, string> = {
@@ -24,7 +24,7 @@ export function SceneEditor() {
   const { characters, places, worldNotes: allWorldNotes } = useEncyclopediaStore();
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const bookId = useBookStore((s) => s.id);
-  const dailyGoal = useBookStore((s) => s.goals?.dailyGoal);
+  const goals = useBookStore((s) => s.goals);
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled ?? false);
   const bookTitle = useBookStore((s) => s.title);
   const bookAuthor = useBookStore((s) => s.author);
@@ -180,13 +180,18 @@ export function SceneEditor() {
 
   // Stats globales
   const totalWords = scenes.reduce((sum, sc) => sum + countWords(sc.content ?? ''), 0);
-  const totalTarget = scenes.reduce((sum, sc) => sum + sc.targetWordCount, 0);
+  const totalTarget = goals.mode === 'total' && goals.targetTotalCount
+    ? goals.targetTotalCount
+    : goals.mode === 'perScene' && goals.targetCountPerScene
+      ? goals.targetCountPerScene * scenes.length
+      : 0;
 
   // Daily progress
   const totalCount = countUnit === 'characters'
     ? scenes.reduce((sum, sc) => sum + countCharacters(sc.content ?? ''), 0)
     : totalWords;
   const todayCount = bookId ? getTodayProgress(bookId, totalCount).todayCount : 0;
+  const dailyGoal = getDailyGoal(scenes, goals);
 
   const visibleScene = visibleSceneId ? scenes.find((s) => s.id === visibleSceneId) : null;
   const visibleChapter = visibleScene ? chapters.find((c) => c.id === visibleScene.chapterId) : null;
@@ -253,7 +258,12 @@ export function SceneEditor() {
                         {sceneLabel}
                       </p>
                       <p className="text-[10px] text-ink-200 mt-0.5">
-                        {wc} / {scene.targetWordCount} {countUnitLabel(countUnit)}
+                        {(() => {
+                          const target = getSceneTarget(scene, scenes, goals);
+                          return target != null
+                            ? `${wc} / ${target} ${countUnitLabel(countUnit)}`
+                            : `${wc} ${countUnitLabel(countUnit)}`;
+                        })()}
                       </p>
                     </div>
 
@@ -333,28 +343,35 @@ export function SceneEditor() {
           })()}
         </div>
 
-        {/* Stats globales */}
-        <div className="hidden sm:flex items-center gap-2 text-xs text-ink-200 shrink-0">
-          <span>{totalWords.toLocaleString('fr-FR')} {countUnitLabel(countUnit)}</span>
-          {totalTarget > 0 && (
-            <span>/ {totalTarget.toLocaleString('fr-FR')} objectif</span>
+        {/* Stats & daily goal — unified */}
+        <div className="hidden sm:flex items-center gap-3 text-xs shrink-0">
+          {/* Book total */}
+          <span className="text-ink-300 tabular-nums">
+            {totalWords.toLocaleString('fr-FR')}{totalTarget > 0 ? ` / ${totalTarget.toLocaleString('fr-FR')}` : ''} {countUnitLabel(countUnit)}
+          </span>
+
+          {/* Daily goal */}
+          {dailyGoal != null && dailyGoal > 0 && (
+            <>
+              <span className="w-px h-3.5 bg-parchment-300" />
+              <div
+                className="flex items-center gap-1.5"
+                title={`Aujourd'hui : ${todayCount.toLocaleString('fr-FR')} / ${dailyGoal.toLocaleString('fr-FR')} ${countUnit === 'characters' ? 'signes' : 'mots'}`}
+              >
+                <span className="text-ink-200">Jour :</span>
+                <div className="w-14 h-1.5 bg-parchment-200 rounded-full overflow-hidden">
+                  <div
+                    className={cn('h-full rounded-full transition-all', todayCount >= dailyGoal ? 'bg-green-500' : 'bg-bordeaux-400')}
+                    style={{ width: `${Math.min(100, (todayCount / dailyGoal) * 100)}%` }}
+                  />
+                </div>
+                <span className={cn('tabular-nums', todayCount >= dailyGoal ? 'text-green-600' : 'text-ink-200')}>
+                  {todayCount >= dailyGoal ? '✓' : `${todayCount.toLocaleString('fr-FR')}/${dailyGoal.toLocaleString('fr-FR')}`}
+                </span>
+              </div>
+            </>
           )}
         </div>
-
-        {/* Daily progress indicator */}
-        {dailyGoal && dailyGoal > 0 && (
-          <div className="hidden sm:flex items-center gap-1.5 text-xs shrink-0" title={`Aujourd'hui : ${todayCount.toLocaleString('fr-FR')} / ${dailyGoal.toLocaleString('fr-FR')} ${countUnit === 'characters' ? 'signes' : 'mots'}`}>
-            <div className="w-16 h-1.5 bg-parchment-200 rounded-full overflow-hidden">
-              <div
-                className={cn('h-full rounded-full transition-all', todayCount >= dailyGoal ? 'bg-green-500' : 'bg-bordeaux-400')}
-                style={{ width: `${Math.min(100, (todayCount / dailyGoal) * 100)}%` }}
-              />
-            </div>
-            <span className={cn('tabular-nums', todayCount >= dailyGoal ? 'text-green-600' : 'text-ink-200')}>
-              {todayCount >= dailyGoal ? '✓' : `${todayCount}/${dailyGoal}`}
-            </span>
-          </div>
-        )}
 
         {/* Sauvegarde auto */}
         <div className="hidden md:flex items-center gap-1.5 text-xs text-ink-200 shrink-0">
@@ -517,19 +534,24 @@ export function SceneEditor() {
                       <div className="mt-3 flex items-center gap-2">
                         {(() => {
                           const wc = countWords(scene.content ?? '');
-                          const pct = scene.targetWordCount > 0
-                            ? Math.min(100, Math.round((wc / scene.targetWordCount) * 100))
+                          const target = getSceneTarget(scene, scenes, goals);
+                          const pct = target != null && target > 0
+                            ? Math.min(100, Math.round((wc / target) * 100))
                             : 0;
                           return (
                             <>
-                              <div className="h-0.5 w-20 bg-parchment-200 rounded-full overflow-hidden">
-                                <div
-                                  className={cn('h-full rounded-full', pct >= 100 ? 'bg-green-400' : 'bg-bordeaux-300')}
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
+                              {target != null && (
+                                <div className="h-0.5 w-20 bg-parchment-200 rounded-full overflow-hidden">
+                                  <div
+                                    className={cn('h-full rounded-full', pct >= 100 ? 'bg-green-400' : 'bg-bordeaux-300')}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              )}
                               <span className="text-xs text-ink-200">
-                                {wc} / {scene.targetWordCount} {countUnitLabel(countUnit)}
+                                {target != null
+                                  ? `${wc} / ${target} ${countUnitLabel(countUnit)}`
+                                  : `${wc} ${countUnitLabel(countUnit)}`}
                               </span>
                             </>
                           );
