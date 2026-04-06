@@ -430,6 +430,10 @@ export const useBookStore = create<BookStore>()(
           } else {
             useSagaStore.getState().unloadSaga();
           }
+        } else {
+          // No local cache — set minimal state so the book id is tracked
+          set({ ...emptyState(), id: bookId, _loaded: true });
+          useSagaStore.getState().unloadSaga();
         }
 
         // 2. Fetch from server (source of truth) and apply — but only if user hasn't edited since
@@ -438,8 +442,8 @@ export const useBookStore = create<BookStore>()(
           useSyncStore.getState().setSyncing();
           api.books.get(bookId).then((remoteData) => {
             const cur = get();
-            // Only apply cloud data if we're still on the same book AND user hasn't made changes
-            if (cur.id !== bookId || !cur._loaded) return;
+            // Only apply cloud data if we're still on the same book
+            if (cur.id !== bookId) return;
             if (cur.updatedAt !== loadedAt) {
               // User already edited — don't overwrite, just mark as synced
               useSyncStore.getState().setSynced();
@@ -455,6 +459,7 @@ export const useBookStore = create<BookStore>()(
           }).catch(() => {
             // Remote not found yet (new book) or offline — use local cache
             if (raw) useSyncStore.getState().setSynced();
+            else useSyncStore.getState().setError('Livre introuvable sur le serveur');
           });
         }
       },

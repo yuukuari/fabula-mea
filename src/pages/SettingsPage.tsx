@@ -339,7 +339,7 @@ function VersionHistorySection({ bookId }: { bookId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const loadVersions = useCallback(() => {
-    if (!hasToken) return;
+    if (!hasToken || !bookId) return;
     setLoading(true);
     setError(null);
     api.books.history(bookId)
