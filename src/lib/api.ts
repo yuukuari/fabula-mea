@@ -9,7 +9,7 @@
 
 import { devAuth } from '@/lib/dev-auth';
 import { devDb } from '@/lib/dev-db';
-import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment } from '@/types';
+import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta } from '@/types';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -140,6 +140,18 @@ export const api = {
             method: 'POST',
             body: JSON.stringify(data),
           }),
+    history: (bookId: string) =>
+      IS_DEV
+        ? devDb.versionHistory.list(bookId)
+        : apiFetch<{ versions: VersionMeta[] }>(`/book/${bookId}?history`),
+    getVersion: (bookId: string, index: number) =>
+      IS_DEV
+        ? devDb.versionHistory.getVersion(bookId, index)
+        : apiFetch<{ meta: VersionMeta; data: unknown }>(`/book/${bookId}?version=${index}`),
+    restoreVersion: (bookId: string, index: number) =>
+      IS_DEV
+        ? devDb.versionHistory.restore(bookId, index)
+        : apiFetch<{ ok: boolean; data: unknown }>(`/book/${bookId}?restore=${index}`, { method: 'POST' }),
   },
 
   sagas: {

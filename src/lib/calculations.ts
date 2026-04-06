@@ -1,5 +1,6 @@
 import { differenceInDays, eachDayOfInterval, parseISO, isWithinInterval, startOfDay } from 'date-fns';
-import type { Scene, ProjectGoals, ExcludedPeriod } from '@/types';
+import type { Scene, ProjectGoals, ExcludedPeriod, CountUnit } from '@/types';
+import { WORDS_TO_CHARS_RATIO } from '@/lib/utils';
 
 // ─── Helpers ───
 
@@ -209,22 +210,47 @@ export function getDailyGoal(scenes: Scene[], goals: ProjectGoals): number | nul
 
 // ─── Book Type Estimation ───
 
-export type BookType = 'micro_nouvelle' | 'nouvelle' | 'novella' | 'roman' | 'grand_roman';
+export type BookType = 'micro_nouvelle' | 'nouvelle' | 'novella' | 'roman_court' | 'roman' | 'long_roman' | 'tres_long_roman';
 
 const WORDS_PER_PAGE = 250;
 
-export function getPageEstimate(wordCount: number): number {
-  return Math.ceil(wordCount / WORDS_PER_PAGE);
+/** Estimate page count. If unit is 'characters', converts to words first using the standard ratio. */
+export function getPageEstimate(count: number, unit: CountUnit = 'words'): number {
+  const words = unit === 'characters' ? Math.round(count / WORDS_TO_CHARS_RATIO) : count;
+  return Math.ceil(words / WORDS_PER_PAGE);
 }
 
-export function getBookType(wordCount: number): { type: BookType; label: string; pages: number } {
-  const pages = getPageEstimate(wordCount);
-  if (pages <= 20) return { type: 'micro_nouvelle', label: 'Micro-nouvelle', pages };
-  if (pages <= 80) return { type: 'nouvelle', label: 'Nouvelle', pages };
-  if (pages <= 200) return { type: 'novella', label: 'Novella', pages };
-  if (pages <= 400) return { type: 'roman', label: 'Roman', pages };
-  return { type: 'grand_roman', label: 'Grand roman', pages };
+/**
+ * Book type thresholds (source: monde-fantasy.com)
+ * Words / Characters (spaces incl.)
+ * < 1 000 / < 6 000              → Micro-nouvelle
+ * 1 000 – 15 000 / 6 000 – 90 000   → Nouvelle
+ * 15 000 – 30 000 / 90 000 – 180 000 → Novella
+ * 30 000 – 50 000 / 180 000 – 300 000 → Roman court
+ * 50 000 – 80 000 / 300 000 – 480 000 → Roman
+ * 80 000 – 110 000 / 480 000 – 660 000 → Long roman
+ * > 110 000 / > 660 000            → Très long roman
+ */
+const BOOK_TYPE_THRESHOLDS: { type: BookType; label: string; maxWords: number; maxChars: number }[] = [
+  { type: 'micro_nouvelle', label: 'Micro-nouvelle', maxWords: 1_000, maxChars: 6_000 },
+  { type: 'nouvelle', label: 'Nouvelle', maxWords: 15_000, maxChars: 90_000 },
+  { type: 'novella', label: 'Novella', maxWords: 30_000, maxChars: 180_000 },
+  { type: 'roman_court', label: 'Roman court', maxWords: 50_000, maxChars: 300_000 },
+  { type: 'roman', label: 'Roman', maxWords: 80_000, maxChars: 480_000 },
+  { type: 'long_roman', label: 'Long roman', maxWords: 110_000, maxChars: 660_000 },
+];
+
+export function getBookType(count: number, unit: CountUnit = 'words'): { type: BookType; label: string; pages: number } {
+  const pages = getPageEstimate(count, unit);
+  for (const t of BOOK_TYPE_THRESHOLDS) {
+    const threshold = unit === 'characters' ? t.maxChars : t.maxWords;
+    if (count <= threshold) return { type: t.type, label: t.label, pages };
+  }
+  return { type: 'tres_long_roman', label: 'Très long roman', pages };
 }
+
+/** Exported for UI (BookTypeScale) */
+export { BOOK_TYPE_THRESHOLDS };
 
 /**
  * Estime le nombre total de mots et par scène à partir des scènes déjà écrites.

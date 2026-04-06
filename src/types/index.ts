@@ -556,3 +556,25 @@ export interface BookProject {
   createdAt: string;
   updatedAt: string;
 }
+
+// ─── Version History ───
+export interface VersionStats {
+  chapters: number;
+  scenes: number;
+  events: number;
+  words: number;
+  characters: number;
+  places: number;
+  worldNotes: number;
+  maps: number;
+  notes: number;
+}
+
+export interface VersionMeta {
+  index: number;
+  savedAt: string;
+  title: string;
+  stats: VersionStats;
+  /** True if this version was saved automatically before a restore */
+  isRestore?: boolean;
+}

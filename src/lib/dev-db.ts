@@ -12,7 +12,7 @@
  *   emlb-dev:releases                     → Release[]
  */
 
-import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment } from '@/types';
+import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta, VersionStats } from '@/types';
 import { devAuth } from '@/lib/dev-auth';
 
 // ─── Token decode (mirrors dev-auth.ts) ──────────────────────────────────────
@@ -46,6 +46,7 @@ const libraryKey = (uid: string) => `emlb-dev:u:${uid}:library`;
 const bookKey = (uid: string, bookId: string) => `emlb-dev:u:${uid}:book:${bookId}`;
 const sagasListKey = (uid: string) => `emlb-dev:u:${uid}:sagas`;
 const sagaKey = (uid: string, sagaId: string) => `emlb-dev:u:${uid}:saga:${sagaId}`;
+const bookHistoryKey = (uid: string, bookId: string) => `emlb-dev:u:${uid}:book:${bookId}:history`;
 
 function generateId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
@@ -189,6 +190,8 @@ export const devDb = {
 
     async save(bookId: string, data: unknown): Promise<{ ok: boolean }> {
       const uid = requireUserId();
+      // Record version history before overwriting (never fail the save)
+      try { devDb.versionHistory._recordIfNeeded(uid, bookId); } catch { /* ignore */ }
       localStorage.setItem(bookKey(uid, bookId), JSON.stringify(data));
       return { ok: true };
     },
@@ -209,6 +212,120 @@ export const devDb = {
         localStorage.setItem(bookKey(uid, book.id), JSON.stringify(book.data));
       }
       return { ok: true, migrated: data.books.length };
+    },
+  },
+
+  // ─── Version History ───────────────────────────────────────────────────
+
+  versionHistory: {
+    _extractStats(bookData: Record<string, unknown>, sagaData?: Record<string, unknown>): VersionStats {
+      const chapters = Array.isArray(bookData.chapters)
+        ? (bookData.chapters as Array<{ type?: string }>).filter((c) => c.type === 'chapter').length
+        : 0;
+      const scenes = Array.isArray(bookData.scenes) ? bookData.scenes.length : 0;
+      const events = Array.isArray(bookData.timelineEvents) ? bookData.timelineEvents.length : 0;
+      const words = Array.isArray(bookData.scenes)
+        ? (bookData.scenes as Array<{ currentWordCount?: number }>).reduce((sum, s) => sum + (s.currentWordCount ?? 0), 0)
+        : 0;
+      // Characters/places/worldNotes/maps: use saga data if available, otherwise book data
+      const encSource = sagaData ?? bookData;
+      const characters = Array.isArray(encSource.characters) ? encSource.characters.length : 0;
+      const places = Array.isArray(encSource.places) ? encSource.places.length : 0;
+      const worldNotes = Array.isArray(encSource.worldNotes) ? encSource.worldNotes.length : 0;
+      const maps = Array.isArray(encSource.maps) ? encSource.maps.length : 0;
+      const notes = Array.isArray(bookData.noteIdeas) ? bookData.noteIdeas.length : 0;
+      return { chapters, scenes, events, words, characters, places, worldNotes, maps, notes };
+    },
+
+    /** Get saga data for a book if it belongs to a saga */
+    _getSagaData(uid: string, bookData: Record<string, unknown>): Record<string, unknown> | undefined {
+      const sagaId = bookData.sagaId as string | undefined;
+      if (!sagaId) return undefined;
+      const raw = localStorage.getItem(sagaKey(uid, sagaId));
+      return raw ? JSON.parse(raw) as Record<string, unknown> : undefined;
+    },
+
+    async list(bookId: string): Promise<{ versions: VersionMeta[] }> {
+      const uid = requireUserId();
+      const history = getJson<Array<{ meta: VersionMeta; data: unknown }>>(bookHistoryKey(uid, bookId), []);
+      return { versions: history.map((entry, i) => ({ ...entry.meta, index: i })) };
+    },
+
+    async getVersion(bookId: string, index: number): Promise<{ meta: VersionMeta; data: unknown }> {
+      const uid = requireUserId();
+      const history = getJson<Array<{ meta: VersionMeta; data: unknown; sagaData?: unknown }>>(bookHistoryKey(uid, bookId), []);
+      if (index < 0 || index >= history.length) throw new Error('Version introuvable');
+      return { meta: { ...history[index].meta, index }, data: history[index].data, ...(history[index].sagaData ? { sagaData: history[index].sagaData } : {}) } as { meta: VersionMeta; data: unknown };
+    },
+
+    async restore(bookId: string, index: number): Promise<{ ok: boolean; data: unknown }> {
+      const uid = requireUserId();
+      const hKey = bookHistoryKey(uid, bookId);
+      const history = getJson<Array<{ meta: { savedAt: string; title: string; stats: VersionStats; isRestore?: boolean }; data: Record<string, unknown>; sagaData?: Record<string, unknown> }>>(hKey, []);
+      if (index < 0 || index >= history.length) throw new Error('Version introuvable');
+
+      // Grab the entry to restore BEFORE modifying the array
+      const entryToRestore = history[index];
+
+      // Save current as a new history entry before restoring
+      const currentRaw = localStorage.getItem(bookKey(uid, bookId));
+      if (currentRaw) {
+        const currentData = JSON.parse(currentRaw) as Record<string, unknown>;
+        const currentSagaData = this._getSagaData(uid, currentData);
+        history.unshift({
+          meta: {
+            savedAt: new Date().toISOString(),
+            title: (currentData.title as string) ?? '',
+            stats: this._extractStats(currentData, currentSagaData),
+            isRestore: true,
+          },
+          data: currentData,
+          ...(currentSagaData ? { sagaData: currentSagaData } : {}),
+        });
+        // Keep max 20
+        if (history.length > 20) history.length = 20;
+      }
+
+      // Restore book using the pre-saved reference
+      const restoredData: Record<string, unknown> = { ...entryToRestore.data, updatedAt: new Date().toISOString() };
+      localStorage.setItem(bookKey(uid, bookId), JSON.stringify(restoredData));
+
+      // Restore saga if snapshot included saga data
+      if (entryToRestore.sagaData && restoredData.sagaId) {
+        const restoredSaga = { ...entryToRestore.sagaData, updatedAt: new Date().toISOString() };
+        localStorage.setItem(sagaKey(uid, restoredData.sagaId as string), JSON.stringify(restoredSaga));
+      }
+
+      setJson(hKey, history);
+      return { ok: true, data: restoredData };
+    },
+
+    /** Called by books.save to record a version snapshot (with dedup) */
+    _recordIfNeeded(uid: string, bookId: string): void {
+      const hKey = bookHistoryKey(uid, bookId);
+      const currentRaw = localStorage.getItem(bookKey(uid, bookId));
+      if (!currentRaw) return;
+
+      const history = getJson<Array<{ meta: { savedAt: string; title: string; stats: VersionStats }; data: unknown; sagaData?: unknown }>>(hKey, []);
+
+      if (history.length > 0) {
+        const lastSavedAt = new Date(history[0].meta.savedAt).getTime();
+        if (Date.now() - lastSavedAt < 15 * 60 * 1000) return;
+      }
+
+      const currentData = JSON.parse(currentRaw) as Record<string, unknown>;
+      const currentSagaData = this._getSagaData(uid, currentData);
+      history.unshift({
+        meta: {
+          savedAt: new Date().toISOString(),
+          title: (currentData.title as string) ?? '',
+          stats: this._extractStats(currentData, currentSagaData),
+        },
+        data: currentData,
+        ...(currentSagaData ? { sagaData: currentSagaData } : {}),
+      });
+      if (history.length > 20) history.length = 20;
+      setJson(hKey, history);
     },
   },
 

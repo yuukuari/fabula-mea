@@ -4,7 +4,7 @@ import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import {
   getOverallProgress, getCompletedScenesCount,
-  getBookType, getPageEstimate, estimateFromScenes,
+  getBookType, getPageEstimate, estimateFromScenes, BOOK_TYPE_THRESHOLDS,
 } from '@/lib/calculations';
 import { cn, formatWritingTime } from '@/lib/utils';
 import type { GoalMode } from '@/types';
@@ -42,7 +42,7 @@ export function ProgressionPage() {
       return {
         totalWords: goals.targetTotalCount,
         perScene,
-        bookType: getBookType(goals.targetTotalCount),
+        bookType: getBookType(goals.targetTotalCount, countUnit),
         source: 'target' as const,
       };
     }
@@ -51,7 +51,7 @@ export function ProgressionPage() {
       return {
         totalWords: total,
         perScene: goals.targetCountPerScene,
-        bookType: getBookType(total),
+        bookType: getBookType(total, countUnit),
         source: 'target' as const,
       };
     }
@@ -61,13 +61,13 @@ export function ProgressionPage() {
       return {
         totalWords: est.estimatedTotal,
         perScene: est.estimatedPerScene,
-        bookType: getBookType(est.estimatedTotal),
+        bookType: getBookType(est.estimatedTotal, countUnit),
         completedCount: est.completedCount,
         source: 'estimated' as const,
       };
     }
     return null;
-  }, [goals, scenes]);
+  }, [goals, scenes, countUnit]);
 
   return (
     <div className="page-container">
@@ -112,7 +112,7 @@ export function ProgressionPage() {
                 <StatCard icon={TrendingUp} label={`${unitLabelCap} écrits`} value={totalWords.toLocaleString('fr-FR')} />
                 <div className="text-center">
                   <BookOpen className="w-5 h-5 text-gold-500 mx-auto mb-1" />
-                  <div className="text-lg font-bold text-ink-500">{getPageEstimate(totalWords)}</div>
+                  <div className="text-lg font-bold text-ink-500">{getPageEstimate(totalWords, countUnit)}</div>
                   <div className="text-xs text-ink-200 flex items-center justify-center gap-0.5">Pages estimées <PageInfoTip /></div>
                 </div>
                 {totalWritingMinutes > 0 && (
@@ -286,7 +286,7 @@ function IdealBookCard({
         )}
 
         {/* Book type scale */}
-        {estimation && <BookTypeScale currentPages={estimation.bookType.pages} />}
+        {estimation && <BookTypeScale currentCount={estimation.totalWords} countUnit={countUnit} />}
       </div>
 
       {showModal && (
@@ -347,7 +347,7 @@ function IdealBookModal({
             />
             {goals.targetTotalCount != null && goals.targetTotalCount > 0 && (
               <p className="text-xs text-ink-300 mt-1.5 flex items-center gap-1">
-                ~{getPageEstimate(goals.targetTotalCount)} pages estimées
+                ~{getPageEstimate(goals.targetTotalCount, countUnit)} pages estimées
                 <PageInfoTip />
               </p>
             )}
@@ -366,7 +366,7 @@ function IdealBookModal({
             />
             {goals.targetCountPerScene != null && goals.targetCountPerScene > 0 && (
               <p className="text-xs text-ink-300 mt-1.5 flex items-center gap-1">
-                ~{getPageEstimate(goals.targetCountPerScene)} pages/scène
+                ~{getPageEstimate(goals.targetCountPerScene, countUnit)} pages/scène
                 <PageInfoTip />
               </p>
             )}
@@ -541,35 +541,46 @@ function SceneStatusPie({
 }
 
 /** Visual scale showing where the current book falls in the typology, with cursor */
-function BookTypeScale({ currentPages }: { currentPages: number }) {
-  const types = [
-    { label: 'Micro-nouvelle', min: 0, max: 20, range: '< 20 p.' },
-    { label: 'Nouvelle', min: 20, max: 80, range: '20–80 p.' },
-    { label: 'Novella', min: 80, max: 200, range: '80–200 p.' },
-    { label: 'Roman', min: 200, max: 400, range: '200–400 p.' },
-    { label: 'Grand roman', min: 400, max: 800, range: '400+ p.' },
+function BookTypeScale({ currentCount, countUnit }: { currentCount: number; countUnit: 'words' | 'characters' }) {
+  const isChars = countUnit === 'characters';
+  const fmt = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+
+  // Build segments from thresholds + last open-ended segment
+  const segments = [
+    ...BOOK_TYPE_THRESHOLDS.map((t, i) => ({
+      label: t.label,
+      min: i === 0 ? 0 : (isChars ? BOOK_TYPE_THRESHOLDS[i - 1].maxChars : BOOK_TYPE_THRESHOLDS[i - 1].maxWords),
+      max: isChars ? t.maxChars : t.maxWords,
+    })),
+    {
+      label: 'Très long roman',
+      min: isChars
+        ? BOOK_TYPE_THRESHOLDS[BOOK_TYPE_THRESHOLDS.length - 1].maxChars
+        : BOOK_TYPE_THRESHOLDS[BOOK_TYPE_THRESHOLDS.length - 1].maxWords,
+      max: isChars
+        ? BOOK_TYPE_THRESHOLDS[BOOK_TYPE_THRESHOLDS.length - 1].maxChars * 1.5
+        : BOOK_TYPE_THRESHOLDS[BOOK_TYPE_THRESHOLDS.length - 1].maxWords * 1.5,
+    },
   ];
 
-  // Cursor position (0-100%)
-  const totalMax = 800;
-  const clampedPages = Math.min(Math.max(currentPages, 0), totalMax);
-  const cursorPct = (clampedPages / totalMax) * 100;
+  const totalMax = segments[segments.length - 1].max;
+  const clampedCount = Math.min(Math.max(currentCount, 0), totalMax);
+  const cursorPct = (clampedCount / totalMax) * 100;
 
   return (
     <div className="mt-3 pt-3 border-t border-parchment-200">
       <div className="flex items-center gap-1 mb-2">
-        <p className="text-[10px] text-ink-200">Pages estimées</p>
-        <PageInfoTip />
+        <p className="text-[10px] text-ink-200">Catégorie du livre</p>
       </div>
       {/* Track with segments */}
       <div className="relative">
         <div className="flex gap-px h-2 rounded-full overflow-hidden">
-          {types.map((t, i) => {
+          {segments.map((t, i) => {
             const isActive = i === 0
-              ? currentPages <= t.max
-              : currentPages > types[i - 1].max && currentPages <= t.max
+              ? currentCount <= t.max
+              : currentCount > segments[i - 1].max && currentCount <= t.max
                 ? true
-                : i === types.length - 1 && currentPages > types[i - 1].max;
+                : i === segments.length - 1 && currentCount > segments[i - 1].max;
             return (
               <div
                 key={t.label}
@@ -591,14 +602,19 @@ function BookTypeScale({ currentPages }: { currentPages: number }) {
         </div>
       </div>
 
-      {/* Labels + page ranges */}
+      {/* Labels + ranges */}
       <div className="flex mt-1.5">
-        {types.map((t, i) => {
+        {segments.map((t, i) => {
           const isActive = i === 0
-            ? currentPages <= t.max
-            : currentPages > types[i - 1].max && currentPages <= t.max
+            ? currentCount <= t.max
+            : currentCount > segments[i - 1].max && currentCount <= t.max
               ? true
-              : i === types.length - 1 && currentPages > types[i - 1].max;
+              : i === segments.length - 1 && currentCount > segments[i - 1].max;
+          const range = i === 0
+            ? `< ${fmt(t.max)}`
+            : i === segments.length - 1
+              ? `> ${fmt(t.min)}`
+              : `${fmt(t.min)}–${fmt(t.max)}`;
           return (
             <div
               key={t.label}
@@ -615,7 +631,7 @@ function BookTypeScale({ currentPages }: { currentPages: number }) {
                 'text-[9px] leading-tight',
                 isActive ? 'text-bordeaux-400' : 'text-ink-100'
               )}>
-                {t.range}
+                {range}
               </p>
             </div>
           );

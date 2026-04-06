@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudOff, CloudAlert, Loader2, LogOut, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard, FileText, Library, UserCircle, TrendingUp, BarChart3 } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudAlert, Loader2, LogOut, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard, FileText, Library, UserCircle, TrendingUp, BarChart3 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -551,21 +551,15 @@ function CompactSyncStatus() {
     </div>
   );
   if (status === 'error') return (
-    <div className="flex items-center gap-2 text-xs text-amber-400">
+    <div className="flex items-center gap-2 text-xs text-red-500">
       <CloudAlert className="w-3.5 h-3.5 flex-shrink-0" />
-      <span>Erreur de sync</span>
-    </div>
-  );
-  if (status === 'disabled') return (
-    <div className="flex items-center gap-2 text-xs text-ink-200">
-      <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-      <span>{lastSaved ? 'Sauvegarde auto' : 'Non sauvegardé'}</span>
+      <span>Erreur de sauvegarde</span>
     </div>
   );
   return (
     <div className="flex items-center gap-2 text-xs text-ink-200">
-      <CloudOff className="w-3.5 h-3.5 flex-shrink-0" />
-      <span>Hors ligne</span>
+      <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+      <span>{lastSaved ? 'Sauvegarde auto' : 'Non sauvegardé'}</span>
     </div>
   );
 }

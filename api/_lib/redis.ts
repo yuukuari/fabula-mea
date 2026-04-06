@@ -34,4 +34,13 @@ export const redis = {
     cmd<string>('SET', [key, value, 'EX', ttlSeconds]).then(() => undefined),
   del: (key: string): Promise<void> =>
     cmd<number>('DEL', [key]).then(() => undefined),
+  // List operations (for version history)
+  lpush: (key: string, value: string): Promise<number> =>
+    cmd<number>('LPUSH', [key, value]),
+  lrange: (key: string, start: number, stop: number): Promise<string[]> =>
+    cmd<string[]>('LRANGE', [key, start, stop]).catch(() => []),
+  lindex: (key: string, index: number): Promise<string | null> =>
+    cmd<string | null>('LINDEX', [key, index]).catch(() => null),
+  ltrim: (key: string, start: number, stop: number): Promise<void> =>
+    cmd<string>('LTRIM', [key, start, stop]).then(() => undefined),
 };

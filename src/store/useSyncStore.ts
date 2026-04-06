@@ -1,9 +1,6 @@
 import { create } from 'zustand';
-import { isRedisConfigured } from '@/lib/redis';
 
-const IS_DEV = import.meta.env.DEV;
-
-export type SyncStatus = 'disabled' | 'idle' | 'syncing' | 'synced' | 'error';
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
 interface SyncStore {
   status: SyncStatus;
@@ -15,7 +12,7 @@ interface SyncStore {
 }
 
 export const useSyncStore = create<SyncStore>((set) => ({
-  status: (IS_DEV || isRedisConfigured) ? 'idle' : 'disabled',
+  status: 'idle',
   lastSyncedAt: null,
   errorMessage: null,
   setSyncing: () => set({ status: 'syncing', errorMessage: null }),

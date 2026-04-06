@@ -12,6 +12,7 @@ import { SpellCheckExtension } from '@/lib/spellcheck-extension';
 import { FontSize } from '@/lib/font-size-extension';
 import { useBookStore } from '@/store/useBookStore';
 import { FONT_STACKS, AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, DEFAULT_LAYOUT } from '@/lib/fonts';
+import { countFromHtml, countWordsFromHtml } from '@/lib/utils';
 import type { Scene, BookFont, BookFontSize } from '@/types';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
@@ -21,10 +22,9 @@ import {
   RemoveFormatting,
 } from 'lucide-react';
 
+/** @deprecated Use countFromHtml from utils instead. Kept for external imports. */
 export function countWords(html: string): number {
-  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!text) return 0;
-  return text.split(' ').filter(Boolean).length;
+  return countWordsFromHtml(html);
 }
 
 interface Props {
@@ -75,6 +75,7 @@ function cleanPastedHtml(html: string): string {
 export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocus }: Props) {
   const updateSceneContent = useBookStore((s) => s.updateSceneContent);
   const layout = useBookStore((s) => s.layout);
+  const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Force re-render on selection change so font/size selectors reflect the selection
   const [, forceUpdate] = useState(0);
@@ -94,10 +95,10 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
     (html: string) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
-        updateSceneContent(scene.id, html, countWords(html));
+        updateSceneContent(scene.id, html, countFromHtml(html, countUnit));
       }, 800);
     },
-    [scene.id, updateSceneContent]
+    [scene.id, updateSceneContent, countUnit]
   );
 
   const editor = useEditor({

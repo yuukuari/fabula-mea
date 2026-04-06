@@ -240,6 +240,21 @@ export function countWordsFromHtml(html: string): number {
   return text.split(' ').filter(Boolean).length;
 }
 
+/** Average ratio: 1 word ≈ 6 characters (spaces included) in French */
+export const WORDS_TO_CHARS_RATIO = 6;
+
+/** Convert a count from one unit to another using the standard ratio */
+export function convertCount(value: number, from: 'words' | 'characters', to: 'words' | 'characters'): number {
+  if (from === to) return value;
+  if (from === 'words') return Math.round(value * WORDS_TO_CHARS_RATIO);
+  return Math.round(value / WORDS_TO_CHARS_RATIO);
+}
+
+/** Count from HTML using the specified unit */
+export function countFromHtml(html: string, unit: 'words' | 'characters'): number {
+  return unit === 'characters' ? countCharacters(html) : countWordsFromHtml(html);
+}
+
 /** Format count with unit label */
 export function formatCount(value: number, unit: 'words' | 'characters'): string {
   return unit === 'characters'

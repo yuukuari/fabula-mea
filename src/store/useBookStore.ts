@@ -6,7 +6,7 @@ import type {
   Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
   BookLayout, TimelineEvent, EventDuration, DurationUnit,
 } from '@/types';
-import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR, computeEventEndDate, getEventStartDate } from '@/lib/utils';
+import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR, computeEventEndDate, getEventStartDate, countFromHtml, convertCount } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
@@ -20,6 +20,19 @@ import { migrateEncyclopediaImages } from './encyclopedia-helpers';
 const shouldSync = () => !!localStorage.getItem('emlb-token');
 
 const IS_DEV = import.meta.env.DEV;
+
+/** Cloud save with retry (3 attempts, exponential backoff) */
+async function cloudSaveWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === maxRetries - 1) throw err;
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+    }
+  }
+  throw new Error('Unreachable');
+}
 
 /**
  * Migrate base64 images to CDN URLs in a BookProject.
@@ -139,10 +152,6 @@ interface BookStore extends BookProject {
 
   // Graph node positions
   saveGraphNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
-
-  // Import/Export
-  exportProject: () => string;
-  importProject: (json: string) => void;
 }
 
 function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
@@ -243,6 +252,7 @@ function updateDailySnapshot(state: BookProject): DailySnapshot[] {
   const todayStr = new Date().toISOString().split('T')[0];
   const scenes = state.scenes;
   const goals = state.goals;
+  // currentWordCount is already stored in the active countUnit
   const totalWritten = scenes.reduce((sum, s) => sum + s.currentWordCount, 0);
 
   // Calculate today's written count using localStorage snapshot
@@ -262,18 +272,31 @@ function updateDailySnapshot(state: BookProject): DailySnapshot[] {
     totalScenes: scenes.length,
   };
 
-  const snapshots = [...(state.dailySnapshots || [])];
-  const todayIdx = snapshots.findIndex((s) => s.date === todayStr);
+  const existing = state.dailySnapshots || [];
+  const todayIdx = existing.findIndex((s) => s.date === todayStr);
   if (todayIdx >= 0) {
     // Preserve writing minutes tracked by the timer
-    if (snapshots[todayIdx].writingMinutesToday) {
-      snapshot.writingMinutesToday = snapshots[todayIdx].writingMinutesToday;
+    if (existing[todayIdx].writingMinutesToday) {
+      snapshot.writingMinutesToday = existing[todayIdx].writingMinutesToday;
     }
+    // Skip update if nothing changed (avoid unnecessary re-renders)
+    const prev = existing[todayIdx];
+    if (
+      prev.totalWritten === snapshot.totalWritten &&
+      prev.writtenToday === snapshot.writtenToday &&
+      prev.dailyGoal === snapshot.dailyGoal &&
+      prev.progress === snapshot.progress &&
+      prev.completedScenes === snapshot.completedScenes &&
+      prev.totalScenes === snapshot.totalScenes &&
+      prev.writingMinutesToday === snapshot.writingMinutesToday
+    ) {
+      return existing;
+    }
+    const snapshots = [...existing];
     snapshots[todayIdx] = snapshot;
-  } else {
-    snapshots.push(snapshot);
+    return snapshots;
   }
-  return snapshots;
+  return [...existing, snapshot];
 }
 
 function touchSave(extra: Record<string, unknown> = {}) {
@@ -385,6 +408,9 @@ export const useBookStore = create<BookStore>()(
       },
 
       loadBook: (bookId) => {
+        // Cancel any pending debounced save from previous book
+        cancelPendingSave();
+
         // Save current book first if loaded
         const current = get();
         if (current._loaded && current.id && current.id !== bookId) {
@@ -394,11 +420,11 @@ export const useBookStore = create<BookStore>()(
           );
         }
 
+        // 1. Load from localStorage immediately (cache for fast display)
         const raw = localStorage.getItem(getBookStorageKey(bookId));
         if (raw) {
           const project = migrateGoals(migrateScenesToTimelineEvents(ensureSpecialChapters(JSON.parse(raw) as BookProject)));
           set({ ...emptyState(), ...project, lastSavedAt: now(), _loaded: true });
-          // Load saga if this book belongs to one
           if (project.sagaId) {
             useSagaStore.getState().loadSaga(project.sagaId);
           } else {
@@ -406,23 +432,28 @@ export const useBookStore = create<BookStore>()(
           }
         }
 
-        // Vérifie l'API de façon asynchrone (priorité si plus récent ou si localStorage vide)
+        // 2. Fetch from server (source of truth) and apply — but only if user hasn't edited since
         if (shouldSync()) {
+          const loadedAt = get().updatedAt;
+          useSyncStore.getState().setSyncing();
           api.books.get(bookId).then((remoteData) => {
-            const remote = remoteData as BookProject;
             const cur = get();
-            if (!raw || remote.updatedAt > (cur.updatedAt ?? '')) {
-              const migrated = migrateGoals(migrateScenesToTimelineEvents(ensureSpecialChapters(remote)));
-              set({ ...emptyState(), ...migrated, lastSavedAt: now(), _loaded: true });
-              localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(migrated));
-              // Load saga from remote data if needed
-              if (migrated.sagaId) {
-                useSagaStore.getState().loadSaga(migrated.sagaId);
-              }
+            // Only apply cloud data if we're still on the same book AND user hasn't made changes
+            if (cur.id !== bookId || !cur._loaded) return;
+            if (cur.updatedAt !== loadedAt) {
+              // User already edited — don't overwrite, just mark as synced
+              useSyncStore.getState().setSynced();
+              return;
+            }
+            const remote = migrateGoals(migrateScenesToTimelineEvents(ensureSpecialChapters(remoteData as BookProject)));
+            set({ ...emptyState(), ...remote, lastSavedAt: now(), _loaded: true });
+            localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(remote));
+            if (remote.sagaId) {
+              useSagaStore.getState().loadSaga(remote.sagaId);
             }
             useSyncStore.getState().setSynced();
           }).catch(() => {
-            // Remote not found yet (new book) — that's OK
+            // Remote not found yet (new book) or offline — use local cache
             if (raw) useSyncStore.getState().setSynced();
           });
         }
@@ -439,7 +470,7 @@ export const useBookStore = create<BookStore>()(
         const data = extractProjectData({ ...state, dailySnapshots: snapshots });
         const json = JSON.stringify(data);
 
-        // Sauvegarde locale (immédiate)
+        // Sauvegarde locale (immédiate, cache)
         localStorage.setItem(getBookStorageKey(state.id), json);
         useLibraryStore.getState().updateBookMeta(state.id, {
           title: state.title,
@@ -451,33 +482,52 @@ export const useBookStore = create<BookStore>()(
         });
         set({ lastSavedAt: now() });
 
-        // Sauvegarde cloud (asynchrone) — migrate base64 images first
+        // Sauvegarde cloud (obligatoire avec retry)
         if (shouldSync()) {
-          const sync = useSyncStore.getState();
-          sync.setSyncing();
+          const bookIdAtSave = state.id;
+          useSyncStore.getState().setSyncing();
 
           migrateBase64Images(data).then((didMigrate) => {
             if (didMigrate) {
-              // Update store and localStorage with migrated URLs
-              set({ ...data, lastSavedAt: now() });
-              localStorage.setItem(getBookStorageKey(state.id), JSON.stringify(data));
+              const cur = get();
+              if (cur.id === bookIdAtSave && cur._loaded) {
+                set({
+                  characters: data.characters,
+                  places: data.places,
+                  worldNotes: data.worldNotes,
+                  maps: data.maps,
+                  layout: data.layout,
+                });
+                const fresh = extractProjectData(get());
+                localStorage.setItem(getBookStorageKey(bookIdAtSave), JSON.stringify(fresh));
+                return cloudSaveWithRetry(() => api.books.save(bookIdAtSave, fresh));
+              }
             }
-            return api.books.save(state.id, data);
+            return cloudSaveWithRetry(() => api.books.save(bookIdAtSave, data));
           })
-            .then(() => useSyncStore.getState().setSynced())
-            .catch(() => useSyncStore.getState().setError('Échec sync cloud'));
+            .then(() => {
+              // Only update sync status if still on the same book
+              if (get().id === bookIdAtSave) useSyncStore.getState().setSynced();
+            })
+            .catch((err) => {
+              if (IS_DEV) console.error('Cloud save failed after retries:', err);
+              if (get().id === bookIdAtSave) useSyncStore.getState().setError('Échec de la sauvegarde en ligne');
+            });
         }
       },
 
       unloadBook: () => {
-        // Save before unloading
+        cancelPendingSave();
         const state = get();
+
+        // Save before unloading
         if (state._loaded && state.id) {
           const projectData = extractProjectData(state);
           const json = JSON.stringify(projectData);
           localStorage.setItem(getBookStorageKey(state.id), json);
           if (shouldSync()) {
-            api.books.save(state.id, projectData).catch(() => useSyncStore.getState().setError('Échec sync cloud'));
+            cloudSaveWithRetry(() => api.books.save(state.id, projectData))
+              .catch(() => useSyncStore.getState().setError('Échec de la sauvegarde en ligne'));
           }
           useLibraryStore.getState().updateBookMeta(state.id, {
             title: state.title,
@@ -515,10 +565,29 @@ export const useBookStore = create<BookStore>()(
         })),
 
       updateCountUnit: (unit) =>
-        set((s) => ({
-          countUnit: unit,
-          ...touchSave(),
-        })),
+        set((s) => {
+          const prev = s.countUnit ?? 'words';
+          if (prev === unit) return {};
+
+          // Recount scenes: use HTML content when available (write mode), otherwise convert with ratio
+          const scenes = s.scenes.map((sc) => {
+            const newCount = sc.content
+              ? countFromHtml(sc.content, unit)
+              : convertCount(sc.currentWordCount, prev, unit);
+            const newTarget = sc.targetWordCount
+              ? convertCount(sc.targetWordCount, prev, unit)
+              : sc.targetWordCount;
+            return { ...sc, currentWordCount: newCount, targetWordCount: newTarget };
+          });
+
+          // Convert goal values
+          const goals = { ...s.goals };
+          if (goals.targetTotalCount) goals.targetTotalCount = convertCount(goals.targetTotalCount, prev, unit);
+          if (goals.targetCountPerScene) goals.targetCountPerScene = convertCount(goals.targetCountPerScene, prev, unit);
+          if (goals.manualDailyGoal) goals.manualDailyGoal = convertCount(goals.manualDailyGoal, prev, unit);
+
+          return { countUnit: unit, scenes, goals, ...touchSave() };
+        }),
 
       setGlossaryEnabled: (enabled) =>
         set((s) => ({
@@ -1278,26 +1347,18 @@ export const useBookStore = create<BookStore>()(
           ...touchSave(),
         })),
 
-      // ─── Import/Export ───
-      exportProject: () => {
-        const state = get();
-        return JSON.stringify(extractProjectData(state), null, 2);
-      },
-
-      importProject: (json) => {
-        const project = JSON.parse(json) as BookProject;
-        set({
-          ...project,
-          lastSavedAt: now(),
-          _loaded: true,
-        });
-      },
     })
   )
 );
 
 // Auto-save: whenever state changes (debounced), save to localStorage
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/** Cancel any pending debounced save — called on book load/unload to prevent cross-book saves */
+export function cancelPendingSave(): void {
+  if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+}
+
 useBookStore.subscribe(
   (state) => state.updatedAt,
   () => {
@@ -1307,3 +1368,4 @@ useBookStore.subscribe(
     }, 500);
   }
 );
+

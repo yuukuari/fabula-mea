@@ -13,6 +13,19 @@ import { migrateEncyclopediaImages } from './encyclopedia-helpers';
 const shouldSync = () => !!localStorage.getItem('emlb-token');
 const IS_DEV = import.meta.env.DEV;
 
+/** Cloud save with retry (3 attempts, exponential backoff) */
+async function cloudSaveWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === maxRetries - 1) throw err;
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+    }
+  }
+  throw new Error('Unreachable');
+}
+
 const SAGA_STORAGE_PREFIX = 'fabula-mea-saga-';
 
 export function getSagaStorageKey(sagaId: string): string {
@@ -145,6 +158,8 @@ export const useSagaStore = create<SagaStore>()(
         const current = get();
         if (current._loaded && current.id === sagaId) return;
 
+        cancelPendingSagaSave();
+
         // Save current saga if different
         if (current._loaded && current.id && current.id !== sagaId) {
           localStorage.setItem(
@@ -153,23 +168,25 @@ export const useSagaStore = create<SagaStore>()(
           );
         }
 
+        // 1. Load from localStorage (cache for fast display)
         const raw = localStorage.getItem(getSagaStorageKey(sagaId));
         if (raw) {
           const project = JSON.parse(raw) as SagaProject;
           set({ ...project, lastSavedAt: now(), _loaded: true });
         }
 
-        // Async cloud check
+        // 2. Fetch from server (source of truth) and apply — but only if user hasn't edited since
         if (shouldSync()) {
+          const loadedAt = get().updatedAt;
           api.sagas.get(sagaId).then((remoteData) => {
-            const remote = remoteData as SagaProject;
             const cur = get();
-            if (!raw || remote.updatedAt > (cur.updatedAt ?? '')) {
-              set({ ...remote, lastSavedAt: now(), _loaded: true });
-              localStorage.setItem(getSagaStorageKey(sagaId), JSON.stringify(remote));
-            }
+            if (cur.id !== sagaId || !cur._loaded) return;
+            if (cur.updatedAt !== loadedAt) return; // User already edited
+            const remote = remoteData as SagaProject;
+            set({ ...remote, lastSavedAt: now(), _loaded: true });
+            localStorage.setItem(getSagaStorageKey(sagaId), JSON.stringify(remote));
           }).catch(() => {
-            // Remote not found yet — OK
+            // Remote not found yet — use local cache
           });
         }
       },
@@ -180,32 +197,52 @@ export const useSagaStore = create<SagaStore>()(
         const data = extractSagaData(state);
         const json = JSON.stringify(data);
 
+        // Sauvegarde locale (cache)
         localStorage.setItem(getSagaStorageKey(state.id), json);
         set({ lastSavedAt: now() });
 
+        // Sauvegarde cloud (obligatoire avec retry)
         if (shouldSync()) {
-          const sync = useSyncStore.getState();
-          sync.setSyncing();
+          const sagaIdAtSave = state.id;
+          useSyncStore.getState().setSyncing();
 
           migrateBase64ImagesSaga(data).then((didMigrate) => {
             if (didMigrate) {
-              set({ ...data, lastSavedAt: now() });
-              localStorage.setItem(getSagaStorageKey(state.id), JSON.stringify(data));
+              const cur = get();
+              if (cur.id === sagaIdAtSave && cur._loaded) {
+                set({
+                  characters: data.characters,
+                  places: data.places,
+                  worldNotes: data.worldNotes,
+                  maps: data.maps,
+                });
+                const fresh = extractSagaData(get());
+                localStorage.setItem(getSagaStorageKey(sagaIdAtSave), JSON.stringify(fresh));
+                return cloudSaveWithRetry(() => api.sagas.save(sagaIdAtSave, fresh));
+              }
             }
-            return api.sagas.save(state.id, data);
+            return cloudSaveWithRetry(() => api.sagas.save(sagaIdAtSave, data));
           })
-            .then(() => useSyncStore.getState().setSynced())
-            .catch(() => useSyncStore.getState().setError('Échec sync saga'));
+            .then(() => {
+              if (get().id === sagaIdAtSave) useSyncStore.getState().setSynced();
+            })
+            .catch((err) => {
+              if (IS_DEV) console.error('Cloud save saga failed after retries:', err);
+              if (get().id === sagaIdAtSave) useSyncStore.getState().setError('Échec de la sauvegarde en ligne');
+            });
         }
       },
 
       unloadSaga: () => {
+        cancelPendingSagaSave();
         const state = get();
+
         if (state._loaded && state.id) {
           const data = extractSagaData(state);
           localStorage.setItem(getSagaStorageKey(state.id), JSON.stringify(data));
           if (shouldSync()) {
-            api.sagas.save(state.id, data).catch(() => useSyncStore.getState().setError('Échec sync saga'));
+            cloudSaveWithRetry(() => api.sagas.save(state.id, data))
+              .catch(() => useSyncStore.getState().setError('Échec de la sauvegarde en ligne'));
           }
         }
         set({
@@ -313,6 +350,10 @@ export const useSagaStore = create<SagaStore>()(
 // Auto-save on changes (debounced)
 let sagaSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
+function cancelPendingSagaSave(): void {
+  if (sagaSaveTimeout) { clearTimeout(sagaSaveTimeout); sagaSaveTimeout = null; }
+}
+
 useSagaStore.subscribe(
   (s) => s.updatedAt,
   () => {
@@ -322,3 +363,4 @@ useSagaStore.subscribe(
     }, 500);
   }
 );
+

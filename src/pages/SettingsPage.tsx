@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, PenLine, AlertTriangle, X, Library, ExternalLink } from 'lucide-react';
+import { Hash, PenLine, AlertTriangle, X, Library, ExternalLink, History, Cloud, HardDrive, RotateCcw, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
-import { useLibraryStore } from '@/store/useLibraryStore';
+import { useLibraryStore, getBookStorageKey } from '@/store/useLibraryStore';
 import { useSagaStore } from '@/store/useSagaStore';
+import { useSyncStore } from '@/store/useSyncStore';
 import { AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, AVAILABLE_LINE_HEIGHTS, FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
-import type { WritingMode, BookFont, BookFontSize, BookLineHeight, BookLayout } from '@/types';
+import { api } from '@/lib/api';
+import { Modal } from '@/components/shared/Modal';
+import type { WritingMode, BookFont, BookFontSize, BookLineHeight, BookLayout, VersionMeta, BookProject } from '@/types';
 
 /** Modale de confirmation de changement de mode */
 function WritingModeChangeDialog({
@@ -181,6 +184,318 @@ function TransformToSagaDialog({
           <button onClick={onCancel} className="btn-secondary flex-1">Annuler</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function formatDiff(diff: number): string {
+  if (diff === 0) return '';
+  return diff > 0 ? `+${diff}` : `${diff}`;
+}
+
+function DiffBadge({ diff }: { diff: number }) {
+  if (diff === 0) return null;
+  const color = diff > 0 ? 'text-emerald-600' : 'text-red-500';
+  return <span className={`text-[10px] font-medium ${color}`}>{formatDiff(diff)}</span>;
+}
+
+function formatVersionDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('fr-FR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return iso; }
+}
+
+function VersionDetailModal({
+  version,
+  prevVersion,
+  bookId,
+  onClose,
+  onRestored,
+}: {
+  version: VersionMeta;
+  prevVersion?: VersionMeta;
+  bookId: string;
+  onClose: () => void;
+  onRestored: () => void;
+}) {
+  const [fullData, setFullData] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setLoadError(false);
+    api.books.getVersion(bookId, version.index)
+      .then((res) => setFullData(res.data as Record<string, unknown>))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
+  }, [bookId, version.index]);
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      const { data: restoredData } = await api.books.restoreVersion(bookId, version.index);
+      const project = restoredData as BookProject;
+      // Write restored data to localStorage
+      localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(project));
+      // Reload the page to get a clean store state from the restored data
+      window.location.reload();
+    } catch {
+      setRestoring(false);
+      setShowConfirm(false);
+    }
+  };
+
+  const stats = version.stats;
+
+  return (
+    <Modal open onClose={onClose} maxWidth="max-w-md">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-display text-lg font-bold text-ink-500">
+          Version du {formatVersionDate(version.savedAt)}
+        </h3>
+        <button onClick={onClose} className="btn-ghost p-1"><X className="w-4 h-4" /></button>
+      </div>
+
+      <div className="bg-parchment-50 rounded-xl p-4 mb-4">
+        <p className="text-sm font-medium text-ink-400 mb-3">Contenu de cette version</p>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          {([
+            ['Chapitres', stats.chapters, prevVersion?.stats.chapters],
+            ['Scènes', stats.scenes, prevVersion?.stats.scenes],
+            ['Événements', stats.events, prevVersion?.stats.events],
+            ['Mots', stats.words, prevVersion?.stats.words],
+            ['Personnages', stats.characters, prevVersion?.stats.characters],
+            ['Lieux', stats.places, prevVersion?.stats.places],
+            ['Fiches univers', stats.worldNotes, prevVersion?.stats.worldNotes],
+            ['Cartes', stats.maps, prevVersion?.stats.maps],
+            ['Notes & idées', stats.notes, prevVersion?.stats.notes],
+          ] as [string, number, number | undefined][]).map(([label, value, prev]) => (
+            <div key={label} className="flex justify-between items-center">
+              <span className="text-ink-300">{label}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="font-medium text-ink-500">{label === 'Mots' ? value.toLocaleString('fr-FR') : value}</span>
+                {prev != null && <DiffBadge diff={value - prev} />}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {loadError ? (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 text-center">
+          Impossible de charger les détails de cette version.
+        </div>
+      ) : !showConfirm ? (
+        <button
+          onClick={() => setShowConfirm(true)}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 bg-bordeaux-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-bordeaux-600 transition-colors disabled:opacity-50"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Restaurer cette version
+        </button>
+      ) : (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-sm text-amber-800 mb-3">
+            La version actuelle sera sauvegardée dans l'historique avant la restauration. Voulez-vous continuer ?
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={handleRestore}
+              disabled={restoring}
+              className="flex-1 flex items-center justify-center gap-2 bg-bordeaux-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-bordeaux-600 transition-colors disabled:opacity-50"
+            >
+              {restoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+              {restoring ? 'Restauration...' : 'Confirmer'}
+            </button>
+            <button
+              onClick={() => setShowConfirm(false)}
+              className="flex-1 bg-parchment-100 border border-parchment-300 text-ink-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-parchment-200 transition-colors"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function VersionHistorySection({ bookId }: { bookId: string }) {
+  const [versions, setVersions] = useState<VersionMeta[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<VersionMeta | null>(null);
+  const syncStatus = useSyncStore((s) => s.status);
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+  const hasToken = !!localStorage.getItem('emlb-token');
+
+  const [error, setError] = useState<string | null>(null);
+
+  const loadVersions = useCallback(() => {
+    if (!hasToken) return;
+    setLoading(true);
+    setError(null);
+    api.books.history(bookId)
+      .then((res) => setVersions(res.versions))
+      .catch(() => setError('Impossible de charger l\'historique'))
+      .finally(() => setLoading(false));
+  }, [bookId, hasToken]);
+
+  // Load versions when section is expanded, and refresh when a new sync completes
+  useEffect(() => {
+    if (expanded) {
+      loadVersions();
+    }
+  }, [expanded, loadVersions, lastSyncedAt]);
+
+  const syncLabel = {
+    idle: 'En attente',
+    syncing: 'Synchronisation...',
+    synced: 'Synchronisé',
+    error: 'Erreur de sauvegarde',
+  }[syncStatus];
+
+  const syncColor = {
+    idle: 'text-ink-300',
+    syncing: 'text-blue-500',
+    synced: 'text-emerald-500',
+    error: 'text-red-500',
+  }[syncStatus];
+
+  return (
+    <div className="card-fantasy p-6 mb-6">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 bg-parchment-200 rounded-lg flex items-center justify-center shrink-0">
+          <Cloud className="w-5 h-5 text-ink-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-display text-lg font-semibold text-ink-500">Sauvegarde et synchronisation</h3>
+          {hasToken && (
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={`text-xs font-medium ${syncColor}`}>{syncLabel}</span>
+              {lastSyncedAt && syncStatus === 'synced' && (
+                <span className="text-xs text-ink-200">
+                  — {formatVersionDate(lastSyncedAt)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p className="text-sm text-ink-300 mb-4">
+        {hasToken
+          ? 'Votre livre est sauvegardé localement et synchronisé avec le serveur. Un historique des versions est conservé automatiquement.'
+          : 'Votre livre est sauvegardé localement. Connectez-vous pour activer la synchronisation cloud et l\'historique des versions.'}
+      </p>
+
+      {hasToken && (
+        <div>
+          <button
+            onClick={() => { setExpanded(!expanded); }}
+            className="flex items-center gap-2 text-sm font-medium text-bordeaux-500 hover:text-bordeaux-700 transition-colors"
+          >
+            <History className="w-4 h-4" />
+            Historique des versions
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+
+          {expanded && (
+            <div className="mt-3">
+              {loading ? (
+                <div className="flex items-center gap-2 text-sm text-ink-300 py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Chargement...
+                </div>
+              ) : error ? (
+                <div className="text-sm text-red-500 py-3">
+                  {error}
+                  <button onClick={loadVersions} className="ml-2 underline hover:no-underline">Réessayer</button>
+                </div>
+              ) : versions.length === 0 ? (
+                <p className="text-sm text-ink-200 py-3">
+                  Aucune version enregistrée pour le moment. Les versions sont créées automatiquement toutes les 15 minutes lors de la synchronisation.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {versions.map((v, i) => {
+                    const prev = versions[i + 1];
+                    const hasDiffs = prev != null;
+                    const dChap = hasDiffs ? v.stats.chapters - prev.stats.chapters : 0;
+                    const dScenes = hasDiffs ? v.stats.scenes - prev.stats.scenes : 0;
+                    const dEvents = hasDiffs ? v.stats.events - prev.stats.events : 0;
+                    const dWords = hasDiffs ? v.stats.words - prev.stats.words : 0;
+                    const dChars = hasDiffs ? v.stats.characters - prev.stats.characters : 0;
+                    const dPlaces = hasDiffs ? v.stats.places - prev.stats.places : 0;
+                    const anyDiff = dChap || dScenes || dEvents || dWords || dChars || dPlaces;
+
+                    return (
+                      <button
+                        key={v.index}
+                        onClick={() => setSelectedVersion(v)}
+                        className="w-full flex items-center justify-between p-3 bg-parchment-50 hover:bg-parchment-100 rounded-lg transition-colors text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-ink-500 flex items-center gap-1.5">
+                            {formatVersionDate(v.savedAt)}
+                            {v.isRestore && (
+                              <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                avant restauration
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-ink-300 mt-0.5">
+                            {v.stats.chapters} chap. · {v.stats.scenes} scènes · {v.stats.events} évén. · {v.stats.words.toLocaleString('fr-FR')} mots
+                          </p>
+                          {hasDiffs && anyDiff ? (
+                            <p className="text-[10px] mt-1 flex flex-wrap gap-x-2">
+                              {dChap !== 0 && <span><DiffBadge diff={dChap} /> chap.</span>}
+                              {dScenes !== 0 && <span><DiffBadge diff={dScenes} /> scènes</span>}
+                              {dEvents !== 0 && <span><DiffBadge diff={dEvents} /> évén.</span>}
+                              {dWords !== 0 && <span><DiffBadge diff={dWords} /> mots</span>}
+                              {dChars !== 0 && <span><DiffBadge diff={dChars} /> perso.</span>}
+                              {dPlaces !== 0 && <span><DiffBadge diff={dPlaces} /> lieux</span>}
+                            </p>
+                          ) : null}
+                        </div>
+                        <RotateCcw className="w-4 h-4 text-ink-200 shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {versions.length > 0 && (
+                <button
+                  onClick={loadVersions}
+                  className="mt-2 text-xs text-ink-200 hover:text-ink-400 transition-colors"
+                >
+                  Rafraîchir
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedVersion && (
+        <VersionDetailModal
+          version={selectedVersion}
+          prevVersion={versions[versions.findIndex((v) => v.index === selectedVersion.index) + 1]}
+          bookId={bookId}
+          onClose={() => setSelectedVersion(null)}
+          onRestored={() => {
+            setSelectedVersion(null);
+            loadVersions();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -525,6 +840,9 @@ export function SettingsPage() {
           </button>
         </div>
       )}
+
+      {/* Backup & sync */}
+      <VersionHistorySection bookId={bookId} />
 
       {/* Layout info dialog */}
       {showLayoutInfo && <LayoutChangeInfoDialog onClose={() => setShowLayoutInfo(false)} />}

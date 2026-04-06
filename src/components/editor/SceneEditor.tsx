@@ -3,10 +3,10 @@ import { Minus, X, User, MapPin, ChevronRight, BookOpen, PanelLeft, PanelRight, 
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
-import { SceneInlineEditor, countWords } from './SceneInlineEditor';
+import { SceneInlineEditor } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
-import { cn, SCENE_STATUS_LABELS, countCharacters, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel, formatDuration } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, countFromHtml, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel, formatDuration } from '@/lib/utils';
 import { getTodayProgress, getDailyGoal, getSceneTarget } from '@/lib/calculations';
 import type { Scene, Chapter, GlossaryEntry } from '@/types';
 
@@ -179,7 +179,7 @@ export function SceneEditor() {
   if (!isOpen) return null;
 
   // Stats globales
-  const totalWords = scenes.reduce((sum, sc) => sum + countWords(sc.content ?? ''), 0);
+  const totalCount = scenes.reduce((sum, sc) => sum + countFromHtml(sc.content ?? '', countUnit), 0);
   const totalTarget = goals.mode === 'total' && goals.targetTotalCount
     ? goals.targetTotalCount
     : goals.mode === 'perScene' && goals.targetCountPerScene
@@ -187,9 +187,6 @@ export function SceneEditor() {
       : 0;
 
   // Daily progress
-  const totalCount = countUnit === 'characters'
-    ? scenes.reduce((sum, sc) => sum + countCharacters(sc.content ?? ''), 0)
-    : totalWords;
   const todayCount = bookId ? getTodayProgress(bookId, totalCount).todayCount : 0;
   const dailyGoal = getDailyGoal(scenes, goals);
 
@@ -239,7 +236,7 @@ export function SceneEditor() {
               {/* Scenes */}
               {chScenes.map((scene, sceneIdx) => {
                 const isVisible = visibleSceneId === scene.id;
-                const wc = countWords(scene.content ?? '');
+                const wc = countFromHtml(scene.content ?? '', countUnit);
                 const sceneLabel = scene.title || `Scène ${sceneIdx + 1}`;
                 return (
                   <button
@@ -347,7 +344,7 @@ export function SceneEditor() {
         <div className="hidden sm:flex items-center gap-3 text-xs shrink-0">
           {/* Book total */}
           <span className="text-ink-300 tabular-nums">
-            {totalWords.toLocaleString('fr-FR')}{totalTarget > 0 ? ` / ${totalTarget.toLocaleString('fr-FR')}` : ''} {countUnitLabel(countUnit)}
+            {totalCount.toLocaleString('fr-FR')}{totalTarget > 0 ? ` / ${totalTarget.toLocaleString('fr-FR')}` : ''} {countUnitLabel(countUnit)}
           </span>
 
           {/* Daily goal */}
@@ -533,7 +530,7 @@ export function SceneEditor() {
 
                       <div className="mt-3 flex items-center gap-2">
                         {(() => {
-                          const wc = countWords(scene.content ?? '');
+                          const wc = countFromHtml(scene.content ?? '', countUnit);
                           const target = getSceneTarget(scene, scenes, goals);
                           const pct = target != null && target > 0
                             ? Math.min(100, Math.round((wc / target) * 100))
