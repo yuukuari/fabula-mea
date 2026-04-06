@@ -1,6 +1,5 @@
 import { getBookStorageKey } from '@/store/useLibraryStore';
-import type { BookMeta, BookProject, TimelineEvent } from '@/types';
-import { generateId, now, convertToSimpleDuration } from '@/lib/utils';
+import type { BookMeta, BookProject } from '@/types';
 
 const OLD_STORAGE_KEY = 'ecrire-mon-livre-storage';
 const LIBRARY_KEY = 'fabula-mea-library';
@@ -124,70 +123,4 @@ export function migrateStorageKeys() {
   });
 
   localStorage.setItem(RENAME_MIGRATION_KEY, '1');
-}
-
-/**
- * Migrate scenes with startDateTime/endDateTime to independent TimelineEvents.
- * Called at book load time. Idempotent: skips if timelineEvents already exists.
- * Clears startDateTime/endDateTime from scenes after migration.
- */
-export function migrateScenesToTimelineEvents(project: BookProject): BookProject {
-  // Already migrated or new book
-  if (project.timelineEvents !== undefined) return project;
-
-  const datedScenes = project.scenes.filter((s) => s.startDateTime);
-  if (datedScenes.length === 0) {
-    return { ...project, timelineEvents: [] };
-  }
-
-  // Sort by startDateTime for chronological order
-  const sorted = [...datedScenes].sort(
-    (a, b) => new Date(a.startDateTime!).getTime() - new Date(b.startDateTime!).getTime()
-  );
-
-  const timestamp = now();
-  const events: TimelineEvent[] = sorted.map((scene, index) => {
-    const { startDate, startTime, duration } = convertToSimpleDuration(
-      scene.startDateTime!,
-      scene.endDateTime
-    );
-
-    return {
-      id: generateId(),
-      title: scene.title || `Événement ${index + 1}`,
-      description: scene.description || undefined,
-      startDate,
-      startTime,
-      duration,
-      order: index,
-      characterIds: [...scene.characterIds],
-      placeId: scene.placeId,
-      chapterId: scene.chapterId,
-      sceneId: scene.id,
-      tags: [...scene.tags],
-      notes: scene.notes,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-  });
-
-  // Migrate scenes: clear old fields, populate new date+duration fields for linked scenes
-  const eventBySceneId = new Map(events.map((e) => [e.sceneId!, e]));
-  const migratedScenes = project.scenes.map((s) => {
-    const evt = eventBySceneId.get(s.id);
-    return {
-      ...s,
-      startDateTime: undefined,
-      endDateTime: undefined,
-      startDate: evt?.startDate,
-      startTime: evt?.startTime,
-      duration: evt?.duration,
-    };
-  });
-
-  return {
-    ...project,
-    timelineEvents: events,
-    scenes: migratedScenes,
-  };
 }

@@ -142,6 +142,7 @@ Choisir le layout adapté :
 | Hébergement | Vercel (SPA + serverless) | — |
 | Base de données | Upstash Redis (prod) / localStorage (dev) | — |
 | Stockage images | Vercel Blob (prod) / base64 localStorage (dev) | — |
+| Tests | Vitest | 1.x |
 
 ---
 
@@ -150,8 +151,8 @@ Choisir le layout adapté :
 ```
 /
 ├── CLAUDE.md                    ← Ce fichier
-├── package.json                 ← Scripts: dev, build, preview
-├── vite.config.ts               ← Port 5174, alias @ → ./src
+├── package.json                 ← Scripts: dev, build, preview, test
+├── vite.config.ts               ← Port 5174, alias @ → ./src, config Vitest
 ├── tailwind.config.js           ← Couleurs custom (parchment, ink, bordeaux, gold)
 ├── vercel.json                  ← SPA rewrite, buildCommand, outputDirectory
 ├── tsconfig.json
@@ -175,6 +176,8 @@ Choisir le layout adapté :
 │   ├── App.tsx                  ← Router + layouts (RootLayout → shells)
 │   ├── main.tsx                 ← Point d'entrée React
 │   ├── index.css                ← Tailwind directives + styles globaux
+│   │
+│   ├── __tests__/               ← Tests unitaires Vitest (voir __tests__/CLAUDE.md)
 │   │
 │   ├── types/
 │   │   └── index.ts             ← Tous les types TypeScript (~523 lignes)
@@ -364,14 +367,32 @@ Système de gestion des versions de l'application :
 
 ## Persistance locale (`useBookStore` + `useLibraryStore`)
 
-### Double sauvegarde
+### Architecture de synchronisation
 
-Le `useBookStore` sauvegarde toujours en **localStorage d'abord** (immédiat), puis en **cloud** (asynchrone) si l'utilisateur est authentifié :
+Le serveur est la **source de vérité**. Le localStorage sert de **cache** pour un affichage instantané. La sauvegarde cloud est **obligatoire avec retry** (pas fire-and-forget).
 
 ```
-saveBook() → localStorage.setItem(key, json)   ← toujours
-           → api.books.save(bookId, data)       ← seulement si token JWT présent
+saveBook() → localStorage.setItem(key, json)   ← toujours (cache immédiat)
+           → cloudSaveWithRetry(api.books.save) ← obligatoire si token JWT présent (3 tentatives, backoff exponentiel 1s/2s/4s)
 ```
+
+**`cloudSaveWithRetry`** : 3 tentatives avec backoff exponentiel (1s, 2s, 4s). Si les 3 échouent → `useSyncStore.setError()` avec message visible dans la sidebar.
+
+**Debounce auto-save** : un subscriber Zustand écoute `updatedAt` et déclenche `saveBook()` après 500ms de debounce. `cancelPendingSave()` annule le debounce en cours (appelé dans `loadBook` et `unloadBook` pour éviter les sauvegardes cross-book).
+
+**Guards anti-stale** :
+- `bookIdAtSave` : le `saveBook` capture l'id au moment de l'appel et vérifie qu'on est toujours sur le même livre quand la promesse se résout
+- `loadedAt` : le `loadBook` capture `updatedAt` au chargement et ne remplace les données locales par les données cloud que si l'utilisateur n'a pas édité entre-temps
+
+### Historique des versions
+
+Snapshots automatiques toutes les **15 minutes** (dedup par timestamp), max **20 versions** par livre. Stocké en Redis LIST (prod) ou localStorage array (dev).
+
+- **Stats** : chapitres, scènes, événements, mots, personnages, lieux, notes univers, cartes, notes & idées
+- **Saga data** : si le livre appartient à une saga, les données partagées (personnages, lieux, etc.) sont incluses dans le snapshot
+- **Restauration** : sauvegarde l'état actuel comme point de restauration (`isRestore: true`) avant de restaurer, puis `window.location.reload()` pour un état propre
+- **UI** : section dépliable dans SettingsPage, badges de diff entre versions, badge ambre "avant restauration"
+- **Clés** : `emlb-dev:u:{userId}:book:{bookId}:history` (dev) / `emlb:u:{userId}:book:{bookId}:history` (prod, Redis LIST)
 
 ### Clés localStorage (côté client, indépendant du mode dev/prod)
 
@@ -385,13 +406,13 @@ saveBook() → localStorage.setItem(key, json)   ← toujours
 
 ### Synchronisation cloud
 
-Le store `useSyncStore` track l'état de sync : `disabled | idle | syncing | synced | error`.  
+Le store `useSyncStore` track l'état de sync : `idle | syncing | synced | error`.
 La sync est déclenchée à chaque `saveBook()` si un token est présent dans localStorage (`emlb-token`).
 
 Au chargement d'un livre (`loadBook`), le store :
-1. Charge depuis localStorage (immédiat)
-2. Fetch depuis l'API en parallèle
-3. Si la version cloud est plus récente → écrase le local
+1. Charge depuis localStorage (cache immédiat). Si pas de cache, initialise un état minimal avec `id: bookId` pour que le fetch serveur puisse s'appliquer
+2. Fetch depuis le serveur en parallèle (source de vérité)
+3. Applique les données cloud — sauf si l'utilisateur a déjà édité (guard `loadedAt`)
 
 ---
 
@@ -429,6 +450,8 @@ Au chargement d'un livre (`loadBook`), le store :
 npm run dev      # Démarre le serveur Vite en mode dev (port 5174)
 npm run build    # Build TypeScript + Vite pour production
 npm run preview  # Preview du build en local
+npm test         # Lance les tests unitaires (Vitest)
+npm run test:watch  # Tests en mode watch
 ```
 
 ---
@@ -480,3 +503,5 @@ npm run preview  # Preview du build en local
 31. **Titres de scènes dans les exports** : les titres de scènes (`scene.title`) apparaissent dans les exports EPUB et PDF pour **tous les chapitres** (y compris ceux avec une seule scène), pas seulement pour les chapitres front/back matter. Dans les relectures, les titres de scènes sont toujours affichés.
 32. **Graphe des relations** : les edges du graphe (`RelationshipGraph`) normalisent `source`/`target` par tri d'ID pour garantir que les courbes entre une même paire de personnages aillent toujours dans la même direction perpendiculaire, quel que soit l'ordre d'itération des personnages. Le champ `arrowTarget` stocke la vraie cible des relations non réciproques pour dessiner la flèche dans le bon sens.
 33. **Correction problème dates < 1000** : les dates de la chronologie supportent les années < 1000 (ex: 0157 pour un roman historique/fantasy). Lors de la conversion `Date → string YYYY-MM-DD`, toujours utiliser `String(d.getFullYear()).padStart(4, '0')` pour conserver les zéros de tête. Les endroits concernés : `insertTimelineEvent`, `splitTimelineEvent` dans `useBookStore.ts`, et `handleMouseUp` (drag/resize) dans `TimelinePage.tsx`.
+34. **Synchronisation cloud robuste** : la sauvegarde cloud utilise `cloudSaveWithRetry` (3 tentatives, backoff exponentiel). Le `loadBook` initialise un état minimal (`id: bookId`) même sans cache localStorage, pour que les données du serveur puissent s'appliquer. Des guards (`bookIdAtSave`, `loadedAt`) empêchent les promesses stale de corrompre l'état. Le debounce est annulé (`cancelPendingSave()`) lors du changement de livre.
+35. **Tests unitaires** : Vitest en environnement `node`. Tests dans `src/__tests__/` (8 fichiers, ~195 tests). Couvrent : retry avec backoff (`cloudSaveWithRetry`), historique de versions (extractStats, dedup, restore, saga data), optimisation daily snapshot, calculs de progression et objectifs (`calculations.ts`), fonctions utilitaires (`utils.ts` : durées, comptage mots/signes, labels chapitres, formatage), CRUD encyclopédie (`encyclopedia-helpers.ts` : personnages, lieux, tags, worldNotes, maps, pins, relations, keyEvents), sanitization export XHTML (`export-shared.ts` : escapeXml, cleanHtml), helpers upload (`upload.ts` : isBase64, isUrl). Voir `src/__tests__/CLAUDE.md` pour les détails.

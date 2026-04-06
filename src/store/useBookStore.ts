@@ -12,7 +12,6 @@ import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
 import { useSagaStore } from './useSagaStore';
 import { isBase64, uploadImage } from '@/lib/upload';
-import { migrateScenesToTimelineEvents } from '@/lib/migration';
 import { getOverallProgress, getDailyGoal, getCompletedScenesCount, getTodayProgress as calcTodayProgress } from '@/lib/calculations';
 import * as enc from './encyclopedia-helpers';
 import { migrateEncyclopediaImages } from './encyclopedia-helpers';
@@ -423,7 +422,7 @@ export const useBookStore = create<BookStore>()(
         // 1. Load from localStorage immediately (cache for fast display)
         const raw = localStorage.getItem(getBookStorageKey(bookId));
         if (raw) {
-          const project = migrateGoals(migrateScenesToTimelineEvents(ensureSpecialChapters(JSON.parse(raw) as BookProject)));
+          const project = migrateGoals(ensureSpecialChapters(JSON.parse(raw) as BookProject));
           set({ ...emptyState(), ...project, lastSavedAt: now(), _loaded: true });
           if (project.sagaId) {
             useSagaStore.getState().loadSaga(project.sagaId);
@@ -449,7 +448,7 @@ export const useBookStore = create<BookStore>()(
               useSyncStore.getState().setSynced();
               return;
             }
-            const remote = migrateGoals(migrateScenesToTimelineEvents(ensureSpecialChapters(remoteData as BookProject)));
+            const remote = migrateGoals(ensureSpecialChapters(remoteData as BookProject));
             set({ ...emptyState(), ...remote, lastSavedAt: now(), _loaded: true });
             localStorage.setItem(getBookStorageKey(bookId), JSON.stringify(remote));
             if (remote.sagaId) {
