@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, ChevronDown, ChevronRight, GripVertical, Edit, Trash2, X, User, MapPin, Map, PenLine, BookText, XCircle, List, Globe, ExternalLink, CalendarDays } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
@@ -8,7 +8,230 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countUnitLabel, isSpecialChapter, getChapterLabel, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, WORLD_NOTE_CATEGORY_LABELS, PLACE_TYPE_LABELS, formatDuration } from '@/lib/utils';
 import { getSceneProgress, getSceneTarget } from '@/lib/calculations';
-import type { Scene, SceneStatus, Chapter, GlossaryEntry, EventDuration, DurationUnit, TimelineEvent } from '@/types';
+import {
+  DndContext,
+  pointerWithin,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  DragOverlay,
+  type DragEndEvent,
+  type DragStartEvent,
+  type DragOverEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { Scene, SceneStatus, Chapter, GlossaryEntry, EventDuration, DurationUnit, TimelineEvent, Character, Place, MapItem, MapPin as MapPinType } from '@/types';
+
+interface SortableSceneItemProps {
+  scene: Scene;
+  sceneIdx: number;
+  isSpecial: boolean;
+  characters: Character[];
+  places: Place[];
+  maps: MapItem[];
+  writingMode: 'count' | 'write';
+  countUnit: 'words' | 'characters';
+  goals: ReturnType<typeof useBookStore.getState>['goals'];
+  scenes: Scene[];
+  timelineEvents: TimelineEvent[];
+  onNavigate: (path: string, options?: { state?: Record<string, unknown> }) => void;
+  onOpenEditor: (sceneId: string) => void;
+  onUpdateScene: (sceneId: string, data: Partial<Scene>) => void;
+  onEditScene: (scene: Scene) => void;
+  onDeleteScene: (sceneId: string) => void;
+  onShowEvents: (title: string, events: TimelineEvent[]) => void;
+}
+
+function SortableSceneItem({
+  scene,
+  sceneIdx,
+  isSpecial,
+  characters,
+  places,
+  maps,
+  writingMode,
+  countUnit,
+  goals,
+  scenes,
+  timelineEvents,
+  onNavigate,
+  onOpenEditor,
+  onUpdateScene,
+  onEditScene,
+  onDeleteScene,
+  onShowEvents,
+}: SortableSceneItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: scene.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  const progress = getSceneProgress(scene, scenes, goals);
+  const sceneTarget = getSceneTarget(scene, scenes, goals);
+  const sceneChars = scene.characterIds
+    .map((cid) => characters.find((c) => c.id === cid))
+    .filter(Boolean);
+  const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
+  const sceneMaps = scenePlace
+    ? maps.filter((m) => m.pins.some((p: MapPinType) => p.placeId === scenePlace.id))
+    : [];
+
+  return (
+    <div ref={setNodeRef} style={style} className="bg-parchment-100 rounded-lg p-3 group">
+      <div className="flex items-start gap-3">
+        <button
+          {...attributes}
+          {...listeners}
+          className="p-0.5 mt-0.5 rounded text-ink-100 hover:text-ink-400 hover:bg-parchment-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="font-medium text-ink-500 text-sm">
+              {scene.title || (isSpecial ? 'Sans titre' : `Scène ${sceneIdx + 1}`)}
+            </h4>
+            <select
+              value={scene.status}
+              onChange={(e) => onUpdateScene(scene.id, { status: e.target.value as SceneStatus })}
+              onClick={(e) => e.stopPropagation()}
+              className={cn('text-xs px-1.5 py-0.5 rounded-full border-0 cursor-pointer font-medium', SCENE_STATUS_COLORS[scene.status])}
+            >
+              {Object.entries(SCENE_STATUS_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </div>
+          {scene.description && (
+            <p className="text-xs text-ink-300 mt-1 line-clamp-2 whitespace-pre-line">{scene.description}</p>
+          )}
+          <div className="flex items-center gap-3 mt-2 text-xs text-ink-200">
+            {sceneChars.length > 0 && (
+              <span className="flex items-center gap-1">
+                <User className="w-3 h-3" />
+                {sceneChars.map((c) => c!.name).join(', ')}
+              </span>
+            )}
+            {scenePlace && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {scenePlace.name}
+                {sceneMaps.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={(e) => { e.stopPropagation(); onNavigate('/maps', { state: { mapId: m.id } }); }}
+                    title={`Voir sur la carte : ${m.name}`}
+                    className="ml-0.5 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                  >
+                    <Map className="w-3 h-3" />
+                  </button>
+                ))}
+              </span>
+            )}
+            {scene.startDate && (
+              <span>{new Date(scene.startDate + 'T00:00:00').toLocaleDateString('fr-FR')}</span>
+            )}
+            {(() => {
+              const sceneEvents = timelineEvents.filter((e) => e.sceneId === scene.id);
+              if (sceneEvents.length === 0) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowEvents(
+                      scene.title || (isSpecial ? 'Sans titre' : `Scène ${sceneIdx + 1}`),
+                      sceneEvents
+                    );
+                  }}
+                  className="flex items-center gap-1 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                  title={`${sceneEvents.length} événement${sceneEvents.length > 1 ? 's' : ''}`}
+                >
+                  <CalendarDays className="w-3 h-3" />
+                  {sceneEvents.length}
+                </button>
+              );
+            })()}
+          </div>
+          {/* Progress bar */}
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-parchment-300 rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  progress >= 1 ? 'bg-green-500' : progress > 0.5 ? 'bg-gold-400' : 'bg-bordeaux-400'
+                )}
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+            <span className="text-xs text-ink-200 text-right">
+              {sceneTarget != null
+                ? `${scene.currentWordCount}/${sceneTarget} ${countUnitLabel(countUnit)}`
+                : `${scene.currentWordCount} ${countUnitLabel(countUnit)}`}
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+          {writingMode === 'write' && (
+            <button
+              onClick={() => onOpenEditor(scene.id)}
+              className="btn-ghost p-1 text-bordeaux-500 hover:text-bordeaux-700"
+              title="Écrire cette scène"
+            >
+              <PenLine className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button onClick={() => onEditScene(scene)} className="btn-ghost p-1">
+            <Edit className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => onDeleteScene(scene.id)} className="btn-ghost p-1 text-red-400">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Droppable zone for each chapter's scene list
+function DroppableSceneList({ chapterId, children }: { chapterId: string; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id: `chapter-drop-${chapterId}` });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="px-4 pb-4 space-y-2 mt-4"
+    >
+      {children}
+    </div>
+  );
+}
+
+// Droppable wrapper for entire chapter (header + scene list)
+function DroppableChapter({ chapterId, children }: { chapterId: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `chapter-header-${chapterId}` });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'transition-all rounded-lg',
+        isOver && 'ring-2 ring-gold-400 ring-offset-2 ring-offset-parchment-50'
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 
 export function ChaptersPage() {
   const chapters = useBookStore((s) => s.chapters);
@@ -27,7 +250,14 @@ export function ChaptersPage() {
   const addScene = useBookStore((s) => s.addScene);
   const updateScene = useBookStore((s) => s.updateScene);
   const deleteScene = useBookStore((s) => s.deleteScene);
+  const reorderScenes = useBookStore((s) => s.reorderScenes);
+  const moveScene = useBookStore((s) => s.moveScene);
   const navigate = useNavigate();
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
+  // Virtual scene arrangement for cross-chapter drag preview
+  const [virtualSceneIds, setVirtualSceneIds] = useState<Record<string, string[]> | null>(null);
   const openEditorAt = useEditorStore((s) => s.open);
   const goals = useBookStore((s) => s.goals);
   const timelineEvents = useBookStore((s) => s.timelineEvents) ?? [];
@@ -47,8 +277,161 @@ export function ChaptersPage() {
   const backMatter = sortedChapters.find(c => c.type === 'back_matter');
   const regularChapters = sortedChapters.filter(c => (c.type ?? 'chapter') === 'chapter');
 
+  // Find which chapter contains a scene
+  const findChapterForScene = useCallback((sceneId: string) => {
+    return chapters.find((c) => c.sceneIds.includes(sceneId));
+  }, [chapters]);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveSceneId(event.active.id as string);
+    setVirtualSceneIds(null);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over || !active) {
+      setVirtualSceneIds(null);
+      return;
+    }
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    if (activeId === overId) return;
+
+    const sourceChapter = findChapterForScene(activeId);
+    if (!sourceChapter) return;
+
+    // Check if over another scene
+    let targetChapter = findChapterForScene(overId);
+    let targetIndex = -1;
+
+    if (targetChapter) {
+      targetIndex = targetChapter.sceneIds.indexOf(overId);
+    } else {
+      // Check chapter drop zones
+      const isChapterDropZone = overId.startsWith('chapter-drop-');
+      const chapterDropZoneId = isChapterDropZone ? overId.replace('chapter-drop-', '') : null;
+      
+      const isChapterHeader = overId.startsWith('chapter-header-');
+      const chapterHeaderId = isChapterHeader ? overId.replace('chapter-header-', '') : null;
+
+      const destChapterId = chapterDropZoneId || chapterHeaderId;
+      if (destChapterId) {
+        targetChapter = chapters.find((c) => c.id === destChapterId);
+        if (targetChapter) {
+          targetIndex = targetChapter.sceneIds.length;
+        }
+      }
+    }
+
+    if (!targetChapter) {
+      setVirtualSceneIds(null);
+      return;
+    }
+
+    // Same chapter - let SortableContext handle it naturally
+    if (sourceChapter.id === targetChapter.id) {
+      setVirtualSceneIds(null);
+      return;
+    }
+
+    // Different chapter - create virtual arrangement
+    const sourceSceneIds = sourceChapter.sceneIds.filter(id => id !== activeId);
+    const targetSceneIds = [...targetChapter.sceneIds];
+    
+    // Insert at the right position
+    if (targetIndex >= 0 && targetIndex < targetSceneIds.length) {
+      targetSceneIds.splice(targetIndex, 0, activeId);
+    } else {
+      targetSceneIds.push(activeId);
+    }
+
+    setVirtualSceneIds({
+      [sourceChapter.id]: sourceSceneIds,
+      [targetChapter.id]: targetSceneIds,
+    });
+  }, [findChapterForScene, chapters]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    // Capture virtual state for index calculation before resetting
+    const virtualArrangement = virtualSceneIds;
+    setActiveSceneId(null);
+    setVirtualSceneIds(null);
+    
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const sourceChapter = findChapterForScene(activeId);
+    if (!sourceChapter) return;
+
+    // If we have a virtual arrangement with cross-chapter move, commit it
+    if (virtualArrangement) {
+      // Find which chapter now contains the scene in virtual state
+      const targetChapterId = Object.entries(virtualArrangement).find(
+        ([, sceneIds]) => sceneIds.includes(activeId)
+      )?.[0];
+      
+      if (targetChapterId && targetChapterId !== sourceChapter.id) {
+        const newIndex = virtualArrangement[targetChapterId].indexOf(activeId);
+        moveScene(activeId, targetChapterId, newIndex >= 0 ? newIndex : 0);
+        return;
+      }
+    }
+    
+    // Same ID means no move needed (same position in same chapter)
+    if (activeId === overId) return;
+
+    // Check if dropping on another scene
+    const targetChapter = findChapterForScene(overId);
+    
+    // Check if dropping on a chapter droppable zone
+    const isChapterDropZone = overId.startsWith('chapter-drop-');
+    const chapterDropZoneId = isChapterDropZone ? overId.replace('chapter-drop-', '') : null;
+    
+    // Check if dropping on a chapter header (entire card)
+    const isChapterHeader = overId.startsWith('chapter-header-');
+    const chapterHeaderId = isChapterHeader ? overId.replace('chapter-header-', '') : null;
+
+    if (targetChapter) {
+      // Dropping on another scene
+      if (sourceChapter.id === targetChapter.id) {
+        // Same chapter: reorder
+        const oldIndex = sourceChapter.sceneIds.indexOf(activeId);
+        const newIndex = targetChapter.sceneIds.indexOf(overId);
+        if (oldIndex === -1 || newIndex === -1) return;
+        const reordered = arrayMove(sourceChapter.sceneIds, oldIndex, newIndex);
+        reorderScenes(sourceChapter.id, reordered);
+      } else {
+        // Different chapter: move scene
+        const newIndex = targetChapter.sceneIds.indexOf(overId);
+        moveScene(activeId, targetChapter.id, newIndex >= 0 ? newIndex : targetChapter.sceneIds.length);
+      }
+    } else if (chapterDropZoneId) {
+      // Dropping on empty chapter scene list zone
+      const destChapter = chapters.find((c) => c.id === chapterDropZoneId);
+      if (destChapter && destChapter.id !== sourceChapter.id) {
+        moveScene(activeId, destChapter.id, destChapter.sceneIds.length);
+      }
+    } else if (chapterHeaderId) {
+      // Dropping on chapter header (entire card) — add to end of chapter
+      const destChapter = chapters.find((c) => c.id === chapterHeaderId);
+      if (destChapter && destChapter.id !== sourceChapter.id) {
+        moveScene(activeId, destChapter.id, destChapter.sceneIds.length);
+      }
+    }
+  }, [virtualSceneIds, findChapterForScene, chapters, reorderScenes, moveScene]);
+
+  // Get active scene for drag overlay
+  const activeScene = activeSceneId ? scenes.find((s) => s.id === activeSceneId) : null;
+
   const renderSceneList = (chapter: Chapter) => {
-    const chapterScenes = chapter.sceneIds
+    // Use virtual scene arrangement during cross-chapter drag, otherwise use actual
+    const sceneIds = virtualSceneIds?.[chapter.id] ?? chapter.sceneIds;
+    const chapterScenes = sceneIds
       .map((sid) => scenes.find((s) => s.id === sid))
       .filter(Boolean) as Scene[];
     const isExpanded = expanded[chapter.id] === true;
@@ -57,128 +440,31 @@ export function ChaptersPage() {
     if (!isExpanded) return null;
 
     return (
-      <div className="px-4 pb-4 space-y-2 mt-4">
-        {chapterScenes.map((scene, sceneIdx) => {
-          const progress = getSceneProgress(scene, scenes, goals);
-          const sceneTarget = getSceneTarget(scene, scenes, goals);
-          const sceneChars = scene.characterIds
-            .map((cid) => characters.find((c) => c.id === cid))
-            .filter(Boolean);
-          const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;
-          const sceneMaps = scenePlace
-            ? maps.filter((m) => m.pins.some((p) => p.placeId === scenePlace.id))
-            : [];
-
-          return (
-            <div key={scene.id} className="bg-parchment-100 rounded-lg p-3 group">
-              <div className="flex items-start gap-3">
-                <GripVertical className="w-4 h-4 text-ink-100 mt-1 opacity-0 group-hover:opacity-100 cursor-grab" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-medium text-ink-500 text-sm">
-                      {scene.title || (isSpecial ? 'Sans titre' : `Scène ${sceneIdx + 1}`)}
-                    </h4>
-                    <select
-                      value={scene.status}
-                      onChange={(e) => updateScene(scene.id, { status: e.target.value as SceneStatus })}
-                      onClick={(e) => e.stopPropagation()}
-                      className={cn('text-xs px-1.5 py-0.5 rounded-full border-0 cursor-pointer font-medium', SCENE_STATUS_COLORS[scene.status])}
-                    >
-                      {Object.entries(SCENE_STATUS_LABELS).map(([key, label]) => (
-                        <option key={key} value={key}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {scene.description && (
-                    <p className="text-xs text-ink-300 mt-1 line-clamp-2 whitespace-pre-line">{scene.description}</p>
-                  )}
-                  <div className="flex items-center gap-3 mt-2 text-xs text-ink-200">
-                    {sceneChars.length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        {sceneChars.map((c) => c!.name).join(', ')}
-                      </span>
-                    )}
-                    {scenePlace && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {scenePlace.name}
-                        {sceneMaps.map((m) => (
-                          <button
-                            key={m.id}
-                            onClick={(e) => { e.stopPropagation(); navigate('/maps', { state: { mapId: m.id } }); }}
-                            title={`Voir sur la carte : ${m.name}`}
-                            className="ml-0.5 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
-                          >
-                            <Map className="w-3 h-3" />
-                          </button>
-                        ))}
-                      </span>
-                    )}
-                    {scene.startDate && (
-                      <span>{new Date(scene.startDate + 'T00:00:00').toLocaleDateString('fr-FR')}</span>
-                    )}
-                    {(() => {
-                      const sceneEvents = timelineEvents.filter((e) => e.sceneId === scene.id);
-                      if (sceneEvents.length === 0) return null;
-                      return (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEventsDialog({
-                              title: scene.title || (isSpecial ? 'Sans titre' : `Scène ${sceneIdx + 1}`),
-                              events: sceneEvents,
-                            });
-                          }}
-                          className="flex items-center gap-1 text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
-                          title={`${sceneEvents.length} événement${sceneEvents.length > 1 ? 's' : ''}`}
-                        >
-                          <CalendarDays className="w-3 h-3" />
-                          {sceneEvents.length}
-                        </button>
-                      );
-                    })()}
-                  </div>
-                  {/* Progress bar */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-parchment-300 rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          'h-full rounded-full transition-all',
-                          progress >= 1 ? 'bg-green-500' : progress > 0.5 ? 'bg-gold-400' : 'bg-bordeaux-400'
-                        )}
-                        style={{ width: `${progress * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-ink-200 text-right">
-                      {sceneTarget != null
-                        ? `${scene.currentWordCount}/${sceneTarget} ${countUnitLabel(countUnit)}`
-                        : `${scene.currentWordCount} ${countUnitLabel(countUnit)}`}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                  {writingMode === 'write' && (
-                    <button
-                      onClick={() => openEditorAt(scene.id)}
-                      className="btn-ghost p-1 text-bordeaux-500 hover:text-bordeaux-700"
-                      title="Écrire cette scène"
-                    >
-                      <PenLine className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <button onClick={() => setEditingScene(scene)} className="btn-ghost p-1">
-                    <Edit className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => setDeleteTarget({ type: 'scene', id: scene.id })} className="btn-ghost p-1 text-red-400">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <DroppableSceneList chapterId={chapter.id}>
+        <SortableContext items={sceneIds} strategy={verticalListSortingStrategy}>
+          {chapterScenes.map((scene, sceneIdx) => (
+            <SortableSceneItem
+              key={scene.id}
+              scene={scene}
+              sceneIdx={sceneIdx}
+              isSpecial={isSpecial}
+              characters={characters}
+              places={places}
+              maps={maps}
+              writingMode={writingMode}
+              countUnit={countUnit}
+              goals={goals}
+              scenes={scenes}
+              timelineEvents={timelineEvents}
+              onNavigate={navigate}
+              onOpenEditor={openEditorAt}
+              onUpdateScene={updateScene}
+              onEditScene={setEditingScene}
+              onDeleteScene={(id) => setDeleteTarget({ type: 'scene', id })}
+              onShowEvents={(title, events) => setEventsDialog({ title, events })}
+            />
+          ))}
+        </SortableContext>
 
         <button
           onClick={() => setShowSceneForm(chapter.id)}
@@ -187,7 +473,7 @@ export function ChaptersPage() {
         >
           <Plus className="w-4 h-4" /> Ajouter une scène
         </button>
-      </div>
+      </DroppableSceneList>
     );
   };
 
@@ -200,43 +486,45 @@ export function ChaptersPage() {
     const label = chapter.type === 'front_matter' ? FRONT_MATTER_LABEL : BACK_MATTER_LABEL;
 
     return (
-      <div className="card-fantasy overflow-hidden border-dashed">
-        <div
-          className="flex items-center gap-3 p-4 cursor-pointer hover:bg-parchment-100 transition-colors"
-          onClick={() => toggleExpand(chapter.id)}
-        >
-          {isExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
-          <div className="flex-1">
-            <h3 className="font-display font-bold text-ink-400 italic">{label}</h3>
-            <p className="text-xs text-ink-200 mt-0.5">Dédicace, prologue, épilogue, remerciements...</p>
+      <DroppableChapter chapterId={chapter.id}>
+        <div className="card-fantasy overflow-hidden border-dashed">
+          <div
+            className="flex items-center gap-3 p-4 cursor-pointer hover:bg-parchment-100 transition-colors"
+            onClick={() => toggleExpand(chapter.id)}
+          >
+            {isExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
+            <div className="flex-1">
+              <h3 className="font-display font-bold text-ink-400 italic">{label}</h3>
+              <p className="text-xs text-ink-200 mt-0.5">Dédicace, prologue, épilogue, remerciements...</p>
+            </div>
+            {chapterScenes.length > 0 && (
+              <span className="text-xs text-ink-200">{chapterScenes.length} page{chapterScenes.length > 1 ? 's' : ''}</span>
+            )}
+            {(() => {
+              const sectionEvents = timelineEvents.filter((e) => e.chapterId === chapter.id);
+              if (sectionEvents.length === 0) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEventsDialog({
+                      title: label,
+                      events: sectionEvents,
+                    });
+                  }}
+                  className="flex items-center gap-1 text-xs text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                  title={`${sectionEvents.length} événement${sectionEvents.length > 1 ? 's' : ''}`}
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  {sectionEvents.length}
+                </button>
+              );
+            })()}
           </div>
-          {chapterScenes.length > 0 && (
-            <span className="text-xs text-ink-200">{chapterScenes.length} page{chapterScenes.length > 1 ? 's' : ''}</span>
-          )}
-          {(() => {
-            const sectionEvents = timelineEvents.filter((e) => e.chapterId === chapter.id);
-            if (sectionEvents.length === 0) return null;
-            return (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEventsDialog({
-                    title: label,
-                    events: sectionEvents,
-                  });
-                }}
-                className="flex items-center gap-1 text-xs text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
-                title={`${sectionEvents.length} événement${sectionEvents.length > 1 ? 's' : ''}`}
-              >
-                <CalendarDays className="w-3.5 h-3.5" />
-                {sectionEvents.length}
-              </button>
-            );
-          })()}
+          {renderSceneList(chapter)}
         </div>
-        {renderSceneList(chapter)}
-      </div>
+      </DroppableChapter>
     );
   };
 
@@ -249,24 +537,31 @@ export function ChaptersPage() {
         </button>
       </div>
 
-      <div className="space-y-3">
-        {/* Table of contents section */}
-        <div className="card-fantasy overflow-hidden border-dashed">
-          <div className="flex items-center gap-3 p-4">
-            <List className="w-4 h-4 text-ink-300 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="font-display font-bold text-ink-400 italic">Table des matières</h3>
-              <p className="text-xs text-ink-200 mt-0.5">
-                Inclure une table des matières dans les exports PDF et EPUB.
-                N'apparaît pas dans le mode d'écriture.
-              </p>
-            </div>
-            <label
-              className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer flex-shrink-0"
-            >
-              <input
-                type="checkbox"
-                checked={tableOfContents}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="space-y-3">
+          {/* Table of contents section */}
+          <div className="card-fantasy overflow-hidden border-dashed">
+            <div className="flex items-center gap-3 p-4">
+              <List className="w-4 h-4 text-ink-300 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-display font-bold text-ink-400 italic">Table des matières</h3>
+                <p className="text-xs text-ink-200 mt-0.5">
+                  Inclure une table des matières dans les exports PDF et EPUB.
+                  N'apparaît pas dans le mode d'écriture.
+                </p>
+              </div>
+              <label
+                className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer flex-shrink-0"
+              >
+                <input
+                  type="checkbox"
+                  checked={tableOfContents}
                 onChange={(e) => setTableOfContents(e.target.checked)}
                 className="rounded border-parchment-300 accent-bordeaux-500"
               />
@@ -295,60 +590,62 @@ export function ChaptersPage() {
             const completedScenes = chapterScenes.filter((s) => getSceneProgress(s, scenes, goals) >= 1).length;
 
             return (
-              <div key={chapter.id} className="card-fantasy overflow-hidden">
-                {/* Chapter Header */}
-                <div
-                  className="flex items-center gap-3 p-4 cursor-pointer hover:bg-parchment-100 transition-colors"
-                  onClick={() => toggleExpand(chapter.id)}
-                >
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: chapter.color }} />
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
-                  <div className="flex-1">
-                    <h3 className="font-display font-bold text-ink-400 italic">
-                      Chapitre {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
-                    </h3>
-                    {chapter.synopsis && (
-                      <p className="text-xs text-ink-200 mt-0.5 whitespace-pre-line">{chapter.synopsis}</p>
-                    )}
+              <DroppableChapter key={chapter.id} chapterId={chapter.id}>
+                <div className="card-fantasy overflow-hidden">
+                  {/* Chapter Header */}
+                  <div
+                    className="flex items-center gap-3 p-4 cursor-pointer hover:bg-parchment-100 transition-colors"
+                    onClick={() => toggleExpand(chapter.id)}
+                  >
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: chapter.color }} />
+                    {isExpanded ? <ChevronDown className="w-4 h-4 text-ink-300" /> : <ChevronRight className="w-4 h-4 text-ink-300" />}
+                    <div className="flex-1">
+                      <h3 className="font-display font-bold text-ink-400 italic">
+                        Chapitre {chapter.number}{chapter.title ? ` — ${chapter.title}` : ''}
+                      </h3>
+                      {chapter.synopsis && (
+                        <p className="text-xs text-ink-200 mt-0.5 whitespace-pre-line">{chapter.synopsis}</p>
+                      )}
+                    </div>
+                    <span className="text-xs text-ink-200">{completedScenes}/{chapterScenes.length} scènes</span>
+                    {(() => {
+                      const chapterEvents = timelineEvents.filter((e) => e.chapterId === chapter.id);
+                      if (chapterEvents.length === 0) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEventsDialog({
+                              title: `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`,
+                              events: chapterEvents,
+                            });
+                          }}
+                          className="flex items-center gap-1 text-xs text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
+                          title={`${chapterEvents.length} événement${chapterEvents.length > 1 ? 's' : ''}`}
+                        >
+                          <CalendarDays className="w-3.5 h-3.5" />
+                          {chapterEvents.length}
+                        </button>
+                      );
+                    })()}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingChapterId(chapter.id); setShowChapterForm(true); }}
+                      className="btn-ghost p-1"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: 'chapter', id: chapter.id }); }}
+                      className="btn-ghost p-1 text-red-400 hover:text-red-500"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <span className="text-xs text-ink-200">{completedScenes}/{chapterScenes.length} scènes</span>
-                  {(() => {
-                    const chapterEvents = timelineEvents.filter((e) => e.chapterId === chapter.id);
-                    if (chapterEvents.length === 0) return null;
-                    return (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEventsDialog({
-                            title: `Chapitre ${chapter.number}${chapter.title ? ` — ${chapter.title}` : ''}`,
-                            events: chapterEvents,
-                          });
-                        }}
-                        className="flex items-center gap-1 text-xs text-bordeaux-400 hover:text-bordeaux-600 transition-colors"
-                        title={`${chapterEvents.length} événement${chapterEvents.length > 1 ? 's' : ''}`}
-                      >
-                        <CalendarDays className="w-3.5 h-3.5" />
-                        {chapterEvents.length}
-                      </button>
-                    );
-                  })()}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setEditingChapterId(chapter.id); setShowChapterForm(true); }}
-                    className="btn-ghost p-1"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: 'chapter', id: chapter.id }); }}
-                    className="btn-ghost p-1 text-red-400 hover:text-red-500"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
 
-                {renderSceneList(chapter)}
-              </div>
+                  {renderSceneList(chapter)}
+                </div>
+              </DroppableChapter>
             );
           })
         )}
@@ -473,6 +770,50 @@ export function ChaptersPage() {
           </div>
         )}
       </div>
+
+      {/* Drag overlay for visual feedback */}
+      <DragOverlay>
+        {activeScene && (() => {
+          const sceneChars = activeScene.characterIds
+            .map((cid) => characters.find((c) => c.id === cid))
+            .filter(Boolean);
+          const scenePlace = activeScene.placeId ? places.find((p) => p.id === activeScene.placeId) : null;
+          return (
+            <div className="bg-parchment-100 rounded-lg p-3 shadow-lg ring-2 ring-gold-400">
+              <div className="flex items-start gap-3">
+                <GripVertical className="w-4 h-4 text-ink-300 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-medium text-ink-500 text-sm">
+                      {activeScene.title || 'Scène'}
+                    </h4>
+                    <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium', SCENE_STATUS_COLORS[activeScene.status])}>
+                      {SCENE_STATUS_LABELS[activeScene.status]}
+                    </span>
+                  </div>
+                  {(sceneChars.length > 0 || scenePlace) && (
+                    <div className="flex items-center gap-3 mt-2 text-xs text-ink-200">
+                      {sceneChars.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {sceneChars.map((c) => c!.name).join(', ')}
+                        </span>
+                      )}
+                      {scenePlace && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {scenePlace.name}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </DragOverlay>
+    </DndContext>
 
       {showChapterForm && (
         <ChapterFormDialog

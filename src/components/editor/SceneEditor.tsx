@@ -6,9 +6,9 @@ import { useEditorStore } from '@/store/useEditorStore';
 import { SceneInlineEditor } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
-import { cn, SCENE_STATUS_LABELS, countFromHtml, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel, formatDuration } from '@/lib/utils';
+import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countFromHtml, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel, formatDuration } from '@/lib/utils';
 import { getTodayProgress, getDailyGoal, getSceneTarget } from '@/lib/calculations';
-import type { Scene, Chapter, GlossaryEntry } from '@/types';
+import type { Scene, Chapter, GlossaryEntry, SceneStatus } from '@/types';
 
 const STATUS_DOT: Record<string, string> = {
   outline:  'bg-ink-200',
@@ -21,6 +21,7 @@ export function SceneEditor() {
   const { isOpen, entrySceneId, minimize, close } = useEditorStore();
   const scenes = useBookStore((s) => s.scenes);
   const chapters = useBookStore((s) => s.chapters);
+  const updateScene = useBookStore((s) => s.updateScene);
   const { characters, places, worldNotes: allWorldNotes } = useEncyclopediaStore();
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const bookId = useBookStore((s) => s.id);
@@ -487,8 +488,9 @@ export function SceneEditor() {
                       id={`scene-${scene.id}`}
                       className={cn('mb-16', idx > 0 && 'border-t border-parchment-200 pt-12')}
                     >
-                      {(scene.title || scene.description || hasMetadata) && (
-                        <div className="mb-4">
+                      {/* Scene header with title and status selector */}
+                      <div className="mb-4 flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
                           {scene.title && (
                             <h3 className="font-display text-lg sm:text-xl font-semibold text-ink-500 mb-1">
                               {scene.title}
@@ -524,8 +526,17 @@ export function SceneEditor() {
                             </div>
                           )}
                         </div>
-                      )}
-
+                        {/* Status selector */}
+                        <select
+                          value={scene.status}
+                          onChange={(e) => updateScene(scene.id, { status: e.target.value as SceneStatus })}
+                          className={cn('text-xs px-2 py-1 rounded-full border-0 cursor-pointer font-medium shrink-0', SCENE_STATUS_COLORS[scene.status])}
+                        >
+                          {Object.entries(SCENE_STATUS_LABELS).map(([key, label]) => (
+                            <option key={key} value={key}>{label}</option>
+                          ))}
+                        </select>
+                      </div>
                       <SceneInlineEditor scene={scene} onFocus={() => {}} />
 
                       <div className="mt-3 flex items-center gap-2">
