@@ -306,14 +306,24 @@ export const devDb = {
       const currentRaw = localStorage.getItem(bookKey(uid, bookId));
       if (!currentRaw) return;
 
-      const history = getJson<Array<{ meta: { savedAt: string; title: string; stats: VersionStats }; data: unknown; sagaData?: unknown }>>(hKey, []);
+      const history = getJson<Array<{ meta: { savedAt: string; title: string; stats: VersionStats }; data: Record<string, unknown>; sagaData?: unknown }>>(hKey, []);
 
+      // Dedup by time: skip if last snapshot is < 15 minutes old
       if (history.length > 0) {
         const lastSavedAt = new Date(history[0].meta.savedAt).getTime();
         if (Date.now() - lastSavedAt < 15 * 60 * 1000) return;
       }
 
       const currentData = JSON.parse(currentRaw) as Record<string, unknown>;
+
+      // Dedup by content: skip if book updatedAt hasn't changed since last snapshot
+      if (history.length > 0) {
+        const lastData = history[0].data;
+        if (lastData.updatedAt === currentData.updatedAt) {
+          return;
+        }
+      }
+
       const currentSagaData = this._getSagaData(uid, currentData);
       history.unshift({
         meta: {

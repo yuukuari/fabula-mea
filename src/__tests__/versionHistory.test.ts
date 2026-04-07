@@ -61,9 +61,17 @@ function recordIfNeeded(
   sagaData?: Record<string, unknown>,
 ): VersionEntry[] {
   const result = [...history];
+  // Dedup by time
   if (result.length > 0) {
     const lastSavedAt = new Date(result[0].meta.savedAt).getTime();
     if (Date.now() - lastSavedAt < DEDUP_INTERVAL) return result;
+  }
+  // Dedup by content: skip if book updatedAt hasn't changed
+  if (result.length > 0) {
+    const lastData = result[0].data;
+    if (lastData.updatedAt === currentData.updatedAt) {
+      return result;
+    }
   }
   result.unshift({
     meta: {
@@ -191,9 +199,9 @@ describe('recordIfNeeded', () => {
     const oldDate = new Date(Date.now() - DEDUP_INTERVAL - 1000);
     const oldEntry: VersionEntry = {
       meta: { savedAt: oldDate.toISOString(), title: 'v1', stats: extractStats({}) },
-      data: {},
+      data: { updatedAt: '2024-01-01T00:00:00Z' },
     };
-    const data = { title: 'v2' };
+    const data = { title: 'v2', updatedAt: '2024-01-01T01:00:00Z' };
     const result = recordIfNeeded([oldEntry], data);
     expect(result.length).toBe(2);
     expect(result[0].meta.title).toBe('v2');
@@ -207,6 +215,30 @@ describe('recordIfNeeded', () => {
     expect(result[0].sagaData).toEqual(sagaData);
   });
 
+  it('skips recording when updatedAt is identical to last snapshot', () => {
+    const data = { title: 'Mon livre', updatedAt: '2024-01-01T12:00:00Z' };
+    const oldDate = new Date(Date.now() - DEDUP_INTERVAL - 1000);
+    const existingEntry: VersionEntry = {
+      meta: { savedAt: oldDate.toISOString(), title: 'Mon livre', stats: extractStats(data) },
+      data: { ...data }, // same updatedAt
+    };
+    // Old enough by time — but updatedAt hasn't changed (no real edit)
+    const result = recordIfNeeded([existingEntry], data);
+    expect(result.length).toBe(1); // no new entry
+  });
+
+  it('records when updatedAt changed (real edit happened)', () => {
+    const oldDate = new Date(Date.now() - DEDUP_INTERVAL - 1000);
+    const existingEntry: VersionEntry = {
+      meta: { savedAt: oldDate.toISOString(), title: 'Mon livre', stats: extractStats({}) },
+      data: { title: 'Mon livre', updatedAt: '2024-01-01T12:00:00Z' },
+    };
+    // Same title/stats but updatedAt changed → setting change, layout change, etc.
+    const newData = { title: 'Mon livre', updatedAt: '2024-01-01T14:00:00Z' };
+    const result = recordIfNeeded([existingEntry], newData);
+    expect(result.length).toBe(2);
+  });
+
   it('caps history at MAX_VERSIONS', () => {
     const old = Array.from({ length: 20 }, (_, i) => ({
       meta: {
@@ -214,10 +246,10 @@ describe('recordIfNeeded', () => {
         title: `v${i}`,
         stats: extractStats({}),
       },
-      data: {},
+      data: { updatedAt: `2024-01-${String(i + 1).padStart(2, '0')}T00:00:00Z` },
     }));
-    // Last entry is old enough to allow recording
-    const result = recordIfNeeded(old, { title: 'new' });
+    // New data with different updatedAt
+    const result = recordIfNeeded(old, { title: 'new', updatedAt: '2024-02-01T00:00:00Z' });
     expect(result.length).toBe(MAX_VERSIONS);
     expect(result[0].meta.title).toBe('new');
   });

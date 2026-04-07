@@ -169,18 +169,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (shouldSaveHistory) {
-          const previousSagaData = await getSagaData(auth.userId, previousData);
-          const historyEntry: VersionEntry = {
-            meta: {
-              savedAt: new Date().toISOString(),
-              title: (previousData.title as string) ?? '',
-              stats: extractStats(previousData, previousSagaData),
-            },
-            data: previousData,
-            ...(previousSagaData ? { sagaData: previousSagaData } : {}),
-          };
-          await redis.lpush(historyKey, JSON.stringify(historyEntry));
-          await redis.ltrim(historyKey, 0, MAX_VERSIONS - 1);
+          // Skip if book updatedAt hasn't changed since last snapshot
+          if (lastRaw) {
+            const lastEntry = JSON.parse(lastRaw) as VersionEntry;
+            if (lastEntry.data.updatedAt === previousData.updatedAt) {
+              shouldSaveHistory = false;
+            }
+          }
+
+          if (shouldSaveHistory) {
+            const previousSagaData = await getSagaData(auth.userId, previousData);
+            const historyEntry: VersionEntry = {
+              meta: {
+                savedAt: new Date().toISOString(),
+                title: (previousData.title as string) ?? '',
+                stats: extractStats(previousData, previousSagaData),
+              },
+              data: previousData,
+              ...(previousSagaData ? { sagaData: previousSagaData } : {}),
+            };
+            await redis.lpush(historyKey, JSON.stringify(historyEntry));
+            await redis.ltrim(historyKey, 0, MAX_VERSIONS - 1);
+          }
         }
       } catch {
         // Don't fail the save if history fails
