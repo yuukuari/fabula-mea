@@ -173,6 +173,9 @@ export const useSagaStore = create<SagaStore>()(
         if (raw) {
           const project = JSON.parse(raw) as SagaProject;
           set({ ...project, lastSavedAt: now(), _loaded: true });
+        } else {
+          // No local cache — set minimal state so the saga id is tracked
+          set({ ...emptySagaState(), id: sagaId, createdAt: '', updatedAt: '', _loaded: true });
         }
 
         // 2. Fetch from server (source of truth) and apply — but only if user hasn't edited since
@@ -180,7 +183,7 @@ export const useSagaStore = create<SagaStore>()(
           const loadedAt = get().updatedAt;
           api.sagas.get(sagaId).then((remoteData) => {
             const cur = get();
-            if (cur.id !== sagaId || !cur._loaded) return;
+            if (cur.id !== sagaId) return;
             if (cur.updatedAt !== loadedAt) return; // User already edited
             const remote = remoteData as SagaProject;
             set({ ...remote, lastSavedAt: now(), _loaded: true });
