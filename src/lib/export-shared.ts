@@ -1,5 +1,5 @@
 /**
- * Shared utilities for EPUB and PDF export.
+ * Shared utilities for EPUB, PDF and DOCX export.
  */
 import type { BookLayout } from '@/types';
 

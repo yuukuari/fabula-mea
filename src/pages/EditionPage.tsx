@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { BookOpen, FileText, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
+import { BookOpen, FileText, FileType, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { exportEpub } from '@/lib/export-epub';
 import { exportPdf } from '@/lib/export-pdf';
+import { exportDocx } from '@/lib/export-docx';
 import { uploadImage } from '@/lib/upload';
 
 /** Upload d'image de couverture */
@@ -138,6 +139,15 @@ export function EditionPage() {
     exportPdf(buildExportBook());
   };
 
+  const handleExportDocx = async () => {
+    try {
+      await exportDocx(buildExportBook());
+    } catch (err) {
+      console.error('[Export DOCX]', err);
+      alert('Erreur lors de l\'export DOCX. Vérifiez la console.');
+    }
+  };
+
   return (
     <div className="page-container max-w-2xl">
       <h2 className="section-title mb-6">Édition</h2>
@@ -170,7 +180,7 @@ export function EditionPage() {
         <p className="text-sm text-ink-300 mb-4">
           Téléchargez votre livre dans un format standard, prêt à être lu sur une liseuse ou imprimé.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={handleExportEpub}
             className="flex items-center gap-3 p-4 rounded-xl border-2 border-parchment-200
@@ -195,6 +205,19 @@ export function EditionPage() {
             <div>
               <p className="font-display font-semibold text-ink-500 text-sm">PDF</p>
               <p className="text-xs text-ink-300 mt-0.5">Impression, relecture, partage</p>
+            </div>
+          </button>
+          <button
+            onClick={handleExportDocx}
+            className="flex items-center gap-3 p-4 rounded-xl border-2 border-parchment-200
+                       hover:border-bordeaux-300 hover:bg-bordeaux-50/30 transition-all text-left"
+          >
+            <div className="w-10 h-10 bg-bordeaux-100 rounded-lg flex items-center justify-center shrink-0">
+              <FileType className="w-5 h-5 text-bordeaux-500" />
+            </div>
+            <div>
+              <p className="font-display font-semibold text-ink-500 text-sm">DOCX</p>
+              <p className="text-xs text-ink-300 mt-0.5">Word, Google Docs, LibreOffice</p>
             </div>
           </button>
         </div>
