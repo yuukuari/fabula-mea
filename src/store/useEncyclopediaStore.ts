@@ -55,6 +55,39 @@ export function useEncyclopediaStore() {
   const sagaDeleteKeyEvent = useSagaStore((s) => s.deleteKeyEvent);
   const deleteKeyEvent = isSagaMode ? sagaDeleteKeyEvent : bookDeleteKeyEvent;
 
+  // Genealogy
+  const bookAddGenealogyParent = useBookStore((s) => s.addGenealogyParent);
+  const sagaAddGenealogyParent = useSagaStore((s) => s.addGenealogyParent);
+  const addGenealogyParent = isSagaMode ? sagaAddGenealogyParent : bookAddGenealogyParent;
+
+  const bookRemoveGenealogyParent = useBookStore((s) => s.removeGenealogyParent);
+  const sagaRemoveGenealogyParent = useSagaStore((s) => s.removeGenealogyParent);
+  const removeGenealogyParent = isSagaMode ? sagaRemoveGenealogyParent : bookRemoveGenealogyParent;
+
+  const bookAddGenealogySpouse = useBookStore((s) => s.addGenealogySpouse);
+  const sagaAddGenealogySpouse = useSagaStore((s) => s.addGenealogySpouse);
+  const addGenealogySpouse = isSagaMode ? sagaAddGenealogySpouse : bookAddGenealogySpouse;
+
+  const bookRemoveGenealogySpouse = useBookStore((s) => s.removeGenealogySpouse);
+  const sagaRemoveGenealogySpouse = useSagaStore((s) => s.removeGenealogySpouse);
+  const removeGenealogySpouse = isSagaMode ? sagaRemoveGenealogySpouse : bookRemoveGenealogySpouse;
+
+  const bookUpdateGenealogySpouse = useBookStore((s) => s.updateGenealogySpouse);
+  const sagaUpdateGenealogySpouse = useSagaStore((s) => s.updateGenealogySpouse);
+  const updateGenealogySpouse = isSagaMode ? sagaUpdateGenealogySpouse : bookUpdateGenealogySpouse;
+
+  const bookAddGenealogyChild = useBookStore((s) => s.addGenealogyChild);
+  const sagaAddGenealogyChild = useSagaStore((s) => s.addGenealogyChild);
+  const addGenealogyChild = isSagaMode ? sagaAddGenealogyChild : bookAddGenealogyChild;
+
+  const bookRemoveGenealogyChild = useBookStore((s) => s.removeGenealogyChild);
+  const sagaRemoveGenealogyChild = useSagaStore((s) => s.removeGenealogyChild);
+  const removeGenealogyChild = isSagaMode ? sagaRemoveGenealogyChild : bookRemoveGenealogyChild;
+
+  const bookReorderGenealogySpouses = useBookStore((s) => s.reorderGenealogySpouses);
+  const sagaReorderGenealogySpouses = useSagaStore((s) => s.reorderGenealogySpouses);
+  const reorderGenealogySpouses = isSagaMode ? sagaReorderGenealogySpouses : bookReorderGenealogySpouses;
+
   // Places
   const bookPlaces = useBookStore((s) => s.places);
   const sagaPlaces = useSagaStore((s) => s.places);
@@ -159,6 +192,16 @@ export function useEncyclopediaStore() {
     deleteRelationship,
     addKeyEvent,
     deleteKeyEvent,
+
+    // Genealogy
+    addGenealogyParent,
+    removeGenealogyParent,
+    addGenealogySpouse,
+    removeGenealogySpouse,
+    updateGenealogySpouse,
+    addGenealogyChild,
+    removeGenealogyChild,
+    reorderGenealogySpouses,
 
     // Places
     places,

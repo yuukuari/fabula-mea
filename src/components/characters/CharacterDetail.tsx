@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, BookText } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, BookText, GitBranch } from 'lucide-react';
 import type { Character, Relationship } from '@/types';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
@@ -63,6 +63,9 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1" />
+        <button onClick={() => navigate(`/characters/${character.id}/genealogy`)} className="btn-secondary flex items-center gap-2">
+          <GitBranch className="w-4 h-4" /> Généalogie
+        </button>
         <button onClick={onEdit} className="btn-secondary flex items-center gap-2">
           <Edit className="w-4 h-4" /> Modifier
         </button>

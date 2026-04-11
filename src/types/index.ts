@@ -7,6 +7,13 @@ export interface Tag {
   color: string;
 }
 
+// ─── Partial Date (day/month/year, all optional) ───
+export interface PartialDate {
+  day?: number;
+  month?: number;
+  year?: number;
+}
+
 // ─── Characters ───
 export type CharacterSex = 'male' | 'female';
 
@@ -17,6 +24,8 @@ export interface Character {
   nickname?: string;
   sex?: CharacterSex;
   age?: number;
+  birthDate?: PartialDate;
+  deathDate?: PartialDate;
   imageUrl?: string;
   imageOffsetY?: number; // percentage offset for avatar centering (0 = top, 50 = center, 100 = bottom)
   description: string;
@@ -35,6 +44,8 @@ export interface Character {
   tags: EntityId[];
   notes?: string;
   order?: number;
+  genealogy?: CharacterGenealogy;
+  hideFromRelationshipGraph?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +83,40 @@ export interface CharacterEvolution {
   duringStory: string;
   endOfStory: string;
   initiationJourney?: string;
+}
+
+// ─── Genealogy ───
+export type GenealogyParentRole = 'pere' | 'mere' | 'autre';
+export type GenealogySpouseRole = 'mari' | 'femme' | 'concubin' | 'concubine' | 'autre';
+export type GenealogyChildRole = 'fils' | 'fille' | 'autre';
+
+export interface GenealogyParent {
+  id: EntityId;
+  characterId: EntityId;
+  role: GenealogyParentRole;
+  customRole?: string;
+}
+
+export interface GenealogySpouse {
+  id: EntityId;
+  characterId: EntityId;
+  role: GenealogySpouseRole;
+  customRole?: string;
+  current: boolean;
+}
+
+export interface GenealogyChild {
+  id: EntityId;
+  characterId: EntityId;
+  role: GenealogyChildRole;
+  customRole?: string;
+  spouseId?: EntityId; // ref to GenealogySpouse.id — groups children by couple
+}
+
+export interface CharacterGenealogy {
+  parents: GenealogyParent[];
+  spouses: GenealogySpouse[];
+  children: GenealogyChild[];
 }
 
 // ─── Places ───

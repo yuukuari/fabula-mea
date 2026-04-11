@@ -8,6 +8,7 @@ import type {
 } from '@/types';
 import { generateId, now } from '@/lib/utils';
 import { isBase64, uploadImage } from '@/lib/upload';
+import { cleanupGenealogyOnDelete } from './genealogy-helpers';
 
 // ─── Base64 Migration ────────────────────────────────────────────────────────
 
@@ -59,6 +60,8 @@ export function createCharacter(characters: Character[], data: Partial<Character
     nickname: data.nickname ?? '',
     sex: data.sex,
     age: data.age,
+    birthDate: data.birthDate,
+    deathDate: data.deathDate,
     imageUrl: data.imageUrl ?? '',
     imageOffsetY: data.imageOffsetY,
     description: data.description ?? '',
@@ -76,6 +79,8 @@ export function createCharacter(characters: Character[], data: Partial<Character
     tags: data.tags ?? [],
     notes: data.notes ?? '',
     inGlossary: data.inGlossary ?? false,
+    hideFromRelationshipGraph: data.hideFromRelationshipGraph,
+    genealogy: data.genealogy,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -87,7 +92,8 @@ export function updateCharacter(characters: Character[], id: string, data: Parti
 }
 
 export function deleteCharacter(characters: Character[], id: string): Character[] {
-  return characters.filter((c) => c.id !== id);
+  const remaining = characters.filter((c) => c.id !== id);
+  return cleanupGenealogyOnDelete(remaining, id);
 }
 
 export function reorderCharacters(characters: Character[], characterIds: string[]): Character[] {

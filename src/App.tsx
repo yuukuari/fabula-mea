@@ -25,6 +25,7 @@ import { ReviewsPage } from '@/pages/ReviewsPage';
 import { ReviewAuthorView } from '@/pages/reviews/ReviewAuthorView';
 import { ReviewReaderPage } from '@/pages/review/ReviewReaderPage';
 import { SagaPage } from '@/pages/SagaPage';
+import { GenealogyPage } from '@/components/genealogy/GenealogyPage';
 import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
 import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
 import { TicketForm } from '@/components/tickets/TicketForm';
@@ -73,6 +74,7 @@ const router = createBrowserRouter([
           { path: 'encyclopedia', element: <EncyclopediaPage /> },
           { path: 'characters', element: <CharactersPage /> },
           { path: 'characters/:id', element: <CharactersPage /> },
+          { path: 'characters/:id/genealogy', element: <GenealogyPage /> },
           { path: 'places', element: <PlacesPage /> },
           { path: 'chapters', element: <ChaptersPage /> },
           { path: 'timeline', element: <TimelinePage /> },

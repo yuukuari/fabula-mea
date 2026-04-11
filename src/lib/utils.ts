@@ -47,6 +47,27 @@ export const FAMILY_ROLE_LABELS: Record<string, string> = {
   autre: 'Autre',
 };
 
+// ─── Genealogy role labels ───
+export const GENEALOGY_PARENT_ROLE_LABELS: Record<string, string> = {
+  pere: 'Père',
+  mere: 'Mère',
+  autre: 'Autre',
+};
+
+export const GENEALOGY_SPOUSE_ROLE_LABELS: Record<string, string> = {
+  mari: 'Mari',
+  femme: 'Femme',
+  concubin: 'Concubin',
+  concubine: 'Concubine',
+  autre: 'Autre',
+};
+
+export const GENEALOGY_CHILD_ROLE_LABELS: Record<string, string> = {
+  fils: 'Fils',
+  fille: 'Fille',
+  autre: 'Autre',
+};
+
 // Always-reciprocal relationship types (added on both characters automatically)
 export const ALWAYS_RECIPROCAL_TYPES: string[] = ['friend', 'enemy', 'colleague', 'family'];
 

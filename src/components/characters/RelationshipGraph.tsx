@@ -104,7 +104,8 @@ function loadSavedViewport(bookId: string): { scale: number; panX: number; panY:
 
 export function RelationshipGraph() {
   const navigate = useNavigate();
-  const { characters, graphNodePositions: rawGraphNodePositions, saveGraphNodePositions } = useEncyclopediaStore();
+  const { characters: allCharacters, graphNodePositions: rawGraphNodePositions, saveGraphNodePositions } = useEncyclopediaStore();
+  const characters = useMemo(() => allCharacters.filter((c) => !c.hideFromRelationshipGraph), [allCharacters]);
   const bookId = useBookStore((s) => s.id);
   const graphNodePositions = rawGraphNodePositions ?? {};
   const canvasRef = useRef<HTMLCanvasElement>(null);

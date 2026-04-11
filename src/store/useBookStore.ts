@@ -14,6 +14,7 @@ import { useSagaStore } from './useSagaStore';
 import { isBase64, uploadImage } from '@/lib/upload';
 import { getOverallProgress, getDailyGoal, getCompletedScenesCount, getTodayProgress as calcTodayProgress } from '@/lib/calculations';
 import * as enc from './encyclopedia-helpers';
+import * as gen from './genealogy-helpers';
 import { migrateEncyclopediaImages } from './encyclopedia-helpers';
 
 const shouldSync = () => !!localStorage.getItem('emlb-token');
@@ -83,6 +84,16 @@ interface BookStore extends BookProject {
   deleteRelationship: (characterId: string, relId: string) => void;
   addKeyEvent: (characterId: string, event: Omit<KeyEvent, 'id'>) => void;
   deleteKeyEvent: (characterId: string, eventId: string) => void;
+
+  // Genealogy
+  addGenealogyParent: (childId: string, parentCharId: string, role: import('@/types').GenealogyParentRole, customRole?: string) => void;
+  removeGenealogyParent: (childId: string, parentLinkId: string) => void;
+  addGenealogySpouse: (charId: string, spouseCharId: string, role: import('@/types').GenealogySpouseRole, customRole: string | undefined, current: boolean) => void;
+  removeGenealogySpouse: (charId: string, spouseLinkId: string) => void;
+  updateGenealogySpouse: (charId: string, spouseLinkId: string, data: Partial<Pick<import('@/types').GenealogySpouse, 'role' | 'customRole' | 'current'>>) => void;
+  addGenealogyChild: (parentId: string, childCharId: string, role: import('@/types').GenealogyChildRole, customRole?: string, spouseId?: string) => void;
+  removeGenealogyChild: (parentId: string, childLinkId: string) => void;
+  reorderGenealogySpouses: (charId: string, spouseLinkIds: string[]) => void;
 
   // Places
   addPlace: (place: Partial<Place> & { name: string }) => string;
@@ -638,6 +649,24 @@ export const useBookStore = create<BookStore>()(
         set((s) => ({ characters: enc.addKeyEvent(s.characters, characterId, event), ...touchSave() })),
       deleteKeyEvent: (characterId, eventId) =>
         set((s) => ({ characters: enc.deleteKeyEvent(s.characters, characterId, eventId), ...touchSave() })),
+
+      // ─── Genealogy ───
+      addGenealogyParent: (childId, parentCharId, role, customRole) =>
+        set((s) => ({ characters: gen.addGenealogyParent(s.characters, childId, parentCharId, role, customRole), ...touchSave() })),
+      removeGenealogyParent: (childId, parentLinkId) =>
+        set((s) => ({ characters: gen.removeGenealogyParent(s.characters, childId, parentLinkId), ...touchSave() })),
+      addGenealogySpouse: (charId, spouseCharId, role, customRole, current) =>
+        set((s) => ({ characters: gen.addGenealogySpouse(s.characters, charId, spouseCharId, role, customRole, current), ...touchSave() })),
+      removeGenealogySpouse: (charId, spouseLinkId) =>
+        set((s) => ({ characters: gen.removeGenealogySpouse(s.characters, charId, spouseLinkId), ...touchSave() })),
+      updateGenealogySpouse: (charId, spouseLinkId, data) =>
+        set((s) => ({ characters: gen.updateGenealogySpouse(s.characters, charId, spouseLinkId, data), ...touchSave() })),
+      addGenealogyChild: (parentId, childCharId, role, customRole, spouseId) =>
+        set((s) => ({ characters: gen.addGenealogyChild(s.characters, parentId, childCharId, role, customRole, spouseId), ...touchSave() })),
+      removeGenealogyChild: (parentId, childLinkId) =>
+        set((s) => ({ characters: gen.removeGenealogyChild(s.characters, parentId, childLinkId), ...touchSave() })),
+      reorderGenealogySpouses: (charId, spouseLinkIds) =>
+        set((s) => ({ characters: gen.reorderGenealogySpouses(s.characters, charId, spouseLinkIds), ...touchSave() })),
 
       // ─── Places ───
       addPlace: (place) => {
