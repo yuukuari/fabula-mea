@@ -180,14 +180,15 @@ function SortableSceneItem({
             </span>
           </div>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
           {writingMode === 'write' && (
             <button
               onClick={() => onOpenEditor(scene.id)}
-              className="btn-ghost p-1 text-bordeaux-500 hover:text-bordeaux-700"
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-white bg-bordeaux-500 hover:bg-bordeaux-600 transition-colors"
               title="Écrire cette scène"
             >
-              <PenLine className="w-3.5 h-3.5" />
+              <PenLine className="w-3 h-3" />
+              Écrire
             </button>
           )}
           <button onClick={() => onEditScene(scene)} className="btn-ghost p-1">

@@ -95,28 +95,58 @@ export function SceneEditor() {
     if (window.innerWidth < 640) setNavOpen(false);
   }, [scrollToScene]);
 
-  // Scroll initial vers la scène d'entrée
+  // Scroll initial vers la scène d'entrée + reset nav
+  const lastEntryRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isOpen || !entrySceneId || didScrollRef.current) return;
-    const tryScroll = () => {
-      if (sceneRefs.current[entrySceneId]) {
-        scrollToScene(entrySceneId);
+    if (!isOpen) return;
+
+    // Reset nav state
+    setVisibleSceneId(entrySceneId);
+    setNavOpen(window.innerWidth >= 640);
+
+    if (!entrySceneId) return;
+
+    // Avoid re-scrolling if same scene and already scrolled
+    if (entrySceneId === lastEntryRef.current && didScrollRef.current) return;
+
+    didScrollRef.current = false;
+    lastEntryRef.current = entrySceneId;
+
+    let cancelled = false;
+    const tryScroll = (attempt = 0) => {
+      if (cancelled || didScrollRef.current) return;
+      const el = sceneRefs.current[entrySceneId];
+      if (el) {
         didScrollRef.current = true;
+
+        // Focus the editor, place cursor at end, then scroll to cursor
+        const editorEl = el.querySelector('.ProseMirror') as HTMLElement | null;
+        if (editorEl) {
+          editorEl.focus();
+          const sel = window.getSelection();
+          if (sel) {
+            sel.selectAllChildren(editorEl);
+            sel.collapseToEnd();
+          }
+          // Scroll to the end of content (where cursor is)
+          const lastChild = editorEl.lastElementChild as HTMLElement | null;
+          if (lastChild) {
+            lastChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else {
+            editorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } else {
+          // Fallback: scroll to scene top if no editor found
+          scrollToScene(entrySceneId);
+        }
+      } else if (attempt < 10) {
+        // Retry if DOM not ready yet (e.g. TipTap still mounting)
+        setTimeout(() => tryScroll(attempt + 1), 100);
       }
     };
-    const t = setTimeout(tryScroll, 100);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => tryScroll(), 50);
+    return () => { cancelled = true; clearTimeout(t); };
   }, [isOpen, entrySceneId, scrollToScene]);
-
-  // Reset scroll ref + nav quand on rouvre
-  useEffect(() => {
-    if (isOpen) {
-      didScrollRef.current = false;
-      setVisibleSceneId(entrySceneId);
-      // Réinitialise l'état du nav : ouvert sur desktop, fermé sur mobile
-      setNavOpen(window.innerWidth >= 640);
-    }
-  }, [isOpen, entrySceneId]);
 
   // IntersectionObserver
   useEffect(() => {
