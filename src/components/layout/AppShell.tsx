@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { SearchDialog, useSearchShortcut } from './SearchDialog';
 import { FloatingWritingTimer } from '@/components/progress/FloatingWritingTimer';
+import { FloatingSpotifyPlayer } from '@/components/progress/FloatingSpotifyPlayer';
 import { EditorTabs } from '@/components/editor/EditorTabs';
 import { SceneEditor } from '@/components/editor/SceneEditor';
 import { useLibraryStore } from '@/store/useLibraryStore';
@@ -64,7 +65,10 @@ export function AppShell() {
       </div>
 
       <SearchDialog open={open} onClose={() => setOpen(false)} />
-      <FloatingWritingTimer />
+      <div className="fixed bottom-5 right-5 z-50 flex items-end gap-3">
+        <FloatingWritingTimer />
+        <FloatingSpotifyPlayer />
+      </div>
       {/* Full-screen scene editor */}
       <SceneEditor />
       {/* Floating editor tabs – fixed bottom center */}

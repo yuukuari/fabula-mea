@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Pause, Square, Coffee, Timer, ChevronDown, PenLine, Clock, Hourglass, ExternalLink } from 'lucide-react';
+import { Play, Pause, Square, Coffee, Clock, ChevronDown, PenLine, ExternalLink } from 'lucide-react';
 import { cn, formatWritingTime } from '@/lib/utils';
 import { useWritingTimer, TIMED_PRESETS } from '@/hooks/useWritingTimer';
 import { useBookStore } from '@/store/useBookStore';
 import type { WritingTimerMode } from '@/types';
 
-const MODE_LABELS: Record<WritingTimerMode, { label: string; icon: typeof Timer }> = {
-  free: { label: 'Session libre', icon: PenLine },
-  timed: { label: 'Minuteur', icon: Hourglass },
+const MODE_LABELS: Record<WritingTimerMode, { label: string; icon: typeof Clock }> = {
+  free: { label: 'Session libre', icon: Clock },
+  timed: { label: 'Minuteur', icon: Clock },
   pomodoro: { label: 'Pomodoro', icon: Clock },
 };
 
@@ -64,14 +64,14 @@ export function FloatingWritingTimer() {
 
   return (
     <>
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
+      <div className="flex flex-col items-end gap-2">
         {/* Expanded panel */}
         {expanded && (
           <div className="bg-parchment-50 rounded-2xl shadow-xl border border-parchment-200 w-80 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-parchment-200">
               <span className="font-display font-semibold text-sm text-ink-500 flex items-center gap-1.5">
-                <Timer className="w-4 h-4 text-bordeaux-500" />
+                <Clock className="w-4 h-4 text-bordeaux-500" />
                 Temps d'écriture
               </span>
               <div className="flex items-center gap-1">
@@ -158,7 +158,7 @@ function TimerPanel({ timer }: { timer: ReturnType<typeof useWritingTimer> }) {
                 timer.isRunning && timer.timerMode !== m && 'opacity-40 cursor-not-allowed'
               )}
             >
-              <Icon className="w-3 h-3" /> {label}
+              {label}
             </button>
           );
         })}

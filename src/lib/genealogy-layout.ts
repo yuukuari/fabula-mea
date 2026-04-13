@@ -129,6 +129,7 @@ function collectTree(
     // Children grouped by spouse
     const childGroups: { spouseId?: string; childIds: string[] }[] = [];
     const childrenBySpouse = new Map<string | undefined, string[]>();
+    const spouseCharIds = new Set(g.spouses.map((s) => s.characterId));
 
     for (const ch of g.children) {
       if (!charMap.has(ch.characterId)) continue;
@@ -136,6 +137,16 @@ function collectTree(
       if (ch.spouseId) {
         const spouseLink = g.spouses.find((s) => s.id === ch.spouseId);
         if (spouseLink) spouseCharId = spouseLink.characterId;
+      }
+      // Fallback: infer spouse from child's own parents list
+      if (!spouseCharId) {
+        const childChar = charMap.get(ch.characterId);
+        if (childChar) {
+          const childParents = getGen(childChar).parents.map((p) => p.characterId);
+          for (const pid of childParents) {
+            if (pid !== charId && spouseCharIds.has(pid)) { spouseCharId = pid; break; }
+          }
+        }
       }
       const key = spouseCharId;
       if (!childrenBySpouse.has(key)) childrenBySpouse.set(key, []);
@@ -209,6 +220,7 @@ function collectTree(
       // Parent's children (center + siblings + half-siblings)
       const parentChildGroups: { spouseId?: string; childIds: string[] }[] = [];
       const siblingsBySpouse = new Map<string | undefined, string[]>();
+      const parentSpouseCharIds = new Set(pg.spouses.map((s) => s.characterId));
 
       for (const ch of pg.children) {
         if (!charMap.has(ch.characterId)) continue;
@@ -219,6 +231,16 @@ function collectTree(
         if (ch.spouseId) {
           const spouseLink = pg.spouses.find((s) => s.id === ch.spouseId);
           if (spouseLink) spouseCharId = spouseLink.characterId;
+        }
+        // Fallback: infer spouse from child's own parents list
+        if (!spouseCharId) {
+          const childChar = charMap.get(ch.characterId);
+          if (childChar) {
+            const childParents = getGen(childChar).parents.map((p) => p.characterId);
+            for (const pid of childParents) {
+              if (pid !== parentId && parentSpouseCharIds.has(pid)) { spouseCharId = pid; break; }
+            }
+          }
         }
         if (!siblingsBySpouse.has(spouseCharId)) siblingsBySpouse.set(spouseCharId, []);
         const list = siblingsBySpouse.get(spouseCharId)!;
@@ -320,210 +342,348 @@ function computeBadges(
   return badges;
 }
 
-// ─── Position computation (tree-based) ──────────────────────────────────────
+// ─── Position computation (compact grid + iterative centering) ──────────────
 
 function computePositions(
   displayed: Set<string>,
   generations: Map<string, number>,
   units: FamilyUnit[],
   centerId: string,
+  charMap: Map<string, Character>,
 ): GenealogyNodeLayout[] {
   const unitMap = new Map<string, FamilyUnit>();
   for (const u of units) unitMap.set(u.id, u);
 
-  const positions = new Map<string, { x: number; y: number }>();
-
-  // ─── Subtree width computation (memoized) ───
-
-  const widthCache = new Map<string, number>();
-  const computing = new Set<string>(); // cycle guard
-
-  function coupleWidth(unit: FamilyUnit): number {
-    return NODE_SIZE + unit.spouseIds.length * (COUPLE_GAP + NODE_SIZE);
-  }
-
-  function childGroupWidth(childIds: string[]): number {
-    let w = 0;
-    for (let i = 0; i < childIds.length; i++) {
-      if (i > 0) w += NODE_GAP;
-      w += getSubtreeWidth(childIds[i]);
-    }
-    return w;
-  }
-
-  function getSubtreeWidth(charId: string): number {
-    if (widthCache.has(charId)) return widthCache.get(charId)!;
-    if (computing.has(charId)) return NODE_SIZE; // cycle guard
-    computing.add(charId);
-
-    const unit = unitMap.get(charId);
-    if (!unit) {
-      widthCache.set(charId, NODE_SIZE);
-      computing.delete(charId);
-      return NODE_SIZE;
-    }
-
-    const cw = coupleWidth(unit);
-
-    if (unit.childGroups.length === 0) {
-      widthCache.set(charId, cw);
-      computing.delete(charId);
-      return cw;
-    }
-
-    // Children total width (groups separated by extra gap)
-    let childrenW = 0;
-    for (let gi = 0; gi < unit.childGroups.length; gi++) {
-      if (gi > 0) childrenW += NODE_GAP * 2; // extra gap between groups
-      childrenW += childGroupWidth(unit.childGroups[gi].childIds);
-    }
-
-    const w = Math.max(cw, childrenW);
-    widthCache.set(charId, w);
-    computing.delete(charId);
-    return w;
-  }
-
-  // ─── Recursive placement ───
-
-  const placedUnits = new Set<string>();
-
-  function placeUnit(unitId: string, cx: number) {
-    const unit = unitMap.get(unitId);
-    if (!unit || placedUnits.has(unitId)) return;
-    placedUnits.add(unitId);
-
-    const y = unit.generation * GENERATION_HEIGHT;
-
-    // If main char was already positioned (by a parent unit), use its position
-    if (positions.has(unitId)) {
-      cx = positions.get(unitId)!.x;
-    } else {
-      positions.set(unitId, { x: cx, y });
-    }
-
-    // ─── Place spouses ───
-    const spouseXMap = new Map<string, number>(); // for child group sorting
-
-    if (unit.spouseIds.length === 1) {
-      const spId = unit.spouseIds[0];
-      const spX = cx + NODE_SIZE + COUPLE_GAP;
-      spouseXMap.set(spId, spX);
-      if (!positions.has(spId)) {
-        positions.set(spId, { x: spX, y });
-      }
-    } else if (unit.spouseIds.length >= 2) {
-      // First spouse LEFT, rest RIGHT (alternating out)
-      for (let i = 0; i < unit.spouseIds.length; i++) {
-        const spId = unit.spouseIds[i];
-        let spX: number;
-        if (i === 0) {
-          spX = cx - (NODE_SIZE + COUPLE_GAP);
-        } else {
-          spX = cx + i * (NODE_SIZE + COUPLE_GAP);
-        }
-        spouseXMap.set(spId, spX);
-        if (!positions.has(spId)) {
-          positions.set(spId, { x: spX, y });
-        }
-      }
-    }
-
-    // ─── Place children ───
-    if (unit.childGroups.length === 0) return;
-
-    // Sort child groups by their couple midpoint (left to right)
-    const sortedGroups = [...unit.childGroups].sort((a, b) => {
-      const aSpX = a.spouseId ? (spouseXMap.get(a.spouseId) ?? cx) : cx;
-      const bSpX = b.spouseId ? (spouseXMap.get(b.spouseId) ?? cx) : cx;
-      const aMid = (aSpX + cx) / 2;
-      const bMid = (bSpX + cx) / 2;
-      return aMid - bMid;
-    });
-
-    // Compute group widths
-    const groupWidths = sortedGroups.map((g) => childGroupWidth(g.childIds));
-    let totalChildrenW = 0;
-    for (let i = 0; i < groupWidths.length; i++) {
-      if (i > 0) totalChildrenW += NODE_GAP * 2;
-      totalChildrenW += groupWidths[i];
-    }
-
-    // Center children under the unit
-    let startX = cx - totalChildrenW / 2;
-
-    for (let gi = 0; gi < sortedGroups.length; gi++) {
-      if (gi > 0) startX += NODE_GAP * 2;
-      const group = sortedGroups[gi];
-      let childX = startX;
-
-      for (const cid of group.childIds) {
-        const cw = getSubtreeWidth(cid);
-        const childCx = childX + cw / 2;
-        const childY = (unit.generation + 1) * GENERATION_HEIGHT;
-
-        if (!positions.has(cid)) {
-          positions.set(cid, { x: childCx, y: childY });
-        }
-
-        // Recurse into child's own unit
-        if (unitMap.has(cid)) {
-          placeUnit(cid, childCx);
-        }
-
-        childX += cw + NODE_GAP;
-      }
-
-      startX += groupWidths[gi];
-    }
-  }
-
-  // ─── Find root units ───
-  const isChildOfUnit = new Set<string>();
+  // ── Build couple lookup ──
+  const coupleSet = new Set<string>();
   for (const u of units) {
-    for (const g of u.childGroups) {
-      for (const cid of g.childIds) isChildOfUnit.add(cid);
+    for (const spId of u.spouseIds) {
+      coupleSet.add([u.id, spId].sort().join(':'));
     }
   }
-  const roots = units.filter((u) => !isChildOfUnit.has(u.id));
+  function areCoupled(a: string, b: string): boolean {
+    return coupleSet.has([a, b].sort().join(':'));
+  }
+
+  // ── Step 1: Build ordered rows by walking the tree ──
+
+  const sortedGens = [...new Set(generations.values())].sort((a, b) => a - b);
+  const orderedRows = new Map<number, string[]>();
+  for (const g of sortedGens) orderedRows.set(g, []);
+
+  const rowPlaced = new Set<string>();
+  function addToRow(charId: string) {
+    const gen = generations.get(charId);
+    if (gen == null || rowPlaced.has(charId) || !displayed.has(charId)) return;
+    rowPlaced.add(charId);
+    orderedRows.get(gen)!.push(charId);
+  }
+
+  // Find root units (not children of any other unit)
+  const isChildOfUnit = new Set<string>();
+  for (const u of units) for (const g of u.childGroups) for (const cid of g.childIds) isChildOfUnit.add(cid);
+  const roots = units.filter((u) => !isChildOfUnit.has(u.id)).sort((a, b) => a.generation - b.generation);
   if (roots.length === 0 && units.length > 0) roots.push(units[0]);
 
-  // Sort roots by generation (topmost first)
-  roots.sort((a, b) => a.generation - b.generation);
+  function walkUnit(unitId: string) {
+    const unit = unitMap.get(unitId);
+    if (!unit) { addToRow(unitId); return; }
 
-  // Compute widths
-  for (const r of roots) getSubtreeWidth(r.id);
+    // Place: first spouse left, then main, then rest right
+    if (unit.spouseIds.length >= 1) addToRow(unit.spouseIds[0]);
+    addToRow(unit.id);
+    for (let i = 1; i < unit.spouseIds.length; i++) addToRow(unit.spouseIds[i]);
 
-  // Place roots side by side
-  const rootWidths = roots.map((r) => getSubtreeWidth(r.id));
-  const totalRootW = rootWidths.reduce((a, b) => a + b, 0) + Math.max(0, roots.length - 1) * NODE_GAP * 3;
-  let rx = -totalRootW / 2;
-
-  for (let i = 0; i < roots.length; i++) {
-    placeUnit(roots[i].id, rx + rootWidths[i] / 2);
-    rx += rootWidths[i] + NODE_GAP * 3;
-  }
-
-  // ─── Place any remaining displayed characters ───
-  for (const charId of displayed) {
-    if (positions.has(charId)) continue;
-    const gen = generations.get(charId) ?? 0;
-    const y = gen * GENERATION_HEIGHT;
-    let maxX = 0;
-    for (const pos of positions.values()) {
-      if (Math.abs(pos.y - y) < 1 && pos.x > maxX) maxX = pos.x;
+    // Walk child groups — ordered by spouse position (left to right)
+    // Spouse order: spouseIds[0] is left, then main char, then spouseIds[1..n] right
+    // So child groups should follow: spouse[0]'s children, then "no spouse" / main, then spouse[1], etc.
+    const sortedGroups = [...unit.childGroups].sort((a, b) => {
+      const aIdx = a.spouseId ? unit.spouseIds.indexOf(a.spouseId) : -1;
+      const bIdx = b.spouseId ? unit.spouseIds.indexOf(b.spouseId) : -1;
+      // Groups with first spouse (idx 0, placed left) come first
+      // Then groups with no spouse (idx -1) in the middle
+      // Then groups with other spouses (idx 1, 2...) placed right
+      const aOrder = aIdx === 0 ? -1 : aIdx === -1 ? 0 : aIdx;
+      const bOrder = bIdx === 0 ? -1 : bIdx === -1 ? 0 : bIdx;
+      return aOrder - bOrder;
+    });
+    for (const group of sortedGroups) {
+      for (const childId of group.childIds) {
+        if (unitMap.has(childId)) walkUnit(childId);
+        else addToRow(childId);
+      }
     }
-    positions.set(charId, { x: maxX + NODE_SIZE + NODE_GAP, y });
   }
 
-  // ─── Center on centerId ───
+  for (const root of roots) walkUnit(root.id);
+  // Add any remaining
+  for (const charId of displayed) if (!rowPlaced.has(charId)) addToRow(charId);
+
+  // ── Step 1b: Re-sort rows by attraction index ──
+  // Group nodes into blocks that must stay together:
+  //   - Coupled nodes (spouses) stay together
+  //   - Siblings (children of the same parent unit) stay together (preserves spouse-based ordering)
+  // Then sort blocks by attraction index (average position of children in the row below).
+
+  for (let gi = sortedGens.length - 2; gi >= 0; gi--) {
+    const gen = sortedGens[gi];
+    const childGen = sortedGens[gi + 1];
+    const row = orderedRows.get(gen)!;
+    const childRow = orderedRows.get(childGen);
+    if (!childRow || row.length <= 1) continue;
+
+    // Find parent unit for each node in this row (which unit above claims it as a child)
+    const nodeParent = new Map<string, string>();
+    for (const u of units) {
+      if (u.generation >= gen) continue;
+      for (const group of u.childGroups) {
+        for (const cid of group.childIds) {
+          if (generations.get(cid) === gen && !nodeParent.has(cid)) {
+            nodeParent.set(cid, u.id);
+          }
+        }
+      }
+    }
+
+    // Group into blocks: adjacent nodes that are coupled OR share the same parent unit
+    const blocks: string[][] = [];
+    let current: string[] = [row[0]];
+    for (let i = 1; i < row.length; i++) {
+      const coupled = areCoupled(row[i - 1], row[i]);
+      const sameParent = nodeParent.has(row[i - 1])
+        && nodeParent.get(row[i - 1]) === nodeParent.get(row[i]);
+      if (coupled || sameParent) {
+        current.push(row[i]);
+      } else {
+        blocks.push(current);
+        current = [row[i]];
+      }
+    }
+    blocks.push(current);
+
+    if (blocks.length <= 1) continue;
+
+    // Compute attraction index for each block
+    const blockAttraction = blocks.map((block) => {
+      const blockSet = new Set(block);
+      const childIndices: number[] = [];
+      for (const nodeId of block) {
+        const unit = unitMap.get(nodeId);
+        if (!unit) continue;
+        for (const group of unit.childGroups) {
+          for (const cid of group.childIds) {
+            const idx = childRow.indexOf(cid);
+            if (idx !== -1) childIndices.push(idx);
+          }
+        }
+      }
+      // Fallback: check if children in row below have a parent in this block
+      if (childIndices.length === 0) {
+        for (let ci = 0; ci < childRow.length; ci++) {
+          const childChar = charMap.get(childRow[ci]);
+          if (!childChar) continue;
+          const cg = getGen(childChar);
+          for (const pl of cg.parents) {
+            if (blockSet.has(pl.characterId)) {
+              childIndices.push(ci);
+              break;
+            }
+          }
+        }
+      }
+
+      if (childIndices.length === 0) return Infinity;
+      return childIndices.reduce((sum, v) => sum + v, 0) / childIndices.length;
+    });
+
+    // Sort blocks by attraction index
+    const indexed = blocks.map((b, i) => ({ block: b, attraction: blockAttraction[i] }));
+    indexed.sort((a, b) => a.attraction - b.attraction);
+    orderedRows.set(gen, indexed.flatMap((item) => item.block));
+  }
+
+  // ── Step 1c: Enforce parent spouse-based child ordering (top-down) ──
+  // When two parents share children (e.g. Jean-Michel & Adélaïde both parent Jonathan),
+  // the walk order from grandparents may produce wrong child ordering.
+  // Fix: for each parent unit, re-order its children in the row to match spouse-group order.
+  // Units with more child groups (more marriages) take priority.
+
+  const unitsByChildCount = [...units].sort((a, b) => b.childGroups.length - a.childGroups.length);
+  for (const unit of unitsByChildCount) {
+    // Compute desired child order from this unit's spouse-grouped children
+    const sortedGroups = [...unit.childGroups].sort((a, b) => {
+      const aIdx = a.spouseId ? unit.spouseIds.indexOf(a.spouseId) : -1;
+      const bIdx = b.spouseId ? unit.spouseIds.indexOf(b.spouseId) : -1;
+      const aOrder = aIdx === 0 ? -1 : aIdx === -1 ? 0 : aIdx;
+      const bOrder = bIdx === 0 ? -1 : bIdx === -1 ? 0 : bIdx;
+      return aOrder - bOrder;
+    });
+    const desiredOrder = sortedGroups.flatMap((g) => g.childIds);
+    if (desiredOrder.length < 2) continue;
+
+    const childGen = unit.generation + 1;
+    const row = orderedRows.get(childGen);
+    if (!row) continue;
+
+    // Find indices of this unit's children in the row
+    const childIndices: number[] = [];
+    const childSet = new Set(desiredOrder);
+    for (let i = 0; i < row.length; i++) {
+      if (childSet.has(row[i])) childIndices.push(i);
+    }
+    if (childIndices.length < 2) continue;
+
+    // Re-order: put desiredOrder children into the slots they currently occupy (preserving slot positions)
+    // But also keep coupled spouses adjacent: if a child has a spouse unit expanding it,
+    // we need to move the spouse along with the child.
+    // Simple approach: extract the contiguous block containing all this unit's children + their neighbors,
+    // then re-sort within that block.
+
+    // Collect contiguous segments: for each child, include coupled neighbors
+    const involvedIndices = new Set<number>();
+    for (const ci of childIndices) {
+      involvedIndices.add(ci);
+      // Include coupled neighbors (spouse placed next to child by walkUnit)
+      if (ci > 0 && areCoupled(row[ci - 1], row[ci])) involvedIndices.add(ci - 1);
+      if (ci < row.length - 1 && areCoupled(row[ci], row[ci + 1])) involvedIndices.add(ci + 1);
+    }
+
+    // Extract the min..max range
+    const sortedIndices = [...involvedIndices].sort((a, b) => a - b);
+    const minIdx = sortedIndices[0];
+    const maxIdx = sortedIndices[sortedIndices.length - 1];
+
+    // Build new sub-row for this range, ordered by desiredOrder
+    const subRow = row.slice(minIdx, maxIdx + 1);
+    const subRowSet = new Set(subRow);
+
+    // Build ordered result: for each child in desiredOrder, emit [spouse-left, child, spouse-right]
+    const placed = new Set<string>();
+    const newSubRow: string[] = [];
+    for (const childId of desiredOrder) {
+      if (!subRowSet.has(childId) || placed.has(childId)) continue;
+      // Check for coupled spouse before this child in subRow
+      const childIdx = subRow.indexOf(childId);
+      if (childIdx > 0 && areCoupled(subRow[childIdx - 1], childId) && !placed.has(subRow[childIdx - 1])) {
+        newSubRow.push(subRow[childIdx - 1]);
+        placed.add(subRow[childIdx - 1]);
+      }
+      newSubRow.push(childId);
+      placed.add(childId);
+      // Check for coupled spouse after
+      if (childIdx < subRow.length - 1 && areCoupled(childId, subRow[childIdx + 1]) && !placed.has(subRow[childIdx + 1])) {
+        newSubRow.push(subRow[childIdx + 1]);
+        placed.add(subRow[childIdx + 1]);
+      }
+    }
+    // Add any remaining nodes in the range that weren't placed
+    for (const id of subRow) {
+      if (!placed.has(id)) { newSubRow.push(id); placed.add(id); }
+    }
+
+    // Replace the range in the row
+    row.splice(minIdx, maxIdx - minIdx + 1, ...newSubRow);
+  }
+
+  // ── Step 2: Compact initial placement ──
+
+  const positions = new Map<string, { x: number; y: number }>();
+
+  for (const gen of sortedGens) {
+    const row = orderedRows.get(gen)!;
+    const y = gen * GENERATION_HEIGHT;
+    let x = 0;
+    for (let i = 0; i < row.length; i++) {
+      if (i > 0) {
+        const gap = areCoupled(row[i - 1], row[i]) ? COUPLE_GAP : NODE_GAP;
+        x += NODE_SIZE + gap;
+      }
+      positions.set(row[i], { x, y });
+    }
+  }
+
+  // ── Step 3: Iterative centering ──
+
+  function resolveOverlaps(gen: number) {
+    const row = orderedRows.get(gen);
+    if (!row) return;
+    for (let i = 1; i < row.length; i++) {
+      const prev = positions.get(row[i - 1]);
+      const curr = positions.get(row[i]);
+      if (!prev || !curr) continue;
+      const gap = areCoupled(row[i - 1], row[i]) ? COUPLE_GAP : NODE_GAP;
+      const minX = prev.x + NODE_SIZE + gap;
+      if (curr.x < minX) {
+        const shift = minX - curr.x;
+        for (let j = i; j < row.length; j++) {
+          const p = positions.get(row[j]);
+          if (p) p.x += shift;
+        }
+      }
+    }
+  }
+
+  const unitsBottomUp = [...units].sort((a, b) => b.generation - a.generation);
+  const unitsTopDown = [...units].sort((a, b) => a.generation - b.generation);
+
+  for (let iter = 0; iter < 4; iter++) {
+    // Bottom-up: center each parent group over its children
+    for (const unit of unitsBottomUp) {
+      const childIds = unit.childGroups.flatMap((g) => g.childIds).filter((id) => positions.has(id));
+      if (childIds.length === 0) continue;
+
+      const childXs = childIds.map((id) => positions.get(id)!.x);
+      const childCenter = (Math.min(...childXs) + Math.max(...childXs)) / 2;
+
+      const unitIds = [unit.id, ...unit.spouseIds].filter((id) => positions.has(id));
+      const unitXs = unitIds.map((id) => positions.get(id)!.x);
+      const unitCenter = (Math.min(...unitXs) + Math.max(...unitXs)) / 2;
+
+      const shift = childCenter - unitCenter;
+      if (Math.abs(shift) < 1) continue;
+
+      // Shift only the unit members
+      for (const id of unitIds) {
+        const p = positions.get(id);
+        if (p) p.x += shift;
+      }
+      resolveOverlaps(unit.generation);
+    }
+
+    // Top-down: center children under their parent group
+    for (const unit of unitsTopDown) {
+      const childIds = unit.childGroups.flatMap((g) => g.childIds).filter((id) => positions.has(id));
+      if (childIds.length === 0) continue;
+
+      const unitIds = [unit.id, ...unit.spouseIds].filter((id) => positions.has(id));
+      const unitXs = unitIds.map((id) => positions.get(id)!.x);
+      const unitCenter = (Math.min(...unitXs) + Math.max(...unitXs)) / 2;
+
+      const childXs = childIds.map((id) => positions.get(id)!.x);
+      const childCenter = (Math.min(...childXs) + Math.max(...childXs)) / 2;
+
+      const shift = unitCenter - childCenter;
+      if (Math.abs(shift) < 1) continue;
+
+      // Shift only this unit's children
+      for (const id of childIds) {
+        const p = positions.get(id);
+        if (p) p.x += shift;
+      }
+
+      // Resolve overlaps in the children's generation
+      const childGen = generations.get(childIds[0]);
+      if (childGen != null) resolveOverlaps(childGen);
+    }
+  }
+
+  // ── Step 4: Center on centerId ──
   const cp = positions.get(centerId);
   if (cp) {
     const ox = cp.x;
     for (const p of positions.values()) p.x -= ox;
   }
 
-  // Build result
   return [...positions.entries()].map(([charId, pos]) => ({
     characterId: charId,
     x: pos.x,
@@ -603,7 +763,7 @@ export function computeGenealogyLayout(
   }
 
   const { displayed, units, generations } = collectTree(centerId, charMap);
-  const nodes = computePositions(displayed, generations, units, centerId);
+  const nodes = computePositions(displayed, generations, units, centerId, charMap);
   const badges = computeBadges(displayed, charMap);
 
   // Build position map for edge computation

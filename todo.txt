@@ -27,20 +27,13 @@ Connecteur avec Wattpad ?
 + détail sur arc narratif et chemin initiatique
 Suivi des intrigues
 Recherche dans le livre, avec résultats
-chronologie compliquée par date exacte, Simplifier chronologie dates
-découper une scène en 2
 Générer un wiki, réorganiser les fiches
 Evolution des scènes sur la carte
 
-Traits superposés encore
-tooltip pas aligné avec le personnage
-accents
 Musiques associées à des personnages (pour s'imprégner du personnage)
-Pourquoi un jour de décalage dans avancement ?
 Envoi de tips (café)
 Expliquer dès l'inscription qu'on est en mode béta
 Réglage des notifications par mail
 Améliorer les commentaires sur le mode écriture, qui est mieux sur le mode relecture
 Transformer une note en fiche univers/personnage/etc.
-Des actions ne sont pas possibles sur la tablette
-Supprimer son compte
+

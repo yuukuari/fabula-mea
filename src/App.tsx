@@ -25,6 +25,7 @@ import { ReviewsPage } from '@/pages/ReviewsPage';
 import { ReviewAuthorView } from '@/pages/reviews/ReviewAuthorView';
 import { ReviewReaderPage } from '@/pages/review/ReviewReaderPage';
 import { SagaPage } from '@/pages/SagaPage';
+import { SpotifyCallbackPage } from '@/pages/SpotifyCallbackPage';
 import { GenealogyPage } from '@/components/genealogy/GenealogyPage';
 import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
 import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
@@ -54,6 +55,7 @@ const router = createBrowserRouter([
     children: [
       { path: 'forgot-password', element: <ForgotPasswordPage /> },
       { path: 'reset-password/:token', element: <ResetPasswordPage /> },
+      { path: 'spotify-callback', element: <SpotifyCallbackPage /> },
       { path: 'review/:token', element: <ReviewReaderPage /> },
       { path: 'reviews/:id', element: <ReviewAuthorView /> },
       {
@@ -122,7 +124,8 @@ export default function App() {
   if (!user && (
     window.location.pathname.startsWith('/review/') ||
     window.location.pathname === '/forgot-password' ||
-    window.location.pathname.startsWith('/reset-password/')
+    window.location.pathname.startsWith('/reset-password/') ||
+    window.location.pathname === '/spotify-callback'
   )) {
     return <RouterProvider router={router} />;
   }
