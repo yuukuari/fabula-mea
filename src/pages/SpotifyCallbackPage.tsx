@@ -35,13 +35,11 @@ export function SpotifyCallbackPage() {
         }
         window.close();
       })
-      .catch((err) => {
-        console.error('[SpotifyCallback] Token exchange FAILED:', err);
-        // Keep open for debugging
-        document.body.innerHTML = `<pre style="padding:2rem;color:red;">${err}</pre>`;
+      .catch(() => {
         if (window.opener) {
           window.opener.postMessage({ type: 'spotify-callback', error: 'token_exchange_failed' }, window.location.origin);
         }
+        window.close();
       });
   }, []);
 

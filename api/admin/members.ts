@@ -8,6 +8,7 @@ interface User {
   email: string;
   name: string;
   isAdmin?: boolean;
+  spotifyEnabled?: boolean;
   createdAt: string;
   passwordHash?: string;
 }
@@ -21,7 +22,7 @@ async function isAdmin(userId: string): Promise<boolean> {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (cors(req, res)) return;
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET' && req.method !== 'PATCH') return res.status(405).end();
 
   const auth = requireAuth(req, res);
   if (!auth) return;
@@ -29,12 +30,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const admin = await isAdmin(auth.userId);
   if (!admin) return res.status(403).json({ error: 'Réservé aux administrateurs' });
 
-  // We need to iterate all users. Since we store users individually (emlb:user:{id}),
-  // we need a way to list them. We'll use an index key.
+  // ─── PATCH: toggle spotifyEnabled for a user ───
+  if (req.method === 'PATCH') {
+    const { userId, spotifyEnabled } = req.body as { userId?: string; spotifyEnabled?: boolean };
+    if (!userId || typeof spotifyEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'userId et spotifyEnabled requis' });
+    }
+    const userJson = await redis.get(`emlb:user:${userId}`);
+    if (!userJson) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    const user = JSON.parse(userJson) as User;
+    user.spotifyEnabled = spotifyEnabled;
+    await redis.set(`emlb:user:${userId}`, JSON.stringify(user));
+    return res.json({ ok: true });
+  }
+
+  // ─── GET: list all members ───
   const memberIdsJson = await redis.get('emlb:member-ids');
   const memberIds: string[] = memberIdsJson ? JSON.parse(memberIdsJson) : [];
 
-  const members: Array<{ id: string; email: string; name: string; isAdmin: boolean; createdAt: string }> = [];
+  const members: Array<{ id: string; email: string; name: string; isAdmin: boolean; spotifyEnabled: boolean; createdAt: string }> = [];
 
   for (const memberId of memberIds) {
     const userJson = await redis.get(`emlb:user:${memberId}`);
@@ -45,6 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: user.email,
         name: user.name,
         isAdmin: user.isAdmin ?? false,
+        spotifyEnabled: user.spotifyEnabled ?? false,
         createdAt: user.createdAt,
       });
     }

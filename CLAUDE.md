@@ -45,6 +45,7 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
   - `RESEND_API_KEY` — Clé API Resend pour l'envoi d'emails
   - `BLOB_READ_WRITE_TOKEN` — Token Vercel Blob pour l'upload d'images
   - `TURNSTILE_SECRET_KEY` — (optionnel) Clé secrète Cloudflare Turnstile pour le CAPTCHA à l'inscription
+  - `VITE_SPOTIFY_CLIENT_ID` — (optionnel) Client ID de l'app Spotify (aussi dans `.env` en local). Active le lecteur Spotify intégré. Pas besoin de client secret (PKCE)
 
 ### Clés localStorage (dev) vs Redis (prod)
 
@@ -196,10 +197,12 @@ Choisir le layout adapté :
 │   │   ├── export-pdf.ts        ← Export PDF via window.print()
 │   │   ├── export-docx.ts       ← Export DOCX (Word) via bibliothèque docx
 │   │   ├── migration.ts         ← Migrations (single-book → multi-book, clés localStorage, scènes → TimelineEvents)
-│   │   └── spellcheck-extension.ts ← Extension TipTap correcteur
+│   │   ├── spellcheck-extension.ts ← Extension TipTap correcteur
+│   │   └── spotify.ts           ← Client Spotify OAuth PKCE + API playlists
 │   │
 │   ├── hooks/
-│   │   └── useWritingTimer.ts   ← Hook timer d'écriture (3 modes, suivi temps, persistance localStorage)
+│   │   ├── useWritingTimer.ts   ← Hook timer d'écriture (3 modes, suivi temps, persistance localStorage)
+│   │   └── useSpotifyPlayer.ts  ← Hook Web Playback SDK (init, play, pause, skip, device discovery)
 │   │
 │   ├── store/
 │   │   ├── useAuthStore.ts      ← Authentification (login/signup/logout/profil)
@@ -237,8 +240,9 @@ Choisir le layout adapté :
 │   │   ├── AuthPage.tsx         ← Login/Inscription
 │   │   ├── ForgotPasswordPage.tsx ← Mot de passe oublié
 │   │   ├── ResetPasswordPage.tsx  ← Réinitialisation mot de passe (via token email)
+│   │   ├── SpotifyCallbackPage.tsx ← Callback OAuth Spotify (popup, échange PKCE)
 │   │   ├── admin/
-│   │   │   ├── AdminMembersPage.tsx  ← Gestion des membres (admin)
+│   │   │   ├── AdminMembersPage.tsx  ← Gestion des membres (admin) + toggle Spotify par utilisateur
 │   │   │   └── AdminReleasesPage.tsx ← Gestion des releases (admin)
 │   │   ├── review/
 │   │   │   └── ReviewReaderPage.tsx ← Page publique relecteur (sans auth)
@@ -255,7 +259,7 @@ Choisir le layout adapté :
 │       ├── editor/              ← Éditeur TipTap (SceneEditor, SceneInlineEditor, EditorTabs, SelfCommentPanel)
 │       ├── characters/          ← Fiches personnages, relations, graphe, CharacterAvatar (composant réutilisable avatar rond)
 │       ├── maps/                ← Viewer de cartes, épingles
-│       ├── progress/            ← Timer d'écriture (FloatingWritingTimer : session libre, minuteur, pomodoro), stats
+│       ├── progress/            ← Timer d'écriture (FloatingWritingTimer), lecteur Spotify (FloatingSpotifyPlayer), stats
 │       ├── shared/              ← ConfirmDialog, EmptyState, ImageUpload (mode rond avec recadrage), PasswordInput, TagBadge
 │       ├── tickets/             ← TicketForm, TicketDetail, ticket-constants
 │       ├── timeline/            ← EventEditorDialog, SplitDialog, NewEventDialog, InsertEventDialog, TimelineTooltip, DurationInput, TimelineRow
@@ -404,6 +408,9 @@ Snapshots automatiques toutes les **15 minutes** (dedup par timestamp), max **20
 - `emlb-last-seen-version` — Dernière version vue (pour badge "Nouveau" sur releases)
 - `emlb-daily-snapshot:{bookId}` — Snapshot du total de mots/signes en début de journée (suivi progression journalière)
 - `fabula-mea-writing-timer` — État persistant du timer d'écriture (mode, durée, sessions, accumulatedWritingSeconds, etc.)
+- `fabula-mea-spotify` — Tokens OAuth Spotify (accessToken, refreshToken, expiresAt)
+- `fabula-mea-spotify-playlist` — Playlist Spotify sélectionnée (id, name, uri, trackCount)
+- `fabula-mea-spotify-verifier` — Code verifier PKCE temporaire (supprimé après échange)
 
 ### Synchronisation cloud
 
@@ -506,4 +513,5 @@ npm run test:watch  # Tests en mode watch
 33. **Correction problème dates < 1000** : les dates de la chronologie supportent les années < 1000 (ex: 0157 pour un roman historique/fantasy). Lors de la conversion `Date → string YYYY-MM-DD`, toujours utiliser `String(d.getFullYear()).padStart(4, '0')` pour conserver les zéros de tête. Les endroits concernés : `insertTimelineEvent`, `splitTimelineEvent` dans `useBookStore.ts`, et `handleMouseUp` (drag/resize) dans `TimelinePage.tsx`.
 34. **Synchronisation cloud robuste** : la sauvegarde cloud utilise `cloudSaveWithRetry` (3 tentatives, backoff exponentiel). Le `loadBook` initialise un état minimal (`id: bookId`) même sans cache localStorage, pour que les données du serveur puissent s'appliquer. Des guards (`bookIdAtSave`, `loadedAt`) empêchent les promesses stale de corrompre l'état. Le debounce est annulé (`cancelPendingSave()`) lors du changement de livre.
 35. **Tests unitaires** : Vitest en environnement `node`. Tests dans `src/__tests__/` (8 fichiers, ~195 tests). Couvrent : retry avec backoff (`cloudSaveWithRetry`), historique de versions (extractStats, dedup, restore, saga data), optimisation daily snapshot, calculs de progression et objectifs (`calculations.ts`), fonctions utilitaires (`utils.ts` : durées, comptage mots/signes, labels chapitres, formatage), CRUD encyclopédie (`encyclopedia-helpers.ts` : personnages, lieux, tags, worldNotes, maps, pins, relations, keyEvents), sanitization export XHTML (`export-shared.ts` : escapeXml, cleanHtml), helpers upload (`upload.ts` : isBase64, isUrl). Voir `src/__tests__/CLAUDE.md` pour les détails.
-36. **Réorganisation des scènes par drag-and-drop** : la page `ChaptersPage` permet de réordonner les scènes par drag-and-drop (`@dnd-kit`, `verticalListSortingStrategy`, `pointerWithin`). Les scènes peuvent être déplacées **au sein du même chapitre** (réordonnancement) ou **entre chapitres différents** (déplacement). La prévisualisation est identique dans les deux cas : un état virtuel (`virtualSceneIds`) permet d'afficher la scène à sa future position en temps réel pendant le drag. Composants impliqués : `SortableSceneItem` (scène draggable), `DroppableSceneList` (zone de drop pour liste de scènes), `DroppableChapter` (zone de drop pour chapitre entier/header). Store : `reorderScenes(chapterId, sceneIds[])` pour réordonnancement intra-chapitre, `moveScene(sceneId, toChapterId, newIndex)` pour déplacement inter-chapitres. Sauvegarde automatique via le subscriber `updatedAt` → `saveBook()` (debounce 500ms).
+36. **Lecteur Spotify intégré** : un bouton flottant dans `AppShell` permet d'écouter ses playlists Spotify pendant l'écriture. **Accès contrôlé par admin** : Spotify est en mode développeur (limité à 25 utilisateurs manuellement ajoutés). Pour contourner cette limitation, chaque utilisateur a un champ `spotifyEnabled?: boolean` (défaut `false`). Seuls les admins peuvent activer/désactiver Spotify pour un utilisateur via `AdminMembersPage` (bouton toggle par membre). Le `FloatingSpotifyPlayer` n'est rendu dans `AppShell` que si `user.spotifyEnabled === true` (lu depuis `useAuthStore`). Architecture : `src/lib/spotify.ts` (OAuth PKCE, API playlists, persistance tokens), `src/hooks/useSpotifyPlayer.ts` (Web Playback SDK, device discovery), `src/components/progress/FloatingSpotifyPlayer.tsx` (UI panneau + bulle), `src/pages/SpotifyCallbackPage.tsx` (popup OAuth). **Endpoints** : `PATCH /api/admin/members` (toggle `spotifyEnabled` pour un utilisateur, admin requis), `devAuth.setSpotifyEnabled()` en dev. Le champ `spotifyEnabled` est retourné par `/api/auth/login`, `/api/auth/signup`, `/api/auth/me`, `/api/auth/profile`. **Particularités techniques** : (1) OAuth PKCE sans client secret — le `code_verifier` est stocké en `localStorage` (pas `sessionStorage`) car la popup OAuth ne partage pas le `sessionStorage` avec la fenêtre parente ; (2) Spotify interdit `localhost` dans les redirect URIs depuis avril 2025, le code remplace automatiquement `localhost` par `127.0.0.1` et `vite.config.ts` utilise `host: true` ; (3) `main.tsx` redirige `localhost` → `127.0.0.1` quand Spotify est configuré pour que les deux fenêtres partagent la même origine ; (4) le `device_id` du SDK ne correspond pas toujours à celui de l'API REST — le hook requête `GET /me/player/devices` pour trouver le vrai ID par nom ; (5) le play utilise un retry (5 tentatives, 1s d'intervalle) car le backend Spotify peut mettre quelques secondes à enregistrer un nouveau device. Requiert **Spotify Premium**. Variable : `VITE_SPOTIFY_CLIENT_ID`.
+37. **Réorganisation des scènes par drag-and-drop** : la page `ChaptersPage` permet de réordonner les scènes par drag-and-drop (`@dnd-kit`, `verticalListSortingStrategy`, `pointerWithin`). Les scènes peuvent être déplacées **au sein du même chapitre** (réordonnancement) ou **entre chapitres différents** (déplacement). La prévisualisation est identique dans les deux cas : un état virtuel (`virtualSceneIds`) permet d'afficher la scène à sa future position en temps réel pendant le drag. Composants impliqués : `SortableSceneItem` (scène draggable), `DroppableSceneList` (zone de drop pour liste de scènes), `DroppableChapter` (zone de drop pour chapitre entier/header). Store : `reorderScenes(chapterId, sceneIds[])` pour réordonnancement intra-chapitre, `moveScene(sceneId, toChapterId, newIndex)` pour déplacement inter-chapitres. Sauvegarde automatique via le subscriber `updatedAt` → `saveBook()` (debounce 500ms).

@@ -20,6 +20,7 @@ export interface AuthUser {
   isAdmin?: boolean;
   avatarUrl?: string;
   avatarOffsetY?: number;
+  spotifyEnabled?: boolean;
 }
 
 function getToken(): string | null {
@@ -259,7 +260,14 @@ export const api = {
     members: () =>
       IS_DEV
         ? devDb.admin.members()
-        : apiFetch<{ members: Array<{ id: string; email: string; name: string; isAdmin: boolean; createdAt: string }> }>('/admin/members'),
+        : apiFetch<{ members: Array<{ id: string; email: string; name: string; isAdmin: boolean; spotifyEnabled: boolean; createdAt: string }> }>('/admin/members'),
+    setSpotifyEnabled: (userId: string, enabled: boolean) =>
+      IS_DEV
+        ? (devAuth.setSpotifyEnabled(userId, enabled), Promise.resolve({ ok: true }))
+        : apiFetch<{ ok: boolean }>('/admin/members', {
+            method: 'PATCH',
+            body: JSON.stringify({ userId, spotifyEnabled: enabled }),
+          }),
   },
 
   // ─── Reviews (author side, authenticated) ────────────────────────────────

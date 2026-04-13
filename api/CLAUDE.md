@@ -84,7 +84,7 @@ sendPasswordResetEmail({to, resetUrl})                          // Lien de réin
 
 | Clé | Contenu |
 |-----|---------|
-| `emlb:user:{id}` | JSON de l'utilisateur (id, email, name, passwordHash, isAdmin, createdAt) |
+| `emlb:user:{id}` | JSON de l'utilisateur (id, email, name, passwordHash, isAdmin, spotifyEnabled, createdAt, avatarUrl, avatarOffsetY) |
 | `emlb:email:{email}` | Juste l'ID de l'utilisateur (index pour login) |
 | `emlb:member-ids` | JSON Array des IDs de tous les membres (index pour admin) |
 | `emlb:u:{userId}:library` | JSON Array des `BookMeta[]` de l'utilisateur |
@@ -210,7 +210,8 @@ Les routes relecteur sont dans le **même fichier** que les routes auteur (`api/
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| GET | `/api/admin/members` | Admin | Liste tous les membres avec leur nombre de livres |
+| GET | `/api/admin/members` | Admin | Liste tous les membres (id, email, name, isAdmin, spotifyEnabled, createdAt) |
+| PATCH | `/api/admin/members` | Admin | Toggle `spotifyEnabled` pour un utilisateur (body: `{ userId, spotifyEnabled }`) |
 
 ### Migration
 

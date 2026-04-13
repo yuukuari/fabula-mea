@@ -133,7 +133,6 @@ export function useSpotifyPlayer(): SpotifyPlayerAPI {
 
       player.addListener('ready', async (data: unknown) => {
         const { device_id: sdkDeviceId } = data as { device_id: string };
-        console.log('[SpotifyPlayer] Ready — SDK device_id:', sdkDeviceId);
 
         // The SDK device_id doesn't always match the one registered in Spotify's backend.
         // Query the devices API to find the real ID by name.
@@ -146,10 +145,7 @@ export function useSpotifyPlayer(): SpotifyPlayerAPI {
           if (resp.ok) {
             const { devices } = await resp.json() as { devices: Array<{ id: string; name: string }> };
             const ours = devices.find((d) => d.name === 'Fabula Mea');
-            if (ours) {
-              realDeviceId = ours.id;
-              console.log('[SpotifyPlayer] Real API device_id:', realDeviceId);
-            }
+            if (ours) realDeviceId = ours.id;
           }
         }
 
@@ -158,7 +154,6 @@ export function useSpotifyPlayer(): SpotifyPlayerAPI {
       });
 
       player.addListener('not_ready', () => {
-        console.log('[SpotifyPlayer] Not ready');
         setIsReady(false);
         setDeviceId(null);
       });
@@ -180,22 +175,18 @@ export function useSpotifyPlayer(): SpotifyPlayerAPI {
       });
 
       player.addListener('initialization_error', (e: unknown) => {
-        console.error('[SpotifyPlayer] initialization_error:', e);
         setError((e as { message: string }).message);
       });
 
       player.addListener('authentication_error', (e: unknown) => {
-        console.error('[SpotifyPlayer] authentication_error:', e);
         setError((e as { message: string }).message);
       });
 
-      player.addListener('account_error', (e: unknown) => {
-        console.error('[SpotifyPlayer] account_error:', e);
+      player.addListener('account_error', () => {
         setError('Spotify Premium est requis pour la lecture en navigateur.');
       });
 
       const connected = await player.connect();
-      console.log('[SpotifyPlayer] connect() result:', connected);
       if (!connected) {
         setError('Impossible de se connecter au lecteur Spotify');
       }
@@ -226,13 +217,10 @@ export function useSpotifyPlayer(): SpotifyPlayerAPI {
       if (resp.ok || resp.status === 204) return; // success
 
       if (resp.status === 404 && attempt < 4) {
-        console.log(`[SpotifyPlayer] Device not ready yet, retry ${attempt + 1}/5...`);
         await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
 
-      const err = await resp.text();
-      console.error('[SpotifyPlayer] Play failed:', resp.status, err);
       return;
     }
   }, [deviceId]);

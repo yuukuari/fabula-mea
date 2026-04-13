@@ -9,6 +9,7 @@ import { EditorTabs } from '@/components/editor/EditorTabs';
 import { SceneEditor } from '@/components/editor/SceneEditor';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export function AppShell() {
   const { open, setOpen } = useSearchShortcut();
@@ -18,6 +19,7 @@ export function AppShell() {
   const loaded = useBookStore((s) => s._loaded);
   const loadBook = useBookStore((s) => s.loadBook);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const spotifyEnabled = useAuthStore((s) => s.user?.spotifyEnabled);
 
   // Restaure la bibliothèque depuis Redis au démarrage (nouveau device ou nouvelle session)
   useEffect(() => {
@@ -67,7 +69,7 @@ export function AppShell() {
       <SearchDialog open={open} onClose={() => setOpen(false)} />
       <div className="fixed bottom-5 right-5 z-50 flex items-end gap-3">
         <FloatingWritingTimer />
-        <FloatingSpotifyPlayer />
+        {spotifyEnabled && <FloatingSpotifyPlayer />}
       </div>
       {/* Full-screen scene editor */}
       <SceneEditor />

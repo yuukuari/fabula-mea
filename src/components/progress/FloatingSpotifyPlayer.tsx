@@ -46,14 +46,8 @@ function SpotifyPlayerInner() {
   // Listen for OAuth callback messages
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      console.log('[SpotifyPlayer] Received message:', event.origin, event.data);
-      if (event.origin !== window.location.origin) {
-        console.warn('[SpotifyPlayer] Origin mismatch:', event.origin, '!==', window.location.origin);
-        return;
-      }
+      if (event.origin !== window.location.origin) return;
       if (event.data?.type !== 'spotify-callback') return;
-
-      console.log('[SpotifyPlayer] Spotify callback message:', event.data);
 
       if (event.data.error) {
         setConnectError('Connexion refusée ou échouée.');

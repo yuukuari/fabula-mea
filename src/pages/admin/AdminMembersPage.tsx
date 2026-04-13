@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, Shield, ShieldCheck, Mail, Calendar, BookOpen } from 'lucide-react';
+import { Users, ShieldCheck, Mail, Calendar, BookOpen, Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 
@@ -8,6 +8,7 @@ interface Member {
   email: string;
   name: string;
   isAdmin: boolean;
+  spotifyEnabled?: boolean;
   createdAt: string;
   booksCount?: number;
 }
@@ -29,6 +30,17 @@ export function AdminMembersPage() {
       console.error('Failed to load members:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleSpotify = async (memberId: string, current: boolean) => {
+    try {
+      await api.admin.setSpotifyEnabled(memberId, !current);
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, spotifyEnabled: !current } : m))
+      );
+    } catch {
+      // ignore
     }
   };
 
@@ -84,6 +96,19 @@ export function AdminMembersPage() {
                   )}
                 </div>
               </div>
+              <button
+                onClick={() => toggleSpotify(member.id, !!member.spotifyEnabled)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1 shrink-0',
+                  member.spotifyEnabled
+                    ? 'bg-[#1DB954]/10 text-[#1DB954] hover:bg-[#1DB954]/20'
+                    : 'bg-parchment-200 text-ink-200 hover:bg-parchment-300'
+                )}
+                title={member.spotifyEnabled ? 'Désactiver Spotify' : 'Activer Spotify'}
+              >
+                <Music className="w-3 h-3" />
+                Spotify
+              </button>
             </div>
           ))}
         </div>

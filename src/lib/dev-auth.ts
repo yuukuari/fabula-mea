@@ -23,6 +23,7 @@ interface StoredUser {
   createdAt: string;
   avatarUrl?: string;
   avatarOffsetY?: number;
+  spotifyEnabled?: boolean;
 }
 
 // ─── LocalStorage helpers ────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ export const devAuth = {
     saveEmails(emails);
 
     const token = encodeToken({ userId: id, email: normalized });
-    return { token, user: { id, email: normalized, name: user.name, isAdmin: user.isAdmin } };
+    return { token, user: { id, email: normalized, name: user.name, isAdmin: user.isAdmin, spotifyEnabled: false } };
   },
 
   async login(data: {
@@ -138,7 +139,7 @@ export const devAuth = {
     if (!valid) throw new Error('Email ou mot de passe incorrect');
 
     const token = encodeToken({ userId: user.id, email: normalized });
-    return { token, user: { id: user.id, email: normalized, name: user.name, isAdmin: user.isAdmin ?? false } };
+    return { token, user: { id: user.id, email: normalized, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false } };
   },
 
   async me(): Promise<AuthUser> {
@@ -152,18 +153,19 @@ export const devAuth = {
     const user = users[payload.userId];
     if (!user) throw new Error('Utilisateur introuvable');
 
-    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY };
+    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, spotifyEnabled: user.spotifyEnabled ?? false };
   },
 
   // ─── Bonus: list all local dev accounts ──────────────────────────────────
 
-  listUsers(): Array<{ id: string; email: string; name: string; isAdmin: boolean; createdAt: string }> {
+  listUsers(): Array<{ id: string; email: string; name: string; isAdmin: boolean; spotifyEnabled: boolean; createdAt: string }> {
     const users = getUsers();
-    return Object.values(users).map(({ id, email, name, isAdmin, createdAt }) => ({
+    return Object.values(users).map(({ id, email, name, isAdmin, spotifyEnabled, createdAt }) => ({
       id,
       email,
       name,
       isAdmin: isAdmin ?? false,
+      spotifyEnabled: spotifyEnabled ?? false,
       createdAt,
     }));
   },
@@ -172,6 +174,14 @@ export const devAuth = {
     const users = getUsers();
     if (users[userId]) {
       users[userId].isAdmin = isAdmin;
+      saveUsers(users);
+    }
+  },
+
+  setSpotifyEnabled(userId: string, enabled: boolean): void {
+    const users = getUsers();
+    if (users[userId]) {
+      users[userId].spotifyEnabled = enabled;
       saveUsers(users);
     }
   },
@@ -247,7 +257,7 @@ export const devAuth = {
     }
 
     saveUsers(users);
-    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY };
+    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, spotifyEnabled: user.spotifyEnabled ?? false };
   },
 
   async changePassword(data: { currentPassword: string; newPassword: string }): Promise<{ ok: boolean }> {

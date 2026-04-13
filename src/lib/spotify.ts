@@ -16,8 +16,6 @@ const SCOPES = [
   'user-read-currently-playing',
   'user-modify-playback-state',
   'playlist-read-private',
-  'playlist-modify-public',
-  'playlist-modify-private',
 ].join(' ');
 
 const STORAGE_KEY = 'fabula-mea-spotify';
@@ -91,7 +89,6 @@ export async function getSpotifyAuthUrl(): Promise<string> {
     scope: SCOPES,
     code_challenge_method: 'S256',
     code_challenge: challenge,
-    show_dialog: 'true', // Force re-consent so updated scopes are granted
   });
 
   return `https://accounts.spotify.com/authorize?${params.toString()}`;
@@ -101,30 +98,23 @@ export async function exchangeCodeForTokens(code: string): Promise<SpotifyTokens
   if (!CLIENT_ID) throw new Error('VITE_SPOTIFY_CLIENT_ID is not configured');
 
   const verifier = localStorage.getItem(VERIFIER_KEY);
-  console.log('[Spotify] exchangeCode — verifier exists:', !!verifier);
-  console.log('[Spotify] exchangeCode — REDIRECT_URI:', REDIRECT_URI);
-  console.log('[Spotify] exchangeCode — CLIENT_ID:', CLIENT_ID?.slice(0, 8) + '...');
   if (!verifier) throw new Error('No code verifier found');
   localStorage.removeItem(VERIFIER_KEY);
-
-  const body = new URLSearchParams({
-    client_id: CLIENT_ID,
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: REDIRECT_URI,
-    code_verifier: verifier,
-  });
-  console.log('[Spotify] exchangeCode — POST body:', Object.fromEntries(body.entries()));
 
   const resp = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: verifier,
+    }),
   });
 
   if (!resp.ok) {
     const err = await resp.text();
-    console.error('[Spotify] exchangeCode — FAILED:', resp.status, err);
     throw new Error(`Token exchange failed: ${err}`);
   }
 
@@ -251,30 +241,6 @@ export async function getPlaylists(): Promise<SpotifyPlaylist[]> {
     imageUrl: p.images?.[0]?.url ?? null,
     trackCount: p.tracks?.total ?? p.items?.total ?? 0,
   }));
-}
-
-export async function createPlaylist(name: string): Promise<SpotifyPlaylist> {
-  // Get user ID first
-  const me = await spotifyFetch<{ id: string }>('https://api.spotify.com/v1/me');
-
-  const data = await spotifyFetch<{
-    id: string;
-    name: string;
-    uri: string;
-    images: Array<{ url: string }>;
-    tracks: { total: number };
-  }>(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
-    method: 'POST',
-    body: JSON.stringify({ name, public: false }),
-  });
-
-  return {
-    id: data.id,
-    name: data.name,
-    uri: data.uri,
-    imageUrl: data.images?.[0]?.url ?? null,
-    trackCount: data.tracks.total,
-  };
 }
 
 // ─── Selected Playlist Persistence ───
