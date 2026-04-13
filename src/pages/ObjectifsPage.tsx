@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Target, Plus, Trash2, CheckCircle, X, Coffee, Pen, Timer, Settings2, CalendarClock, CalendarOff, Palmtree } from 'lucide-react';
 import { format, parseISO, differenceInDays, eachDayOfInterval, startOfDay, isAfter, isBefore, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -774,15 +774,22 @@ function ProgressChart({
       const segEnd = i < goalPeriods.length - 1
         ? goalPeriods[i + 1].startDate
         : period.targetEndDate;
-      const totalDuration = differenceInDays(period.targetEndDate, period.startDate);
-      const segDuration = differenceInDays(segEnd, period.startDate);
-      const endValue = totalDuration > 0
-        ? period.startValue + (period.targetTotal - period.startValue) * (segDuration / totalDuration)
-        : period.targetTotal;
-      return [
-        { date: period.startDate, value: period.startValue },
-        { date: segEnd, value: endValue },
-      ];
+      const segDays = eachDayOfInterval({ start: period.startDate, end: segEnd });
+      // Count working days in the full period (start → targetEndDate) to compute the daily rate
+      const fullPeriodDays = eachDayOfInterval({ start: period.startDate, end: period.targetEndDate });
+      const fullWorkingDays = fullPeriodDays.filter((d) => !isDateExcluded(d, goals.excludedPeriods)).length;
+      const totalToWrite = period.targetTotal - period.startValue;
+      const dailyIdealRate = fullWorkingDays > 0 ? totalToWrite / fullWorkingDays : 0;
+
+      const points: { date: Date; value: number }[] = [];
+      let cumulative = period.startValue;
+      for (const day of segDays) {
+        points.push({ date: day, value: cumulative });
+        if (!isDateExcluded(day, goals.excludedPeriods)) {
+          cumulative += dailyIdealRate;
+        }
+      }
+      return points;
     });
 
     const excludedRanges: { start: Date; end: Date }[] = [];
@@ -797,16 +804,53 @@ function ProgressChart({
       }
     }
 
-    return { allDays, realPoints, projectedPoints, idealSegments, excludedRanges, targetTotal, chartStart, chartEnd, today };
+    // Build lookup maps for tooltip: ideal and projected values by date key
+    const idealMap: Record<string, number> = {};
+    for (const seg of idealSegments) {
+      for (const p of seg) {
+        idealMap[format(p.date, 'yyyy-MM-dd')] = p.value;
+      }
+    }
+    const projectedMap: Record<string, number> = {};
+    for (const p of projectedPoints) {
+      projectedMap[format(p.date, 'yyyy-MM-dd')] = p.value;
+    }
+    const realMap: Record<string, number> = {};
+    for (const p of realPoints) {
+      realMap[format(p.date, 'yyyy-MM-dd')] = p.value;
+    }
+
+    return { allDays, realPoints, projectedPoints, idealSegments, excludedRanges, targetTotal, chartStart, chartEnd, today, snapMap, idealMap, projectedMap, realMap };
   }, [dailySnapshots, goals, scenes, countUnit]);
 
-  if (!chartData) return null;
-
-  const { realPoints, projectedPoints, idealSegments, excludedRanges, targetTotal, chartStart, chartEnd, today } = chartData;
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null);
 
   const W = 700;
   const H = 280;
   const PAD = { top: 20, right: 20, bottom: 40, left: 60 };
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<SVGRectElement>) => {
+    if (!chartData) return;
+    const svg = e.currentTarget.closest('svg');
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * W;
+    const plotW = W - PAD.left - PAD.right;
+    const ratio = (svgX - PAD.left) / plotW;
+    const totalDays = Math.max(1, differenceInDays(chartData.chartEnd, chartData.chartStart));
+    const dayIndex = Math.round(ratio * totalDays);
+    if (dayIndex >= 0 && dayIndex < chartData.allDays.length) {
+      const key = format(chartData.allDays[dayIndex], 'yyyy-MM-dd');
+      setHoveredDay(key);
+    } else {
+      setHoveredDay(null);
+    }
+  }, [chartData]);
+
+  if (!chartData) return null;
+
+  const { realPoints, projectedPoints, idealSegments, excludedRanges, targetTotal, chartStart, chartEnd, today, snapMap, idealMap, projectedMap, realMap } = chartData;
+
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
 
@@ -931,6 +975,67 @@ function ProgressChart({
         <text x={12} y={PAD.top + plotH / 2} fontSize={10} fill="#8c7b6b" textAnchor="middle" transform={`rotate(-90, 12, ${PAD.top + plotH / 2})`}>
           {unitLbl}
         </text>
+
+        {/* Tooltip vertical line + overlay */}
+        {(() => {
+          if (!hoveredDay) return null;
+          const hDate = parseISO(hoveredDay);
+          const hx = toX(hDate);
+          if (hx < PAD.left || hx > W - PAD.right) return null;
+          const snap = snapMap[hoveredDay] as DailySnapshot | undefined;
+          const real = realMap[hoveredDay] as number | undefined;
+          const ideal = idealMap[hoveredDay] as number | undefined;
+          const projected = projectedMap[hoveredDay] as number | undefined;
+          const isPast = hDate <= today;
+          const excluded = isDateExcluded(hDate, goals.excludedPeriods);
+
+          const lines: string[] = [];
+          lines.push(format(hDate, 'EEEE d MMMM yyyy', { locale: fr }));
+          if (excluded) lines.push('Jour exclu (pause)');
+          if (isPast && snap) {
+            lines.push(`Total : ${snap.totalWritten.toLocaleString('fr-FR')} ${unitLbl}`);
+            if (snap.writtenToday > 0) lines.push(`Écrits ce jour : +${snap.writtenToday.toLocaleString('fr-FR')}`);
+          } else if (isPast && real !== undefined) {
+            lines.push(`Total : ${Math.round(real).toLocaleString('fr-FR')} ${unitLbl}`);
+          }
+          if (!isPast && projected !== undefined) {
+            lines.push(`Estimation : ${Math.round(projected).toLocaleString('fr-FR')} ${unitLbl}`);
+          }
+          if (ideal !== undefined) {
+            lines.push(`Rythme idéal : ${Math.round(ideal).toLocaleString('fr-FR')} ${unitLbl}`);
+          }
+
+          const lineH = 15;
+          const tipW = 200;
+          const tipH = lines.length * lineH + 12;
+          let tipX = hx + 10;
+          if (tipX + tipW > W - 5) tipX = hx - tipW - 10;
+          let tipY = PAD.top + 10;
+
+          return (
+            <>
+              <line x1={hx} x2={hx} y1={PAD.top} y2={PAD.top + plotH} stroke="#8c7b6b" strokeWidth={0.5} opacity={0.6} />
+              <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={4} fill="white" stroke="#c4b5a0" strokeWidth={0.5} opacity={0.95} />
+              {lines.map((line, i) => (
+                <text key={i} x={tipX + 8} y={tipY + 14 + i * lineH} fontSize={i === 0 ? 10 : 9} fill={i === 0 ? '#3d3427' : '#6b5d4d'} fontWeight={i === 0 ? 600 : 400}>
+                  {line}
+                </text>
+              ))}
+            </>
+          );
+        })()}
+
+        {/* Invisible overlay for mouse tracking */}
+        <rect
+          x={PAD.left}
+          y={PAD.top}
+          width={plotW}
+          height={plotH}
+          fill="transparent"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoveredDay(null)}
+          style={{ cursor: 'crosshair' }}
+        />
       </svg>
 
       <div className="flex items-center gap-4 mt-3 text-xs text-ink-300 justify-center flex-wrap">

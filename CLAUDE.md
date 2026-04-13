@@ -228,7 +228,7 @@ Choisir le layout adapté :
 │   │   ├── ChaptersPage.tsx     ← Chapitres + scènes + éditeur + événements associés (badge + modale)
 │   │   ├── TimelinePage.tsx     ← Frise chronologique (vue par personnage OU par lieu, filtres croisés, filtrage doux par opacité, rangées triées par order des personnages)
 │   │   ├── ProgressionPage.tsx  ← Progression globale (temps total d'écriture, pages estimées avec tooltip livre de poche) + « Longueur du livre » (stats en grille)
-│   │   ├── ObjectifsPage.tsx   ← Objectifs d'écriture (mots/temps avec barre de progression) + périodes exclues (modale) + courbe
+│   │   ├── ObjectifsPage.tsx   ← Objectifs d'écriture (mots/temps avec barre de progression) + périodes exclues (modale) + courbe (rythme idéal tenant compte des pauses, estimation, tooltip au survol)
 │   │   ├── WorldPage.tsx        ← Notes de worldbuilding
 │   │   ├── MapsPage.tsx         ← Cartes interactives
 │   │   ├── NotesIdeasPage.tsx   ← Notes & idées (grille de cartes, TipTap avec toolbar complète + checklists)
