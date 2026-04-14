@@ -12,7 +12,7 @@
  *   emlb-dev:releases                     → Release[]
  */
 
-import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta, VersionStats } from '@/types';
+import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta, VersionStats, AppNotification } from '@/types';
 import { devAuth } from '@/lib/dev-auth';
 
 // ─── Token decode (mirrors dev-auth.ts) ──────────────────────────────────────
@@ -161,6 +161,70 @@ function devEmailLog(opts: { to: string; subject: string; description: string; d
   }
   console.log('   (email non envoyé en mode développement)');
   console.groupEnd();
+}
+
+// ─── Notification helpers ────────────────────────────────────────────────────
+
+const NOTIFICATIONS_KEY = 'emlb-dev:notifications';
+const MAX_NOTIFICATIONS = 200;
+
+function notificationReadsKey(uid: string) {
+  return `emlb-dev:u:${uid}:notification-reads`;
+}
+
+function createNotification(opts: {
+  type: AppNotification['type'];
+  actorId: string;
+  actorName: string;
+  message: string;
+  link: string;
+  payload: Record<string, string>;
+  recipientIds: string[];
+}): AppNotification | null {
+  // No recipients → no notification
+  if (opts.recipientIds.length === 0) return null;
+
+  const notification: AppNotification = {
+    id: generateId(),
+    type: opts.type,
+    actorId: opts.actorId,
+    actorName: opts.actorName,
+    message: opts.message,
+    link: opts.link,
+    payload: opts.payload,
+    recipientIds: opts.recipientIds,
+    createdAt: new Date().toISOString(),
+  };
+
+  const notifications = getJson<AppNotification[]>(NOTIFICATIONS_KEY, []);
+  notifications.unshift(notification);
+  if (notifications.length > MAX_NOTIFICATIONS) notifications.length = MAX_NOTIFICATIONS;
+  setJson(NOTIFICATIONS_KEY, notifications);
+
+  return notification;
+}
+
+function createTicketCommentNotification(ticketId: string, commenterId: string, commenterName: string): void {
+  const tickets = getJson<Ticket[]>('emlb-dev:tickets', []);
+  const ticket = tickets.find((t) => t.id === ticketId);
+  if (!ticket) return;
+
+  const comments = getJson<TicketComment[]>(`emlb-dev:ticket:${ticketId}:comments`, []);
+  const commenterIds = new Set(comments.map((c) => c.userId));
+  commenterIds.add(ticket.userId); // ticket creator always notified
+  commenterIds.delete(commenterId); // exclude the commenter
+
+  const recipientIds = Array.from(commenterIds);
+
+  createNotification({
+    type: 'ticket_comment',
+    actorId: commenterId,
+    actorName: commenterName,
+    message: '{{actorName}} a commenté le ticket « {{ticketTitle}} »',
+    link: `/tickets?id=${ticketId}`,
+    payload: { ticketId, ticketTitle: ticket.title },
+    recipientIds,
+  });
 }
 
 // ─── Public API (same shape as the real serverless functions) ─────────────────
@@ -529,6 +593,10 @@ export const devDb = {
       const comments = getJson<TicketComment[]>(`emlb-dev:ticket:${ticketId}:comments`, []);
       comments.push(comment);
       setJson(`emlb-dev:ticket:${ticketId}:comments`, comments);
+
+      // Create notification for ticket participants
+      createTicketCommentNotification(ticketId, user.id, user.name);
+
       return { comment };
     },
 
@@ -654,6 +722,61 @@ export const devDb = {
         };
       });
       return { members };
+    },
+  },
+
+  // ─── Notifications ──────────────────────────────────────────────────────
+
+  notifications: {
+    async list(): Promise<{ notifications: AppNotification[]; readIds: string[] }> {
+      const uid = requireUserId();
+      const all = getJson<AppNotification[]>(NOTIFICATIONS_KEY, []);
+      // Only return notifications where the current user is a recipient
+      const notifications = all.filter((n) => n.recipientIds.includes(uid));
+      const readIds = getJson<string[]>(notificationReadsKey(uid), []);
+      return { notifications, readIds };
+    },
+
+    async markRead(notificationId: string): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      const readIds = getJson<string[]>(notificationReadsKey(uid), []);
+      if (!readIds.includes(notificationId)) {
+        readIds.push(notificationId);
+        setJson(notificationReadsKey(uid), readIds);
+      }
+      return { ok: true };
+    },
+
+    async markAllRead(): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      const all = getJson<AppNotification[]>(NOTIFICATIONS_KEY, []);
+      const myNotifIds = all.filter((n) => n.recipientIds.includes(uid)).map((n) => n.id);
+      setJson(notificationReadsKey(uid), myNotifIds);
+      return { ok: true };
+    },
+
+    async markReadByPayload(key: string, value: string): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      const all = getJson<AppNotification[]>(NOTIFICATIONS_KEY, []);
+      const readIds = getJson<string[]>(notificationReadsKey(uid), []);
+      const toMark = all
+        .filter((n) => n.recipientIds.includes(uid) && n.payload[key] === value)
+        .map((n) => n.id);
+      const newReadIds = [...new Set([...readIds, ...toMark])];
+      setJson(notificationReadsKey(uid), newReadIds);
+      return { ok: true };
+    },
+
+    async registerPush(subscription: PushSubscriptionJSON): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      setJson(`emlb-dev:u:${uid}:push-subscription`, subscription);
+      return { ok: true };
+    },
+
+    async unregisterPush(): Promise<{ ok: boolean }> {
+      const uid = requireUserId();
+      localStorage.removeItem(`emlb-dev:u:${uid}:push-subscription`);
+      return { ok: true };
     },
   },
 
@@ -796,6 +919,15 @@ export const devDb = {
           description: 'Notification commentaires relecture',
           details: { 'Relecteur': session.readerName || 'Un relecteur', 'Livre': session.bookTitle, 'Commentaires': `${sent}` },
         });
+        createNotification({
+          type: 'review_comments_sent',
+          actorId: 'reader',
+          actorName: session.readerName || 'Un relecteur',
+          message: '{{actorName}} a envoyé {{commentCount}} commentaire{{pluralS}} sur « {{bookTitle}} »',
+          link: `/reviews/${session.id}`,
+          payload: { reviewId: session.id, bookTitle: session.bookTitle, commentCount: `${sent}`, pluralS: sent > 1 ? 's' : '' },
+          recipientIds: [session.userId],
+        });
       }
       return { sent };
     },
@@ -848,6 +980,15 @@ export const devDb = {
           description: 'Notification commentaires relecture',
           details: { 'Relecteur': session.readerName || 'Un relecteur', 'Livre': session.bookTitle, 'Commentaires': `${sent}` },
         });
+        createNotification({
+          type: 'review_comments_sent',
+          actorId: 'reader',
+          actorName: session.readerName || 'Un relecteur',
+          message: '{{actorName}} a envoyé {{commentCount}} commentaire{{pluralS}} sur « {{bookTitle}} »',
+          link: `/reviews/${session.id}`,
+          payload: { reviewId: session.id, bookTitle: session.bookTitle, commentCount: `${sent}`, pluralS: sent > 1 ? 's' : '' },
+          recipientIds: [session.userId],
+        });
       }
       return { sent };
     },
@@ -863,6 +1004,15 @@ export const devDb = {
           subject: `${session.readerName || 'Un relecteur'} a terminé la relecture de « ${session.bookTitle} »`,
           description: 'Notification relecture terminée',
           details: { 'Relecteur': session.readerName || 'Un relecteur', 'Livre': session.bookTitle },
+        });
+        createNotification({
+          type: 'review_completed',
+          actorId: 'reader',
+          actorName: session.readerName || 'Un relecteur',
+          message: '{{actorName}} a terminé la relecture de « {{bookTitle}} »',
+          link: `/reviews/${session.id}`,
+          payload: { reviewId: session.id, bookTitle: session.bookTitle },
+          recipientIds: [session.userId],
         });
       }
       return { session };

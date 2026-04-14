@@ -9,7 +9,7 @@
 
 import { devAuth } from '@/lib/dev-auth';
 import { devDb } from '@/lib/dev-db';
-import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta } from '@/types';
+import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta, AppNotification } from '@/types';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -268,6 +268,44 @@ export const api = {
             method: 'PATCH',
             body: JSON.stringify({ userId, spotifyEnabled: enabled }),
           }),
+  },
+
+  // ─── Notifications ───────────────────────────────────────────────────────
+
+  notifications: {
+    list: () =>
+      IS_DEV
+        ? devDb.notifications.list()
+        : apiFetch<{ notifications: AppNotification[]; readIds: string[] }>('/notifications'),
+    markRead: (notificationId: string) =>
+      IS_DEV
+        ? devDb.notifications.markRead(notificationId)
+        : apiFetch<{ ok: boolean }>('/notifications?action=read', {
+            method: 'POST',
+            body: JSON.stringify({ notificationId }),
+          }),
+    markAllRead: () =>
+      IS_DEV
+        ? devDb.notifications.markAllRead()
+        : apiFetch<{ ok: boolean }>('/notifications?action=readAll', { method: 'POST' }),
+    markReadByPayload: (key: string, value: string) =>
+      IS_DEV
+        ? devDb.notifications.markReadByPayload(key, value)
+        : apiFetch<{ ok: boolean }>('/notifications?action=readByPayload', {
+            method: 'POST',
+            body: JSON.stringify({ key, value }),
+          }),
+    registerPush: (subscription: PushSubscriptionJSON) =>
+      IS_DEV
+        ? devDb.notifications.registerPush(subscription)
+        : apiFetch<{ ok: boolean }>('/notifications?action=push', {
+            method: 'POST',
+            body: JSON.stringify({ subscription }),
+          }),
+    unregisterPush: () =>
+      IS_DEV
+        ? devDb.notifications.unregisterPush()
+        : apiFetch<{ ok: boolean }>('/notifications?action=push', { method: 'DELETE' }),
   },
 
   // ─── Reviews (author side, authenticated) ────────────────────────────────

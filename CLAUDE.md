@@ -45,6 +45,8 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
   - `RESEND_API_KEY` — Clé API Resend pour l'envoi d'emails
   - `BLOB_READ_WRITE_TOKEN` — Token Vercel Blob pour l'upload d'images
   - `TURNSTILE_SECRET_KEY` — (optionnel) Clé secrète Cloudflare Turnstile pour le CAPTCHA à l'inscription
+  - `VITE_VAPID_PUBLIC_KEY` — (optionnel) Clé publique VAPID pour Web Push (aussi dans `.env` en local). Générée via `npx web-push generate-vapid-keys`
+  - `VAPID_PRIVATE_KEY` — (optionnel) Clé privée VAPID pour Web Push (serveur uniquement). Nécessaire en prod pour envoyer les notifications push
   - `VITE_SPOTIFY_CLIENT_ID` — (optionnel) Client ID de l'app Spotify (aussi dans `.env` en local). Active le lecteur Spotify intégré. Pas besoin de client secret (PKCE)
 
 ### Clés localStorage (dev) vs Redis (prod)
@@ -65,6 +67,9 @@ login: (data) => IS_DEV ? devAuth.login(data) : apiFetch('/auth/login', { method
 | Index membres | — | `emlb:member-ids` |
 | Saga (métadonnées) | `emlb-dev:saga:{sagaId}:meta` | `emlb:saga:{sagaId}:meta` |
 | Saga (données partagées) | `emlb-dev:saga:{sagaId}` | `emlb:saga:{sagaId}` |
+| Notifications | `emlb-dev:notifications` | `emlb:notifications` |
+| Notification reads (par user) | `emlb-dev:u:{userId}:notification-reads` | `emlb:u:{userId}:notification-reads` |
+| Push subscription (par user) | `emlb-dev:u:{userId}:push-subscription` | `emlb:u:{userId}:push-subscription` |
 
 ---
 
@@ -161,13 +166,14 @@ Choisir le layout adapté :
 ├── api/                         ← Serverless functions (Vercel) — CommonJS, catch-all routes
 │   ├── CLAUDE.md                ← Doc spécifique API
 │   ├── package.json             ← { "type": "commonjs" }
-│   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis, email, utils)
+│   ├── _lib/                    ← Utilitaires partagés (auth, cors, redis, email, utils, notifications)
 │   ├── auth/[[...path]].ts      ← signup, login, me, profile, change-password, account, forgot-password, reset-password (catch-all)
 │   ├── book/[bookId].ts         ← CRUD livre par utilisateur
 │   ├── saga/[sagaId].ts         ← CRUD saga (métadonnées + données partagées)
 │   ├── tickets/[[...path]].ts   ← CRUD tickets + commentaires + réactions (catch-all)
 │   ├── releases/[[...path]].ts  ← CRUD releases (catch-all)
 │   ├── admin/members.ts         ← Endpoints admin (membres)
+│   ├── notifications/[[...path]].ts ← CRUD notifications (list, markRead, markAllRead, markByPayload, push)
 │   ├── reviews/[[...path]].ts   ← Auteur + relecteur (reader/) dans un seul catch-all
 │   ├── library.ts               ← GET/POST bibliothèque utilisateur
 │   ├── upload.ts                ← Upload d'images vers Vercel Blob (CDN)
@@ -198,9 +204,11 @@ Choisir le layout adapté :
 │   │   ├── export-docx.ts       ← Export DOCX (Word) via bibliothèque docx
 │   │   ├── migration.ts         ← Migrations (single-book → multi-book, clés localStorage, scènes → TimelineEvents)
 │   │   ├── spellcheck-extension.ts ← Extension TipTap correcteur
+│   │   ├── push.ts              ← Web Push notifications (subscribe, unsubscribe, local notification)
 │   │   └── spotify.ts           ← Client Spotify OAuth PKCE + API playlists
 │   │
 │   ├── hooks/
+│   │   ├── useNotificationPolling.ts ← Polling notifications toutes les 60s
 │   │   ├── useWritingTimer.ts   ← Hook timer d'écriture (3 modes, suivi temps, persistance localStorage)
 │   │   └── useSpotifyPlayer.ts  ← Hook Web Playback SDK (init, play, pause, skip, device discovery)
 │   │
@@ -216,6 +224,7 @@ Choisir le layout adapté :
 │   │   ├── useTicketStore.ts    ← CRUD tickets + commentaires + réactions
 │   │   ├── useTicketFormStore.ts ← État du formulaire de ticket (open/close)
 │   │   ├── useReleaseStore.ts   ← CRUD releases
+│   │   ├── useNotificationStore.ts ← Notifications in-app (list, markRead, badges, polling)
 │   │   └── useReviewStore.ts    ← CRUD sessions de relecture + commentaires
 │   │
 │   ├── pages/                   ← Pages de l'application
@@ -258,6 +267,7 @@ Choisir le layout adapté :
 │       │   └── SearchDialog.tsx ← Recherche globale (Cmd+K)
 │       ├── editor/              ← Éditeur TipTap (SceneEditor, SceneInlineEditor, EditorTabs, SelfCommentPanel)
 │       ├── characters/          ← Fiches personnages, relations, graphe, CharacterAvatar (composant réutilisable avatar rond)
+│       ├── notifications/        ← NotificationBell, NotificationModal, PushOptInModal
 │       ├── maps/                ← Viewer de cartes, épingles
 │       ├── progress/            ← Timer d'écriture (FloatingWritingTimer), lecteur Spotify (FloatingSpotifyPlayer), stats
 │       ├── shared/              ← ConfirmDialog, EmptyState, ImageUpload (mode rond avec recadrage), PasswordInput, TagBadge
@@ -314,15 +324,40 @@ Les sagas permettent de regrouper plusieurs livres partageant une encyclopédie 
 
 Les tickets sont globaux (pas liés à un livre). Système de feedback avec :
 - Types : `bug`, `question`, `improvement`
-- Module concerné : `TicketModule` — catégorise le ticket par section de l'application (auth, characters, places, chapters, timeline, writing, progress, world, maps, notes, reviews, settings, export, other)
+- Module concerné : `TicketModule` — catégorise le ticket par section de l'application (auth, characters, places, chapters, timeline, writing, progress, world, maps, notes, reviews, settings, export, support, other)
 - Visibilité : `public` (visible par tous) ou `private` (visible seulement par l'auteur et les admins)
 - Statuts : `open`, `closed_done`, `closed_duplicate`
 - Commentaires avec éditeur TipTap riche
 - Réactions emoji
 - Assignation optionnelle à une release
 - Timeline d'activité (changements de statut, assignation release)
-- **Filtres** : par type, statut (ouvert par défaut), module, et version (release). Le filtre version peut être pré-sélectionné via le paramètre URL `?releaseId={id}` (utilisé par le lien depuis ReleaseNotesPage)
+- **Filtres** : par type, statut (ouvert par défaut), module, et version (release). Le filtre version peut être pré-sélectionné via le paramètre URL `?releaseId={id}` (utilisé par le lien depuis ReleaseNotesPage). Le paramètre URL `?id={ticketId}` permet de pré-sélectionner un ticket (utilisé par les deep links des notifications)
 - **Notification email** : à la création d'un ticket, un email est envoyé à tous les admins (via `sendTicketCreatedEmail`)
+- **Notification in-app** : un commentaire sur un ticket crée une notification pour le créateur du ticket et tous les autres commentateurs. Les notifications non lues sont affichées via un badge sur le ticket dans la liste et sur le menu « Tickets » dans la sidebar. Aller sur un ticket marque automatiquement ses notifications comme lues.
+
+### Notifications
+
+Système de notifications in-app extensible, avec deux collections :
+- **AppNotification** — Détails de la notification (type, acteur, message, lien, payload, recipientIds). Stockée dans une liste globale (max 200), partagée entre tous les utilisateurs.
+- **Statut lu/non-lu par utilisateur** — Liste d'IDs de notifications lues, stockée par utilisateur. Séparation des responsabilités : modifier le statut lu d'un utilisateur ne touche pas la notification partagée.
+- **Types** : `ticket_comment`, `review_comments_sent`, `review_completed`. Chaque type a une fonction de création dédiée qui calcule les destinataires.
+- **Cloche** : icône `Bell` dans le header des deux sidebars (AppShell + HomeShell) + barres mobiles. Badge avec compteur de notifications non lues.
+- **Modal** : clic sur la cloche → dropdown **positionnée en fixed** (calculée dynamiquement via `getBoundingClientRect` du bouton cloche pour éviter les débordements). Liste des notifications (plus récentes en premier), actions « Tout lire » et « Marquer comme lu » par notification. Clic sur une notification → navigation vers le lien + marque comme lu.
+- **Badges sidebar** : le menu « Tickets » affiche le nombre total de notifications non lues de type ticket_comment. Chaque ticket dans la liste affiche aussi un badge avec son nombre de notifications non lues.
+- **Auto-mark** : aller sur un TicketDetail marque automatiquement comme lues les notifications de ce ticket (via `markReadByPayload`).
+- **Polling** : `useNotificationPolling` charge les notifications au montage et toutes les 60 secondes. Utilisé dans les deux sidebars. Quand le polling détecte de nouvelles notifications non lues (absentes du poll précédent), une notification locale du navigateur est affichée via `showLocalNotification()`.
+- **Push navigateur** :
+  - **Opt-in proactif** : une modale `PushOptInModal` (`src/components/notifications/PushOptInModal.tsx`) est affichée automatiquement à des moments clés — arrivée sur la page Tickets (après 1,5s) et après création d'une relecture (après 0,8s). La modale explique les bénéfices et propose « Activer » ou « Plus tard ». Si « Plus tard », la modale ne réapparaît qu'après 7 jours (`emlb-push-optin-dismissed` dans localStorage). Le bouton d'activation reste aussi disponible dans le modal de notifications.
+  - **Dev** : utilise l'API `Notification` locale, déclenchée au polling quand de nouvelles notifications sont détectées dans le store.
+  - **Prod** : Web Push via `web-push` (npm, dans `api/package.json`). `createNotification()` dans `api/_lib/notifications.ts` envoie automatiquement une push à chaque destinataire ayant une subscription enregistrée en Redis. Les subscriptions expirées (410 Gone) sont nettoyées automatiquement. Service worker (`public/sw.js`) gère l'affichage et le clic (navigation vers le lien).
+  - **Variables d'environnement** : `VITE_VAPID_PUBLIC_KEY` (client + serveur), `VAPID_PRIVATE_KEY` (serveur uniquement). Génération via `npx web-push generate-vapid-keys`.
+- **Cas d'usage** :
+  - `ticket_comment` — Nouveau commentaire sur un ticket → notifie le créateur + tous les commentateurs précédents (hors auteur du commentaire)
+  - `review_comments_sent` — Relecteur envoie ses commentaires → notifie l'auteur du livre
+  - `review_completed` — Relecteur termine sa relecture → notifie l'auteur du livre
+- **Messages templatés** : les messages sont stockés en base sous forme de templates à moustaches (ex: `{{actorName}} a commenté le ticket « {{ticketTitle}} »`). Les variables disponibles sont `actorName` (champ de la notification) + toutes les clés de `payload`. La résolution se fait via `resolveTemplate()` (`src/lib/utils.ts`) côté front (affichage + push locale) et côté serveur (Web Push body). Ce format est compatible i18n — il suffira de remplacer `resolveTemplate` par une fonction de traduction.
+- **Architecture extensible** : pour ajouter un nouveau type de notification, (1) ajouter le type à `NotificationType`, (2) appeler `createNotification` au bon endroit côté dev-db et serverless avec un message templaté `{{var}}`, (3) optionnellement ajouter une icône dans `NotificationModal.TYPE_ICONS`.
+- **Fichiers** : `src/store/useNotificationStore.ts`, `src/components/notifications/NotificationBell.tsx`, `src/components/notifications/NotificationModal.tsx`, `src/components/notifications/PushOptInModal.tsx`, `src/hooks/useNotificationPolling.ts`, `src/lib/push.ts`, `public/sw.js`, `api/notifications/[[...path]].ts`, `api/_lib/notifications.ts`
 
 ### Reviews (Relecture)
 
@@ -340,11 +375,11 @@ Système de relecture permettant à un auteur de partager des extraits de son li
   - Réponses (replies) : threaded via `parentId`
   - L'auteur peut répondre et résoudre les commentaires
   - **Les commentaires de l'auteur** sont aussi en brouillon par défaut → envoi groupé via un bouton « Envoyer (N) » → email au relecteur (`sendAuthorRepliedEmail`)
-- **Emails de notification** :
+- **Emails et notifications** :
   - Invitation de relecture (à la création de la session) → `sendReviewInviteEmail` (avec liste des fonctionnalités)
-  - Relecteur envoie ses commentaires → `sendCommentsNotificationEmail` (à l'auteur, lien vers `reviews/{id}`)
+  - Relecteur envoie ses commentaires → `sendCommentsNotificationEmail` (email) + notification in-app `review_comments_sent` (à l'auteur, lien vers `reviews/{id}`)
   - Auteur envoie ses réponses → `sendAuthorRepliedEmail` (au relecteur, lien vers `review/{token}`)
-  - Relecteur termine sa relecture → `sendReviewCompletedEmail` (à l'auteur, lien vers `reviews/{id}`)
+  - Relecteur termine sa relecture → `sendReviewCompletedEmail` (email) + notification in-app `review_completed` (à l'auteur, lien vers `reviews/{id}`)
 - **Highlights** : le texte commenté est surligné dans le contenu (via `injectHighlights` dans `src/lib/review-highlights.ts`)
 - **Clic commentaire → scroll** : cliquer sur un commentaire scrolle vers le passage surligné dans le contenu
 - **Panneau collapsible** : le plan (nav) et les commentaires sont collapsibles sur desktop, drawers sur mobile
@@ -411,6 +446,7 @@ Snapshots automatiques toutes les **15 minutes** (dedup par timestamp), max **20
 - `fabula-mea-spotify` — Tokens OAuth Spotify (accessToken, refreshToken, expiresAt)
 - `fabula-mea-spotify-playlist` — Playlist Spotify sélectionnée (id, name, uri, trackCount)
 - `fabula-mea-spotify-verifier` — Code verifier PKCE temporaire (supprimé après échange)
+- `emlb-push-optin-dismissed` — Date de dernière fermeture de la modale push opt-in (réapparaît après 7 jours)
 
 ### Synchronisation cloud
 
@@ -481,7 +517,7 @@ npm run test:watch  # Tests en mode watch
 1. **Toujours modifier les deux côtés** : `dev-db.ts` ET le endpoint `api/` correspondant pour toute fonctionnalité data.
 2. **La façade `api.ts`** doit avoir le ternaire `IS_DEV` pour chaque nouvelle méthode.
 3. **Les clés Redis** en prod n'ont PAS le préfixe `dev:` — voir `api/_lib/redis.ts` vs `src/lib/dev-db.ts`.
-4. **Les serverless functions** sont en **CommonJS** (`module.exports`, pas `export default`). Le `tsconfig.json` dans `api/` gère ça. Les endpoints sont regroupés en **catch-all routes** (`[[...path]].ts`) pour respecter la limite de 12 fonctions du plan Hobby Vercel (10 fonctions actuellement). Voir `api/CLAUDE.md` pour le détail du routing interne.
+4. **Les serverless functions** sont en **CommonJS** (`module.exports`, pas `export default`). Le `tsconfig.json` dans `api/` gère ça. Les endpoints sont regroupés en **catch-all routes** (`[[...path]].ts`) pour respecter la limite de 12 fonctions du plan Hobby Vercel (11 fonctions actuellement). Voir `api/CLAUDE.md` pour le détail du routing interne.
 5. **CORS** : chaque endpoint prod doit appeler `handleCors(req, res)` en premier.
 6. **Auth** : chaque endpoint protégé doit appeler `requireAuth(req, res)` qui retourne `{ userId }` ou `null`.
 7. **Le `useBookStore`** est le store le plus complexe (~1450 lignes). Il gère tout le contenu d'un livre et auto-save en local + cloud. Il interagit avec `useSagaStore` pour charger/décharger les données de saga quand un livre appartient à une saga.

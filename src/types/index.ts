@@ -377,6 +377,21 @@ export interface SagaProject {
   updatedAt: string;
 }
 
+// ─── Notifications ───
+export type NotificationType = 'ticket_comment' | 'review_comments_sent' | 'review_completed';
+
+export interface AppNotification {
+  id: EntityId;
+  type: NotificationType;
+  actorId: string;
+  actorName: string;
+  message: string;
+  link: string;
+  payload: Record<string, string>; // e.g. { ticketId, ticketTitle }
+  recipientIds: string[];
+  createdAt: string;
+}
+
 // ─── Tickets ───
 export type TicketType = 'bug' | 'question' | 'improvement';
 export type TicketVisibility = 'public' | 'private';
@@ -395,6 +410,7 @@ export type TicketModule =
   | 'reviews'
   | 'settings'
   | 'export'
+  | 'support'
   | 'other';
 
 export interface Ticket {

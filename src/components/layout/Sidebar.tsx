@@ -9,6 +9,9 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useTicketFormStore } from '@/store/useTicketFormStore';
 import { useReleaseStore } from '@/store/useReleaseStore';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { useNotificationPolling } from '@/hooks/useNotificationPolling';
 
 
 interface NavGroup {
@@ -74,6 +77,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarProps) {
+  useNotificationPolling();
   const navigate = useNavigate();
   const location = useLocation();
   const bookTitle = useBookStore((s) => s.title);
@@ -88,6 +92,7 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
   const releases = useReleaseStore((s) => s.releases);
   const loadReleases = useReleaseStore((s) => s.loadReleases);
   const currentRelease = releases.find((r) => r.status === 'current');
+  const totalUnreadTicketNotifs = useNotificationStore((s) => s.totalUnreadTicketNotifications());
 
   useEffect(() => {
     if (releases.length === 0) loadReleases();
@@ -194,14 +199,17 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
             <h1 className="text-2xl text-ink-500 leading-tight" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</h1>
           </div>
         </button>
-        {/* Close button — mobile only */}
-        <button
-          onClick={onMobileClose}
-          className="md:hidden p-1.5 rounded-lg text-ink-300 hover:bg-parchment-200"
-          aria-label="Fermer le menu"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          {/* Close button — mobile only */}
+          <button
+            onClick={onMobileClose}
+            className="md:hidden p-1.5 rounded-lg text-ink-300 hover:bg-parchment-200"
+            aria-label="Fermer le menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Book selector */}
@@ -475,6 +483,11 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
                       {label === 'Versions' && currentRelease && (
                         <span className="text-[10px] font-semibold text-ink-200 bg-parchment-200 px-1.5 py-0.5 rounded-full">
                           v{currentRelease.version}
+                        </span>
+                      )}
+                      {label === 'Tickets' && totalUnreadTicketNotifs > 0 && (
+                        <span className="text-[10px] font-bold bg-bordeaux-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight">
+                          {totalUnreadTicketNotifs}
                         </span>
                       )}
                     </NavLink>

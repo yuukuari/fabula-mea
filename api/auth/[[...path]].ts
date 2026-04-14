@@ -285,6 +285,8 @@ async function handleDeleteAccount(req: VercelRequest, res: VercelResponse) {
     redis.del(`emlb:email:${user.email}`),
     redis.del(`emlb:u:${user.id}:library`),
     redis.del(`emlb:u:${user.id}:reviews`),
+    redis.del(`emlb:u:${user.id}:notification-reads`),
+    redis.del(`emlb:u:${user.id}:push-subscription`),
     ...bookDeletes,
     ...reviewDeletes,
     ...sagaDeletes,

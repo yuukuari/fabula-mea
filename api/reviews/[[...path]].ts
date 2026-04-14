@@ -4,6 +4,7 @@ import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { sendReviewInviteEmail, sendAuthorRepliedEmail, sendCommentsNotificationEmail, sendReviewCompletedEmail } from '../_lib/email';
 import { getPathSegments, generateId, getUser } from '../_lib/utils';
+import { createNotification } from '../_lib/notifications';
 
 interface ReviewComment {
   id: string;
@@ -335,6 +336,20 @@ async function handleReaderComplete(req: VercelRequest, res: VercelResponse, tok
     });
   }
 
+  // In-app notification to author
+  try {
+    const readerName = session.readerName || 'Un relecteur';
+    await createNotification({
+      type: 'review_completed',
+      actorId: 'reader',
+      actorName: readerName,
+      message: '{{actorName}} a terminé la relecture de « {{bookTitle}} »',
+      link: `/reviews/${session.id}`,
+      payload: { reviewId: session.id, bookTitle: session.bookTitle },
+      recipientIds: [session.userId],
+    });
+  } catch { /* never fail the request */ }
+
   return res.json({ session });
 }
 
@@ -369,6 +384,22 @@ async function handleReaderSend(req: VercelRequest, res: VercelResponse, token: 
       commentCount: sent,
       reviewUrl: `${baseUrl}/reviews/${session.id}`,
     });
+  }
+
+  // In-app notification to author
+  if (sent > 0) {
+    try {
+      const readerName = session.readerName || 'Un relecteur';
+      await createNotification({
+        type: 'review_comments_sent',
+        actorId: 'reader',
+        actorName: readerName,
+        message: '{{actorName}} a envoyé {{commentCount}} commentaire{{pluralS}} sur « {{bookTitle}} »',
+        link: `/reviews/${session.id}`,
+        payload: { reviewId: session.id, bookTitle: session.bookTitle, commentCount: `${sent}`, pluralS: sent > 1 ? 's' : '' },
+        recipientIds: [session.userId],
+      });
+    } catch { /* never fail the request */ }
   }
 
   return res.json({ sent });

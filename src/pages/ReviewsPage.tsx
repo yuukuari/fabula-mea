@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import type { ReviewSession } from '@/types';
 import { NewReviewDialog } from '@/components/reviews/NewReviewDialog';
+import { PushOptInModal, shouldPromptPushOptIn } from '@/components/notifications/PushOptInModal';
 
 const STATUS_CONFIG: Record<ReviewSession['status'], { label: string; icon: typeof Clock; color: string; bg: string }> = {
   pending: { label: 'En attente', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50' },
@@ -32,6 +33,7 @@ export function ReviewsPage() {
   const [activeStatuses, setActiveStatuses] = useState<Set<ReviewSession['status']>>(
     new Set(['pending', 'in_progress', 'completed'])
   );
+  const [showPushOptIn, setShowPushOptIn] = useState(false);
 
   const toggleStatus = (status: ReviewSession['status']) => {
     setActiveStatuses((prev) => {
@@ -275,10 +277,12 @@ export function ReviewsPage() {
           onCreated={(session) => {
             setShowNewDialog(false);
             handleCopyLink(session.token);
+            if (shouldPromptPushOptIn()) setTimeout(() => setShowPushOptIn(true), 800);
           }}
-          onMultiCreated={(sessions) => {
+          onMultiCreated={() => {
             setShowNewDialog(false);
             loadSessions();
+            if (shouldPromptPushOptIn()) setTimeout(() => setShowPushOptIn(true), 800);
           }}
         />
       )}
@@ -290,6 +294,8 @@ export function ReviewsPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <PushOptInModal open={showPushOptIn} onClose={() => setShowPushOptIn(false)} />
 
       <ConfirmDialog
         open={!!closeTarget}

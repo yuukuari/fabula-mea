@@ -1,1 +1,1 @@
-{"type":"commonjs","dependencies":{"@vercel/blob":"^2.3.2","resend":"^6.9.4"}}
+{"type":"commonjs","dependencies":{"@vercel/blob":"^2.3.2","resend":"^6.9.4","web-push":"^3.6.7"}}

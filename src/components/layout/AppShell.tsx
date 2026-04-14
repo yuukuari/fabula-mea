@@ -10,6 +10,7 @@ import { SceneEditor } from '@/components/editor/SceneEditor';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 export function AppShell() {
   const { open, setOpen } = useSearchShortcut();
@@ -55,9 +56,10 @@ export function AppShell() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <span className="font-display font-semibold text-ink-500 text-sm truncate">
+            <span className="font-display font-semibold text-ink-500 text-sm truncate flex-1">
               {useBookStore.getState().title || 'Mon Livre'}
             </span>
+            <NotificationBell />
           </header>
 
           <main className="flex-1 overflow-auto">

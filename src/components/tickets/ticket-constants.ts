@@ -27,6 +27,7 @@ export const MODULE_LABELS: Record<string, string> = {
   reviews: 'Relectures',
   settings: 'Paramètres',
   export: 'Export',
+  support: 'Aide & Support',
   other: 'Autre',
 };
 

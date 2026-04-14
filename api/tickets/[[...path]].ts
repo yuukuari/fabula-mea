@@ -4,13 +4,14 @@ import { requireAuth } from '../_lib/auth';
 import { cors } from '../_lib/cors';
 import { sendTicketCreatedEmail } from '../_lib/email';
 import { getPathSegments, generateId, getUser, isAdmin, getRedisJson } from '../_lib/utils';
+import { createNotification } from '../_lib/notifications';
 
 const VALID_TICKET_TYPES = ['bug', 'question', 'improvement'] as const;
 const VALID_TICKET_STATUSES = ['open', 'closed_done', 'closed_duplicate'] as const;
 const VALID_TICKET_VISIBILITIES = ['public', 'private'] as const;
 const VALID_TICKET_MODULES = [
   'auth', 'characters', 'places', 'chapters', 'timeline', 'writing',
-  'progress', 'world', 'maps', 'notes', 'reviews', 'settings', 'export', 'other',
+  'progress', 'world', 'maps', 'notes', 'reviews', 'settings', 'export', 'support', 'other',
 ] as const;
 
 interface Ticket {
@@ -272,6 +273,31 @@ async function handleComments(req: VercelRequest, res: VercelResponse, auth: { u
     const comments: TicketComment[] = commentsJson ? JSON.parse(commentsJson) : [];
     comments.push(comment);
     await redis.set(`emlb:ticket:${ticketId}:comments`, JSON.stringify(comments));
+
+    // Create notification for ticket participants
+    try {
+      const ticketsJson = await redis.get('emlb:tickets');
+      const allTickets: Ticket[] = ticketsJson ? JSON.parse(ticketsJson) : [];
+      const ticket = allTickets.find((t) => t.id === ticketId);
+      if (ticket) {
+        const commenterIds = new Set(comments.map((c) => c.userId));
+        commenterIds.add(ticket.userId); // ticket creator
+        commenterIds.delete(auth.userId); // exclude commenter
+        const recipientIds = Array.from(commenterIds);
+
+        await createNotification({
+          type: 'ticket_comment',
+          actorId: auth.userId,
+          actorName: user?.name ?? 'Utilisateur',
+          message: '{{actorName}} a commenté le ticket « {{ticketTitle}} »',
+          link: `/tickets?id=${ticketId}`,
+          payload: { ticketId, ticketTitle: ticket.title },
+          recipientIds,
+        });
+      }
+    } catch {
+      // Never fail the comment creation because of notification errors
+    }
 
     return res.json({ comment });
   }

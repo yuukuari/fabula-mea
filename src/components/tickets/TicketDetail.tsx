@@ -20,6 +20,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useReleaseStore } from '@/store/useReleaseStore';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { useNavigate } from 'react-router-dom';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { TYPE_CONFIG, STATUS_CONFIG, MODULE_LABELS, QUICK_REACTIONS } from './ticket-constants';
 import type { TicketType, TicketStatus, TicketModule, TicketComment, TicketStatusChange } from '@/types';
 
@@ -100,10 +101,13 @@ export function TicketDetail({ ticketId, onBack }: Props) {
   }, [commentEditor]);
 
   const isAdmin = user?.isAdmin ?? false;
+  const markTicketRead = useNotificationStore((s) => s.markTicketRead);
 
   useEffect(() => {
     loadTicket(ticketId);
     loadReleases();
+    // Auto-mark ticket notifications as read
+    markTicketRead(ticketId);
   }, [ticketId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

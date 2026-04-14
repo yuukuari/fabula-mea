@@ -10,6 +10,14 @@ export function now(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Resolve a mustache-style template: replaces {{key}} with values from the vars object.
+ * Used for notification messages — keeps templates translatable.
+ */
+export function resolveTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+}
+
 export const CHAPTER_COLORS = [
   '#8b2252', '#c4a35a', '#2d6a4f', '#1d3557', '#e76f51',
   '#6a4c93', '#1982c4', '#8ac926', '#ff595e', '#ffca3a',

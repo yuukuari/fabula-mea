@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu, Feather } from 'lucide-react';
 import { HomeSidebar } from './HomeSidebar';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 export function HomeShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -24,7 +25,8 @@ export function HomeShell() {
             <div className="w-8 h-8 bg-bordeaux-500 rounded-lg flex items-center justify-center">
               <Feather className="w-4 h-4 text-white" />
             </div>
-            <span className="text-2xl text-ink-500" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</span>
+            <span className="text-2xl text-ink-500 flex-1" style={{ fontFamily: "'Ephesis', cursive" }}>Fabula Mea</span>
+            <NotificationBell />
           </header>
 
           <main className="flex-1 overflow-auto">

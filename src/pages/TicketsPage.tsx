@@ -6,7 +6,9 @@ import {
 import { cn } from '@/lib/utils';
 import { useTicketStore } from '@/store/useTicketStore';
 import { useReleaseStore } from '@/store/useReleaseStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { TicketDetail } from '@/components/tickets/TicketDetail';
+import { PushOptInModal, shouldPromptPushOptIn } from '@/components/notifications/PushOptInModal';
 import { TYPE_CONFIG, STATUS_CONFIG, MODULE_LABELS } from '@/components/tickets/ticket-constants';
 import type { Ticket, TicketType, TicketModule, Release } from '@/types';
 
@@ -20,20 +22,32 @@ export function TicketsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('open');
   const [moduleFilter, setModuleFilter] = useState<'all' | TicketModule>('all');
   const [releaseFilter, setReleaseFilter] = useState<string>('all');
+  const [showPushOptIn, setShowPushOptIn] = useState(false);
 
   useEffect(() => {
     loadTickets();
     loadReleases();
+    // Prompt push opt-in after a short delay
+    const timer = setTimeout(() => {
+      if (shouldPromptPushOptIn()) setShowPushOptIn(true);
+    }, 1500);
+    return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Read releaseId from URL params on mount
+  // Read releaseId or id (deep link from notification) from URL params on mount
   useEffect(() => {
     const releaseId = searchParams.get('releaseId');
     if (releaseId) {
       setReleaseFilter(releaseId);
       setStatusFilter('all');
-      // Clean up URL
       searchParams.delete('releaseId');
+      setSearchParams(searchParams, { replace: true });
+    }
+    const ticketId = searchParams.get('id');
+    if (ticketId) {
+      setSelectedId(ticketId);
+      setStatusFilter('all');
+      searchParams.delete('id');
       setSearchParams(searchParams, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -56,7 +70,12 @@ export function TicketsPage() {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   if (selectedId) {
-    return <TicketDetail ticketId={selectedId} onBack={() => setSelectedId(null)} />;
+    return (
+      <>
+        <TicketDetail ticketId={selectedId} onBack={() => setSelectedId(null)} />
+        <PushOptInModal open={showPushOptIn} onClose={() => setShowPushOptIn(false)} />
+      </>
+    );
   }
 
   return (
@@ -154,6 +173,7 @@ export function TicketsPage() {
           ))}
         </div>
       )}
+      <PushOptInModal open={showPushOptIn} onClose={() => setShowPushOptIn(false)} />
     </div>
   );
 }
@@ -163,6 +183,7 @@ function TicketRow({ ticket, releases, onClick }: { ticket: Ticket; releases: Re
   const statusConf = STATUS_CONFIG[ticket.status];
   const TypeIcon = typeConf.icon;
   const release = ticket.releaseId ? releases.find((r) => r.id === ticket.releaseId) : null;
+  const unreadCount = useNotificationStore((s) => s.unreadCountForTicket(ticket.id));
 
   return (
     <button
@@ -213,6 +234,11 @@ function TicketRow({ ticket, releases, onClick }: { ticket: Ticket; releases: Re
           )}
         </div>
       </div>
+      {unreadCount > 0 && (
+        <span className="text-[10px] font-bold bg-bordeaux-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight flex-shrink-0">
+          {unreadCount}
+        </span>
+      )}
       <div className={cn('badge', statusConf.color)}>
         {statusConf.label}
       </div>

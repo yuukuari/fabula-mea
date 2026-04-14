@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useTicketFormStore } from '@/store/useTicketFormStore';
 import { useReleaseStore } from '@/store/useReleaseStore';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { useNotificationPolling } from '@/hooks/useNotificationPolling';
 
 interface HomeSidebarProps {
   mobileOpen: boolean;
@@ -12,6 +15,7 @@ interface HomeSidebarProps {
 }
 
 export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
+  useNotificationPolling();
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
@@ -20,6 +24,7 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
   const releases = useReleaseStore((s) => s.releases);
   const loadReleases = useReleaseStore((s) => s.loadReleases);
   const currentRelease = releases.find((r) => r.status === 'current');
+  const totalUnreadTicketNotifs = useNotificationStore((s) => s.totalUnreadTicketNotifications());
 
   useEffect(() => {
     if (releases.length === 0) loadReleases();
@@ -66,13 +71,16 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
             Fabula Mea
           </h1>
         </button>
-        <button
-          onClick={onMobileClose}
-          className="md:hidden p-1.5 rounded-lg text-ink-300 hover:bg-parchment-200"
-          aria-label="Fermer le menu"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            onClick={onMobileClose}
+            className="md:hidden p-1.5 rounded-lg text-ink-300 hover:bg-parchment-200"
+            aria-label="Fermer le menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -227,7 +235,12 @@ export function HomeSidebar({ mobileOpen, onMobileClose }: HomeSidebarProps) {
                 aria-current={location.pathname === '/tickets' ? 'page' : undefined}
               >
                 <List className="w-4 h-4" />
-                <span>Tickets</span>
+                <span className="flex-1">Tickets</span>
+                {totalUnreadTicketNotifs > 0 && (
+                  <span className="text-[10px] font-bold bg-bordeaux-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-tight">
+                    {totalUnreadTicketNotifs}
+                  </span>
+                )}
               </NavLink>
               <button
                 onClick={() => { openTicketForm(); onMobileClose(); }}

@@ -18,8 +18,10 @@ Ce dossier contient les **serverless functions Vercel** qui forment le backend d
 | `RESEND_API_KEY` | Clé API Resend pour l'envoi d'emails de notification |
 | `BLOB_READ_WRITE_TOKEN` | Token Vercel Blob pour l'upload d'images (CDN) |
 | `TURNSTILE_SECRET_KEY` | (optionnel) Clé secrète Cloudflare Turnstile pour CAPTCHA à l'inscription |
+| `VITE_VAPID_PUBLIC_KEY` | (optionnel) Clé publique VAPID pour Web Push notifications |
+| `VAPID_PRIVATE_KEY` | (optionnel) Clé privée VAPID pour Web Push notifications |
 
-> ⚠️ Ces variables n'ont **PAS** le préfixe `VITE_` — elles sont côté serveur uniquement. Le fichier `src/lib/redis.ts` (côté client) utilise `VITE_UPSTASH_*` — c'est un résidu historique pour la sync directe.
+> ⚠️ Ces variables n'ont **PAS** le préfixe `VITE_` — elles sont côté serveur uniquement (sauf `VITE_VAPID_PUBLIC_KEY` qui est partagée avec le client). Le fichier `src/lib/redis.ts` (côté client) utilise `VITE_UPSTASH_*` — c'est un résidu historique pour la sync directe.
 
 ---
 
@@ -158,11 +160,22 @@ sendPasswordResetEmail({to, resetUrl})                          // Lien de réin
 | GET | `/api/tickets/{id}` | Oui | Détail d'un ticket + commentaires + statusChanges |
 | PATCH | `/api/tickets/{id}` | Admin | Modifie le statut ou la release d'un ticket |
 | DELETE | `/api/tickets/{id}` | Admin | Supprime un ticket |
-| POST | `/api/tickets/{id}/comments` | Oui | Ajoute un commentaire |
+| POST | `/api/tickets/{id}/comments` | Oui | Ajoute un commentaire + crée notification |
 | DELETE | `/api/tickets/{id}/comments/{commentId}` | Oui* | Supprime un commentaire |
 | POST | `/api/tickets/{id}/comments/{commentId}/reaction` | Oui | Toggle une réaction emoji |
 
 > *La suppression de commentaire vérifie que l'utilisateur est l'auteur ou admin.
+
+### Notifications
+
+| Méthode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| GET | `/api/notifications` | Oui | Liste les notifications de l'utilisateur + IDs lus |
+| POST | `/api/notifications?action=read` | Oui | Marque une notification comme lue |
+| POST | `/api/notifications?action=readAll` | Oui | Marque toutes les notifications comme lues |
+| POST | `/api/notifications?action=readByPayload` | Oui | Marque comme lues les notifications avec un payload donné |
+| POST | `/api/notifications?action=push` | Oui | Enregistre une subscription push |
+| DELETE | `/api/notifications?action=push` | Oui | Supprime la subscription push |
 
 ### Releases
 
@@ -225,7 +238,7 @@ Les routes relecteur sont dans le **même fichier** que les routes auteur (`api/
 
 Pour respecter la **limite de 12 serverless functions** du plan Hobby Vercel, les endpoints sont regroupés par domaine via des **catch-all routes** (`[[...path]].ts`). Chaque fichier catch-all route en interne selon les segments d'URL via parsing de `req.url`.
 
-### Fichiers actuels (10 fonctions)
+### Fichiers actuels (11 fonctions)
 
 ```
 api/library.ts                → /api/library
@@ -235,9 +248,10 @@ api/admin/members.ts          → /api/admin/members
 api/book/[bookId].ts          → /api/book/{bookId}
 api/saga/[sagaId].ts          → /api/saga/{sagaId}
 api/auth/[[...path]].ts       → /api/auth/login, /api/auth/signup, /api/auth/me, /api/auth/profile, /api/auth/change-password, /api/auth/account, /api/auth/forgot-password, /api/auth/reset-password
+api/notifications/[[...path]].ts → /api/notifications (list, markRead, markAllRead, markByPayload, push)
 api/releases/[[...path]].ts   → /api/releases, /api/releases/{id}
 api/reviews/[[...path]].ts    → /api/reviews (auteur) + /api/reviews/reader/{token} (relecteur)
-api/tickets/[[...path]].ts    → /api/tickets, /api/tickets/{id}, /api/tickets/{id}/comments, etc.
+api/tickets/[[...path]].ts    → /api/tickets, /api/tickets/{id}, /api/tickets/{id}/comments, etc. (+ notification on comment)
 ```
 
 > **Note** : les routes relecteur (`/api/reviews/reader/...`) et auteur (`/api/reviews/...`) sont dans le même fichier. Les routes `reader/` ne passent pas par `requireAuth` — le routeur vérifie `pathSegments[0] === 'reader'` avant d'appeler `requireAuth`.
