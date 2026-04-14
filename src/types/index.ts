@@ -613,6 +613,7 @@ export interface BookProject {
   timelineEvents?: TimelineEvent[];
   noteIdeas?: NoteIdea[];
   selfComments?: SelfComment[];
+  customDictionary?: string[];
   graphNodePositions?: Record<string, { x: number; y: number }>;
   createdAt: string;
   updatedAt: string;

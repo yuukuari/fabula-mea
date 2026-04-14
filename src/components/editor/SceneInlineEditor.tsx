@@ -11,6 +11,7 @@ import { FontFamily } from '@tiptap/extension-font-family';
 import { SpellCheckExtension } from '@/lib/spellcheck-extension';
 import { FontSize } from '@/lib/font-size-extension';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { FONT_STACKS, AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, DEFAULT_LAYOUT } from '@/lib/fonts';
 import { countFromHtml, countWordsFromHtml } from '@/lib/utils';
 import type { Scene, BookFont, BookFontSize } from '@/types';
@@ -76,9 +77,33 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
   const updateSceneContent = useBookStore((s) => s.updateSceneContent);
   const layout = useBookStore((s) => s.layout);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
+  const customDictionary = useBookStore((s) => s.customDictionary ?? []);
+  const addToCustomDictionary = useBookStore((s) => s.addToCustomDictionary);
+  const { characters, places, worldNotes } = useEncyclopediaStore();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Force re-render on selection change so font/size selectors reflect the selection
   const [, forceUpdate] = useState(0);
+
+  // Build a stable ref for custom words (custom dictionary + encyclopedia names)
+  const customWordsRef = useRef<string[]>([]);
+  const encyclopediaNames = useMemo(() => {
+    const names: string[] = [];
+    for (const c of characters) {
+      if (c.name) names.push(c.name);
+      if (c.surname) names.push(c.surname);
+      if (c.nickname) names.push(c.nickname);
+    }
+    for (const p of places) {
+      if (p.name) names.push(p.name);
+    }
+    for (const w of worldNotes) {
+      if (w.title) names.push(w.title);
+    }
+    return names;
+  }, [characters, places, worldNotes]);
+
+  // Keep ref up to date (avoids recreating the editor on every change)
+  customWordsRef.current = [...customDictionary, ...encyclopediaNames];
 
   const fontFamily = layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily;
   const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
@@ -136,7 +161,13 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
       TextStyle,
       FontFamily,
       FontSize,
-      SpellCheckExtension.configure({ language: 'fr', debounceMs: 800 }),
+      SpellCheckExtension.configure({
+        language: 'fr',
+        spellingDebounceMs: 300,
+        grammarDebounceMs: 1500,
+        getCustomWords: () => customWordsRef.current,
+        onAddToDictionary: addToCustomDictionary,
+      }),
     ],
     content: scene.content ?? '',
     onUpdate: ({ editor: e }) => handleUpdate(e.getHTML()),

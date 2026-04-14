@@ -193,7 +193,9 @@
 }
 
 /* ── Spellchecker styles ── */
-.spellchecker-word-highlight {
+
+/* Spelling error: red wavy underline */
+.spellcheck-spelling {
   background-color: transparent;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='3'%3E%3Cpath d='M0 3 Q1 0 2 3 Q3 6 4 3' fill='none' stroke='%23e53e3e' stroke-width='1'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
@@ -203,7 +205,20 @@
   cursor: pointer;
 }
 
-.spellchecker-suggestion-box {
+/* Grammar error: blue/purple wavy underline */
+.spellcheck-grammar {
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='3'%3E%3Cpath d='M0 3 Q1 0 2 3 Q3 6 4 3' fill='none' stroke='%236366f1' stroke-width='1'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: bottom;
+  background-size: 4px 3px;
+  padding-bottom: 2px;
+  cursor: pointer;
+}
+
+/* ── Spellcheck context menu ── */
+/* ── Context menu container ── */
+.spellcheck-context-menu {
   position: fixed;
   z-index: 9999;
   background: #fffdf7;
@@ -211,13 +226,118 @@
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(44, 36, 23, 0.15);
   padding: 4px 0;
-  min-width: 160px;
-  max-width: 280px;
+  min-width: 230px;
+  max-width: 300px;
+  max-height: 70vh;
+  overflow-y: auto;
   font-family: 'Inter', sans-serif;
-  font-size: 0.875rem;
+  font-size: 0.84rem;
 }
 
-.spellchecker-suggestion-box .suggestion-item {
+/* ── Generic menu row (button or <a>) ── */
+.spellcheck-context-menu .ctx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: #4a3f35;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.84rem;
+  transition: background-color 0.1s;
+}
+.spellcheck-context-menu .ctx-row:hover {
+  background-color: #f0e6d2;
+  color: #7a1b3a;
+}
+.spellcheck-context-menu .ctx-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.spellcheck-context-menu .ctx-row-right {
+  display: flex;
+  align-items: center;
+  opacity: 0.4;
+}
+.spellcheck-context-menu .ctx-row:hover .ctx-row-right {
+  opacity: 0.7;
+}
+
+/* Back row in submenus */
+.spellcheck-context-menu .ctx-back-row {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #2c2417;
+}
+.spellcheck-context-menu .ctx-back-row:hover {
+  color: #2c2417;
+  background-color: #f5efe3;
+}
+
+/* Accent row (e.g. "Ajouter au dictionnaire") */
+.spellcheck-context-menu .ctx-row-accent {
+  color: #7a6b2e;
+  font-weight: 500;
+}
+.spellcheck-context-menu .ctx-row-accent:hover {
+  background-color: #fef9ec;
+  color: #5a4e1e;
+}
+
+/* Muted row (e.g. "Voir tous les synonymes") */
+.spellcheck-context-menu .ctx-row-muted {
+  color: #8b7e6f;
+  font-size: 0.8rem;
+}
+
+/* Error rows (spelling/grammar indicator) */
+.spellcheck-context-menu .ctx-row-error-spelling {
+  color: #991b1b;
+}
+.spellcheck-context-menu .ctx-row-error-grammar {
+  color: #3730a3;
+}
+
+/* ── Separator ── */
+.spellcheck-context-menu .ctx-separator {
+  height: 1px;
+  background: #e8dcc8;
+  margin: 3px 0;
+}
+
+/* ── Loading / empty states ── */
+.spellcheck-context-menu .ctx-loading {
+  padding: 8px 12px;
+  color: #b8a99a;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+.spellcheck-context-menu .ctx-empty {
+  padding: 8px 12px;
+  color: #b8a99a;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+.spellcheck-context-menu .ctx-hint {
+  padding: 10px 14px;
+  color: #8b7355;
+  font-size: 0.8rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ── Spelling/grammar: badge, message, suggestion items ── */
+.spellcheck-context-menu .suggestion-message {
+  padding: 4px 12px 6px;
+  color: #6b5e50;
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+.spellcheck-context-menu .suggestion-item {
   display: block;
   width: 100%;
   padding: 6px 12px;
@@ -227,17 +347,55 @@
   transition: background-color 0.1s;
   border: none;
   background: transparent;
+  font-size: 0.84rem;
 }
-
-.spellchecker-suggestion-box .suggestion-item:hover {
+.spellcheck-context-menu .suggestion-item:hover {
   background-color: #f0e6d2;
   color: #7a1b3a;
 }
 
-.spellchecker-suggestion-box .no-suggestions {
-  padding: 6px 12px;
-  color: #9a8d7e;
-  font-style: italic;
+/* ── Synonym/antonym result rows ── */
+.spellcheck-context-menu .ctx-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  transition: background-color 0.1s;
+}
+.spellcheck-context-menu .ctx-result-row:hover {
+  background-color: #f5efe3;
+}
+.spellcheck-context-menu .ctx-result-label {
+  color: #4a3f35;
+  font-size: 0.84rem;
+}
+.spellcheck-context-menu .ctx-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.spellcheck-context-menu .ctx-result-row:hover .ctx-result-actions {
+  opacity: 1;
+}
+.spellcheck-context-menu .ctx-result-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #8b7e6f;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.1s, color 0.1s;
+}
+.spellcheck-context-menu .ctx-result-btn:hover {
+  background-color: #e8dcc8;
+  color: #7a1b3a;
 }
 
 /* Review content typography (mirrors TipTap editor styles) */

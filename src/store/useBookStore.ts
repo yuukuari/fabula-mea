@@ -160,6 +160,10 @@ interface BookStore extends BookProject {
   convertEventToChapter: (eventId: string) => string;
   createSceneForEvent: (eventId: string, chapterId: string) => string;
 
+  // Custom dictionary (spellcheck)
+  addToCustomDictionary: (word: string) => void;
+  removeFromCustomDictionary: (word: string) => void;
+
   // Graph node positions
   saveGraphNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
 }
@@ -189,6 +193,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     timelineEvents: [],
     noteIdeas: [],
     selfComments: [],
+    customDictionary: [],
     graphNodePositions: {},
     glossaryEnabled: false,
     tableOfContents: undefined,
@@ -222,6 +227,7 @@ function extractProjectData(state: BookStore): BookProject {
     timelineEvents: state.timelineEvents,
     noteIdeas: state.noteIdeas,
     selfComments: state.selfComments,
+    customDictionary: state.customDictionary,
     graphNodePositions: state.graphNodePositions,
     glossaryEnabled: state.glossaryEnabled,
     tableOfContents: state.tableOfContents,
@@ -1372,6 +1378,19 @@ export const useBookStore = create<BookStore>()(
 
         return sceneId;
       },
+
+      // ─── Custom dictionary (spellcheck) ───
+      addToCustomDictionary: (word) =>
+        set((s) => {
+          const dict = s.customDictionary ?? [];
+          if (dict.includes(word.toLowerCase())) return {};
+          return { customDictionary: [...dict, word.toLowerCase()], ...touchSave() };
+        }),
+      removeFromCustomDictionary: (word) =>
+        set((s) => ({
+          customDictionary: (s.customDictionary ?? []).filter((w) => w !== word.toLowerCase()),
+          ...touchSave(),
+        })),
 
       // ─── Graph node positions ───
       saveGraphNodePositions: (positions) =>
