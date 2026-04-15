@@ -119,8 +119,9 @@ Teste les fonctions pures de `src/lib/calculations.ts` utilisées pour la progre
 | `getPageEstimate` | 3 | Mots → pages, signes → pages (ratio 6), défaut mots |
 | `getBookType` | 9 | Chaque seuil (micro-nouvelle → très long roman), unité signes, pages incluses |
 | `estimateFromScenes` | 3 | Scènes complètes, fallback contenu, aucun contenu → 0 |
+| `getTodayProgress` | 7 | Guard currentTotal=0 (pas de snapshot), création snapshot, suivi progression, **fix race condition** (0 puis données réelles), réparation snapshot empoisonné, nouveau jour, données corrompues |
 
-**Note** : `getDailyGoal` utilise `vi.useFakeTimers()` + `vi.setSystemTime()` pour fixer la date du jour.
+**Note** : `getDailyGoal` utilise `vi.useFakeTimers()` + `vi.setSystemTime()` pour fixer la date du jour. `getTodayProgress` utilise un mock `localStorage` (Map) car l'environnement de test est `node`.
 
 ---
 

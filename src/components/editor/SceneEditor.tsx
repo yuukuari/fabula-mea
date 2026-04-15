@@ -168,6 +168,13 @@ export function SceneEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, scenes.length, chapters.length]);
 
+  // Hide body scrollbar when editor is open
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   // Escape → minimize
   useEffect(() => {
     if (!isOpen) return;

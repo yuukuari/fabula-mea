@@ -507,3 +507,101 @@ describe('estimateFromScenes', () => {
     expect(result.estimatedTotal).toBe(4500); // 1500 * 3
   });
 });
+
+// ─── getTodayProgress ───
+
+describe('getTodayProgress', () => {
+  let getTodayProgress: typeof import('@/lib/calculations').getTodayProgress;
+
+  // Mock localStorage in node environment
+  const storage = new Map<string, string>();
+  const localStorageMock = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
+    removeItem: (key: string) => { storage.delete(key); },
+    clear: () => { storage.clear(); },
+    get length() { return storage.size; },
+    key: (_i: number) => null as string | null,
+  };
+
+  beforeEach(async () => {
+    storage.clear();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).localStorage = localStorageMock;
+    ({ getTodayProgress } = await import('@/lib/calculations'));
+  });
+
+  afterEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (globalThis as any).localStorage;
+  });
+
+  it('returns 0 and does not create snapshot when currentTotal is 0 (data not loaded)', () => {
+    const result = getTodayProgress('book-1', 0);
+    expect(result.todayCount).toBe(0);
+    expect(result.startOfDayTotal).toBe(0);
+    // Must NOT have written to localStorage
+    expect(storage.has('emlb-daily-snapshot:book-1')).toBe(false);
+  });
+
+  it('creates snapshot on first call with real data', () => {
+    const result = getTodayProgress('book-1', 5000);
+    expect(result.todayCount).toBe(0);
+    expect(result.startOfDayTotal).toBe(5000);
+    // Snapshot must exist
+    const stored = JSON.parse(storage.get('emlb-daily-snapshot:book-1')!);
+    expect(stored.total).toBe(5000);
+  });
+
+  it('tracks progress correctly after snapshot is created', () => {
+    // First call: snapshot with 5000
+    getTodayProgress('book-1', 5000);
+    // User writes 300 more words
+    const result = getTodayProgress('book-1', 5300);
+    expect(result.todayCount).toBe(300);
+    expect(result.startOfDayTotal).toBe(5000);
+  });
+
+  it('BUG FIX: does not poison snapshot when called with 0 then real data', () => {
+    // Simulate race condition: first render with scenes=[] → total=0
+    const r1 = getTodayProgress('book-1', 0);
+    expect(r1.todayCount).toBe(0);
+    // No snapshot should exist
+    expect(storage.has('emlb-daily-snapshot:book-1')).toBe(false);
+
+    // Cloud data arrives → scenes load → total=45000
+    const r2 = getTodayProgress('book-1', 45000);
+    expect(r2.todayCount).toBe(0); // Must be 0, not 45000!
+    expect(r2.startOfDayTotal).toBe(45000);
+  });
+
+  it('repairs a poisoned snapshot (total=0 with real data)', () => {
+    // Simulate a pre-fix poisoned snapshot already in localStorage
+    const todayStr = new Date().toISOString().split('T')[0];
+    storage.set('emlb-daily-snapshot:book-1', JSON.stringify({ date: todayStr, total: 0 }));
+
+    const result = getTodayProgress('book-1', 45000);
+    expect(result.todayCount).toBe(0); // Repaired: should be 0, not 45000
+    expect(result.startOfDayTotal).toBe(45000);
+    // Snapshot must be updated
+    const stored = JSON.parse(storage.get('emlb-daily-snapshot:book-1')!);
+    expect(stored.total).toBe(45000);
+  });
+
+  it('handles new day correctly (resets snapshot)', () => {
+    // Yesterday's snapshot
+    storage.set('emlb-daily-snapshot:book-1', JSON.stringify({ date: '2020-01-01', total: 3000 }));
+
+    const result = getTodayProgress('book-1', 5000);
+    expect(result.todayCount).toBe(0); // New day → reset
+    expect(result.startOfDayTotal).toBe(5000);
+  });
+
+  it('handles corrupt stored data gracefully', () => {
+    storage.set('emlb-daily-snapshot:book-1', 'not-json');
+
+    const result = getTodayProgress('book-1', 5000);
+    expect(result.todayCount).toBe(0);
+    expect(result.startOfDayTotal).toBe(5000);
+  });
+});

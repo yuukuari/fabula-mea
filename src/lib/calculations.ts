@@ -286,6 +286,11 @@ export function estimateFromScenes(scenes: Scene[]): {
 /**
  * Get today's written count by comparing current total to a stored snapshot from the start of today.
  * Uses localStorage to track the "start of day" total.
+ *
+ * Guard: if currentTotal is 0, the book data likely hasn't loaded yet (e.g. waiting
+ * for cloud fetch). In that case we must NOT create or overwrite the snapshot,
+ * otherwise the "start of day" total is poisoned to 0 and all subsequent reads
+ * report the entire book word count as "written today".
  */
 export function getTodayProgress(
   bookId: string,
@@ -294,6 +299,11 @@ export function getTodayProgress(
   const todayKey = `emlb-daily-snapshot:${bookId}`;
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Data not loaded yet — return 0 without touching the snapshot
+  if (currentTotal === 0) {
+    return { todayCount: 0, startOfDayTotal: 0 };
+  }
+
   const stored = localStorage.getItem(todayKey);
   let startOfDayTotal = currentTotal;
 
@@ -301,7 +311,15 @@ export function getTodayProgress(
     try {
       const parsed = JSON.parse(stored);
       if (parsed.date === todayStr) {
-        startOfDayTotal = parsed.total;
+        // Repair a poisoned snapshot: if the stored total is 0 but the book
+        // clearly has content, the snapshot was written before data loaded.
+        // Re-snapshot with the real total so today's count resets to 0.
+        if (parsed.total === 0) {
+          localStorage.setItem(todayKey, JSON.stringify({ date: todayStr, total: currentTotal }));
+          startOfDayTotal = currentTotal;
+        } else {
+          startOfDayTotal = parsed.total;
+        }
       } else {
         // New day — snapshot the current total
         localStorage.setItem(todayKey, JSON.stringify({ date: todayStr, total: currentTotal }));
