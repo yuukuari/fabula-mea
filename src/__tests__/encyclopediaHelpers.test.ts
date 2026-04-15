@@ -167,6 +167,134 @@ describe('deleteRelationship', () => {
   });
 });
 
+// ─── Reciprocal Relationship Workflows ───
+
+describe('reciprocal relationship workflow', () => {
+  it('creates bidirectional relationships on both characters', () => {
+    const { characters: c1, id: aliceId } = createCharacter([], { name: 'Alice' });
+    const { characters: c2, id: bobId } = createCharacter(c1, { name: 'Bob' });
+
+    // Add relationship Alice → Bob
+    const c3 = addRelationship(c2, aliceId, {
+      targetCharacterId: bobId,
+      type: 'lover',
+      description: 'In love',
+    });
+    // Add reverse relationship Bob → Alice (reciprocal)
+    const c4 = addRelationship(c3, bobId, {
+      targetCharacterId: aliceId,
+      type: 'lover',
+      description: 'In love',
+    });
+
+    const alice = c4.find((c) => c.id === aliceId)!;
+    const bob = c4.find((c) => c.id === bobId)!;
+    expect(alice.relationships).toHaveLength(1);
+    expect(bob.relationships).toHaveLength(1);
+    expect(alice.relationships[0].targetCharacterId).toBe(bobId);
+    expect(bob.relationships[0].targetCharacterId).toBe(aliceId);
+  });
+
+  it('deleting both sides cleans up reciprocal relationship completely', () => {
+    const { characters: c1, id: aliceId } = createCharacter([], { name: 'Alice' });
+    const { characters: c2, id: bobId } = createCharacter(c1, { name: 'Bob' });
+
+    // Create reciprocal relationship
+    const c3 = addRelationship(c2, aliceId, {
+      targetCharacterId: bobId,
+      type: 'lover',
+      description: 'In love',
+    });
+    const c4 = addRelationship(c3, bobId, {
+      targetCharacterId: aliceId,
+      type: 'lover',
+      description: 'In love',
+    });
+
+    // Delete from Alice
+    const aliceRelId = c4.find((c) => c.id === aliceId)!.relationships[0].id;
+    const c5 = deleteRelationship(c4, aliceId, aliceRelId);
+
+    // Delete from Bob (simulates bilateral deletion in CharacterDetail)
+    const bobRelId = c5.find((c) => c.id === bobId)!.relationships[0].id;
+    const c6 = deleteRelationship(c5, bobId, bobRelId);
+
+    expect(c6.find((c) => c.id === aliceId)!.relationships).toHaveLength(0);
+    expect(c6.find((c) => c.id === bobId)!.relationships).toHaveLength(0);
+  });
+
+  it('deleting only one side leaves the reverse as orphan (non-reciprocal)', () => {
+    const { characters: c1, id: aliceId } = createCharacter([], { name: 'Alice' });
+    const { characters: c2, id: bobId } = createCharacter(c1, { name: 'Bob' });
+
+    // Create reciprocal relationship
+    const c3 = addRelationship(c2, aliceId, {
+      targetCharacterId: bobId,
+      type: 'rival',
+      description: '',
+    });
+    const c4 = addRelationship(c3, bobId, {
+      targetCharacterId: aliceId,
+      type: 'rival',
+      description: '',
+    });
+
+    // Only delete Alice's side
+    const aliceRelId = c4.find((c) => c.id === aliceId)!.relationships[0].id;
+    const c5 = deleteRelationship(c4, aliceId, aliceRelId);
+
+    expect(c5.find((c) => c.id === aliceId)!.relationships).toHaveLength(0);
+    expect(c5.find((c) => c.id === bobId)!.relationships).toHaveLength(1); // orphan remains
+  });
+
+  it('non-reciprocal relationship only exists on one character', () => {
+    const { characters: c1, id: aliceId } = createCharacter([], { name: 'Alice' });
+    const { characters: c2, id: bobId } = createCharacter(c1, { name: 'Bob' });
+
+    // Only Alice → Bob (non-reciprocal)
+    const c3 = addRelationship(c2, aliceId, {
+      targetCharacterId: bobId,
+      type: 'mentor',
+      description: 'Alice mentors Bob',
+    });
+
+    expect(c3.find((c) => c.id === aliceId)!.relationships).toHaveLength(1);
+    expect(c3.find((c) => c.id === bobId)!.relationships).toHaveLength(0);
+  });
+
+  it('can detect if a reverse relationship exists for reciprocity check', () => {
+    const { characters: c1, id: aliceId } = createCharacter([], { name: 'Alice' });
+    const { characters: c2, id: bobId } = createCharacter(c1, { name: 'Bob' });
+
+    // Create one-way relationship Alice → Bob
+    const c3 = addRelationship(c2, aliceId, {
+      targetCharacterId: bobId,
+      type: 'lover',
+      description: '',
+    });
+
+    // Check reciprocity (same logic used in RelationshipEditor and RelationshipGraph)
+    const bob = c3.find((c) => c.id === bobId)!;
+    const reverseExists = bob.relationships.some(
+      (r) => r.targetCharacterId === aliceId && r.type === 'lover'
+    );
+    expect(reverseExists).toBe(false);
+
+    // Now add reverse
+    const c4 = addRelationship(c3, bobId, {
+      targetCharacterId: aliceId,
+      type: 'lover',
+      description: '',
+    });
+
+    const bob2 = c4.find((c) => c.id === bobId)!;
+    const reverseExists2 = bob2.relationships.some(
+      (r) => r.targetCharacterId === aliceId && r.type === 'lover'
+    );
+    expect(reverseExists2).toBe(true);
+  });
+});
+
 // ─── Key Event CRUD ───
 
 describe('addKeyEvent', () => {

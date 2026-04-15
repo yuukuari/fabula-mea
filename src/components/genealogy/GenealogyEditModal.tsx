@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ExternalLink, Focus, Plus, Trash2, UserPlus, Users, ChevronUp, ChevronDown } from 'lucide-react';
+import { X, ExternalLink, Focus, Plus, Trash2, UserPlus, Users, ChevronUp, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 import type { Character, GenealogyParentRole, GenealogySpouseRole, GenealogyChildRole, CharacterSex, PartialDate } from '@/types';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import {
@@ -37,6 +37,7 @@ export function GenealogyEditModal({ characterId, centerId, onClose, onRecenter 
 
   const character = characters.find((c) => c.id === characterId);
   const [addingType, setAddingType] = useState<AddLinkType | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   if (!character) return null;
 
@@ -66,13 +67,16 @@ export function GenealogyEditModal({ characterId, centerId, onClose, onRecenter 
     updateCharacter(characterId, { surname });
   };
 
+  const handleChangeNickname = (nickname: string) => {
+    updateCharacter(characterId, { nickname: nickname || undefined });
+  };
+
   const handleChangeSex = (sex: CharacterSex | '') => {
     updateCharacter(characterId, { sex: sex || undefined });
   };
 
-  const handleChangeAge = (value: string) => {
-    const num = value === '' ? undefined : parseInt(value, 10);
-    updateCharacter(characterId, { age: Number.isNaN(num) ? undefined : num });
+  const handleChangeDescription = (description: string) => {
+    updateCharacter(characterId, { description });
   };
 
   const handleChangeBirthDate = (field: keyof PartialDate, value: string) => {
@@ -102,105 +106,148 @@ export function GenealogyEditModal({ characterId, centerId, onClose, onRecenter 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto m-4"
+        className="bg-parchment-50 rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto m-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 p-4 border-b border-parchment-200">
-          <CharacterAvatar
-            imageUrl={character.imageUrl}
-            imageOffsetY={character.imageOffsetY}
-            name={character.name}
-            size={12}
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex gap-2">
-              <input
-                value={character.name}
-                onChange={(e) => handleChangeName(e.target.value)}
-                className="bg-parchment-50 border border-parchment-200 rounded px-2 py-0.5 text-sm w-24 font-medium text-ink-500"
-                placeholder="Prénom"
-              />
-              <input
-                value={character.surname ?? ''}
-                onChange={(e) => handleChangeSurname(e.target.value)}
-                className="bg-parchment-50 border border-parchment-200 rounded px-2 py-0.5 text-sm w-28 text-ink-500"
-                placeholder="Nom"
-              />
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <select
-                value={character.sex ?? ''}
-                onChange={(e) => handleChangeSex(e.target.value as CharacterSex | '')}
-                className="text-xs bg-parchment-50 border border-parchment-200 rounded px-1 py-0.5 text-ink-400"
-              >
-                <option value="">Non défini</option>
-                <option value="male">Homme</option>
-                <option value="female">Femme</option>
-              </select>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-parchment-100">
-            <X className="w-5 h-5 text-ink-300" />
-          </button>
-        </div>
-
-        {/* Extra fields: age, birthDate, deathDate */}
-        <div className="px-4 py-2 border-b border-parchment-100 space-y-1.5">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <label className="text-[10px] text-ink-300 uppercase tracking-wider">Naissance</label>
-              <PartialDateInput
-                value={character.birthDate}
-                onChange={(field, val) => handleChangeBirthDate(field, val)}
-              />
-            </div>
-            <div className="w-14">
-              <label className="text-[10px] text-ink-300 uppercase tracking-wider">Âge</label>
-              <input
-                type="number"
-                value={character.age ?? ''}
-                onChange={(e) => handleChangeAge(e.target.value)}
-                placeholder="—"
-                className="w-full bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500 mt-0.5"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] text-ink-300 uppercase tracking-wider">Décès</label>
-            <PartialDateInput
-              value={character.deathDate}
-              onChange={(field, val) => handleChangeDeathDate(field, val)}
+        <div className="flex items-center justify-between p-4 border-b border-parchment-300 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <CharacterAvatar
+              imageUrl={character.imageUrl}
+              imageOffsetY={character.imageOffsetY}
+              name={character.name}
+              size={10}
             />
+            <div className="min-w-0">
+              <h3 className="font-display text-lg font-bold text-ink-500 truncate">
+                {character.name}{character.surname ? ` ${character.surname}` : ''}
+              </h3>
+              {character.nickname && (
+                <p className="text-xs text-ink-300 italic truncate">{character.nickname}</p>
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-parchment-100 text-xs">
-          <button
-            onClick={() => navigate(`/characters/${characterId}`)}
-            className="flex items-center gap-1 text-bordeaux-500 hover:text-bordeaux-600"
-          >
-            <ExternalLink className="w-3.5 h-3.5" /> Voir la fiche
-          </button>
-          {characterId !== centerId && (
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button
-              onClick={() => onRecenter(characterId)}
-              className="flex items-center gap-1 text-bordeaux-500 hover:text-bordeaux-600 ml-2"
+              onClick={() => navigate(`/characters/${characterId}`)}
+              className="btn-ghost p-1.5"
+              title="Voir la fiche"
             >
-              <Focus className="w-3.5 h-3.5" /> Centrer le graphe
+              <ExternalLink className="w-4 h-4" />
             </button>
+            {characterId !== centerId && (
+              <button
+                onClick={() => onRecenter(characterId)}
+                className="btn-ghost p-1.5"
+                title="Centrer le graphe"
+              >
+                <Focus className="w-4 h-4" />
+              </button>
+            )}
+            <button onClick={onClose} className="btn-ghost p-1.5">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Collapsible character info */}
+        <div className="border-b border-parchment-300">
+          <button
+            onClick={() => setInfoOpen(!infoOpen)}
+            className="flex items-center gap-2 w-full px-4 py-2.5 text-left hover:bg-parchment-100 transition-colors"
+          >
+            <ChevronRight className={`w-4 h-4 text-ink-300 transition-transform ${infoOpen ? 'rotate-90' : ''}`} />
+            <Pencil className="w-3.5 h-3.5 text-ink-300" />
+            <span className="text-sm font-medium text-ink-400">Fiche personnage</span>
+            {!infoOpen && (character.description || character.sex) && (
+              <span className="text-xs text-ink-300 truncate ml-1">
+                — {character.sex === 'male' ? 'Homme' : character.sex === 'female' ? 'Femme' : ''}{character.sex && character.description ? ', ' : ''}{character.description?.slice(0, 40)}{(character.description?.length ?? 0) > 40 ? '…' : ''}
+              </span>
+            )}
+          </button>
+          {infoOpen && (
+            <div className="px-4 pb-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Prénom</label>
+                  <input
+                    value={character.name}
+                    onChange={(e) => handleChangeName(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Nom de famille</label>
+                  <input
+                    value={character.surname ?? ''}
+                    onChange={(e) => handleChangeSurname(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Surnom</label>
+                  <input
+                    value={character.nickname ?? ''}
+                    onChange={(e) => handleChangeNickname(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Sexe</label>
+                  <select
+                    value={character.sex ?? ''}
+                    onChange={(e) => handleChangeSex(e.target.value as CharacterSex | '')}
+                    className="input-field"
+                  >
+                    <option value="">Non précisé</option>
+                    <option value="male">Homme</option>
+                    <option value="female">Femme</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="label-field">Description</label>
+                <textarea
+                  value={character.description}
+                  onChange={(e) => handleChangeDescription(e.target.value)}
+                  className="textarea-field"
+                  rows={2}
+                  placeholder="Quelques mots sur ce personnage…"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Naissance</label>
+                  <PartialDateInput
+                    value={character.birthDate}
+                    onChange={(field, val) => handleChangeBirthDate(field, val)}
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Décès</label>
+                  <PartialDateInput
+                    value={character.deathDate}
+                    onChange={(field, val) => handleChangeDeathDate(field, val)}
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-1.5 text-[11px] text-ink-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={character.hideFromRelationshipGraph ?? false}
+                  onChange={handleToggleHideFromGraph}
+                  className="rounded border-parchment-300"
+                />
+                Masquer du graphe de relations
+              </label>
+            </div>
           )}
-          <div className="flex-1" />
-          <label className="flex items-center gap-1.5 text-ink-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={character.hideFromRelationshipGraph ?? false}
-              onChange={handleToggleHideFromGraph}
-              className="rounded border-parchment-300"
-            />
-            Masquer du graphe des relations
-          </label>
         </div>
 
         <div className="p-4 space-y-4">
@@ -348,26 +395,26 @@ function PartialDateInput({ value, onChange }: {
         type="number"
         value={value?.day ?? ''}
         onChange={(e) => onChange('day', e.target.value)}
-        placeholder="JJ"
+        placeholder="Jour"
         min={1}
         max={31}
-        className="w-12 bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500 text-center"
+        className="w-full bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500 text-center"
       />
       <input
         type="number"
         value={value?.month ?? ''}
         onChange={(e) => onChange('month', e.target.value)}
-        placeholder="MM"
+        placeholder="Mois"
         min={1}
         max={12}
-        className="w-12 bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500 text-center"
+        className="w-full bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500 text-center"
       />
       <input
         type="number"
         value={value?.year ?? ''}
         onChange={(e) => onChange('year', e.target.value)}
         placeholder="Année"
-        className="flex-1 bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500"
+        className="w-full bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500 text-center"
       />
     </div>
   );
@@ -444,9 +491,10 @@ function AddLinkDialog({ type, characterId, characters, genealogy, onClose, addC
   const [selectedId, setSelectedId] = useState('');
   const [newName, setNewName] = useState('');
   const [newSurname, setNewSurname] = useState('');
+  const [newNickname, setNewNickname] = useState('');
   const [newSex, setNewSex] = useState<CharacterSex | ''>('');
+  const [newDescription, setNewDescription] = useState('');
   const [newBirthDate, setNewBirthDate] = useState<PartialDate>({});
-  const [newAge, setNewAge] = useState('');
   const [newDeathDate, setNewDeathDate] = useState<PartialDate>({});
 
   // Role state
@@ -459,14 +507,14 @@ function AddLinkDialog({ type, characterId, characters, genealogy, onClose, addC
 
   const title = type === 'parent' ? 'Ajouter un parent' : type === 'spouse' ? 'Ajouter un conjoint' : 'Ajouter un enfant';
 
-  // Exclude already-linked and self
+  // Exclude self + all characters already linked in any genealogy role
   const excludeIds = useMemo(() => {
     const ids = new Set([characterId]);
-    if (type === 'parent') genealogy.parents.forEach((p) => ids.add(p.characterId));
-    if (type === 'spouse') genealogy.spouses.forEach((s) => ids.add(s.characterId));
-    if (type === 'child') genealogy.children.forEach((ch) => ids.add(ch.characterId));
+    genealogy.parents.forEach((p) => ids.add(p.characterId));
+    genealogy.spouses.forEach((s) => ids.add(s.characterId));
+    genealogy.children.forEach((ch) => ids.add(ch.characterId));
     return ids;
-  }, [type, characterId, genealogy]);
+  }, [characterId, genealogy]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -487,15 +535,15 @@ function AddLinkDialog({ type, characterId, characters, genealogy, onClose, addC
 
     if (tab === 'new') {
       if (!newName.trim()) return;
-      const ageNum = newAge ? parseInt(newAge, 10) : undefined;
       const hasBirth = newBirthDate.day != null || newBirthDate.month != null || newBirthDate.year != null;
       const hasDeath = newDeathDate.day != null || newDeathDate.month != null || newDeathDate.year != null;
       targetId = addCharacter({
         name: newName.trim(),
         surname: newSurname.trim() || undefined,
+        nickname: newNickname.trim() || undefined,
         sex: newSex || undefined,
+        description: newDescription.trim(),
         birthDate: hasBirth ? newBirthDate : undefined,
-        age: Number.isNaN(ageNum) ? undefined : ageNum,
         deathDate: hasDeath ? newDeathDate : undefined,
         hideFromRelationshipGraph: true,
       });
@@ -517,44 +565,44 @@ function AddLinkDialog({ type, characterId, characters, genealogy, onClose, addC
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md m-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-3 border-b border-parchment-200">
-          <h3 className="font-display text-sm text-ink-500">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-parchment-100">
-            <X className="w-4 h-4 text-ink-300" />
+      <div className="bg-parchment-50 rounded-xl shadow-xl w-full max-w-md m-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-parchment-300">
+          <h3 className="font-display text-lg font-bold text-ink-500">{title}</h3>
+          <button onClick={onClose} className="btn-ghost p-1">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-parchment-200">
+        <div className="flex border-b border-parchment-300">
           <button
             onClick={() => setTab('existing')}
-            className={`flex-1 py-2 text-xs font-medium text-center border-b-2 transition-colors ${
+            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${
               tab === 'existing' ? 'border-bordeaux-400 text-bordeaux-500' : 'border-transparent text-ink-300 hover:text-ink-400'
             }`}
           >
-            <Users className="w-3.5 h-3.5 inline mr-1" />
+            <Users className="w-4 h-4 inline mr-1.5" />
             Personnage existant
           </button>
           <button
             onClick={() => setTab('new')}
-            className={`flex-1 py-2 text-xs font-medium text-center border-b-2 transition-colors ${
+            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${
               tab === 'new' ? 'border-bordeaux-400 text-bordeaux-500' : 'border-transparent text-ink-300 hover:text-ink-400'
             }`}
           >
-            <UserPlus className="w-3.5 h-3.5 inline mr-1" />
+            <UserPlus className="w-4 h-4 inline mr-1.5" />
             Nouveau personnage
           </button>
         </div>
 
-        <div className="p-4 space-y-3">
+        <div className="p-6 space-y-4">
           {tab === 'existing' ? (
             <>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Rechercher un personnage…"
-                className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
+                className="input-field"
                 autoFocus
               />
               <div className="max-h-40 overflow-y-auto space-y-1">
@@ -583,32 +631,64 @@ function AddLinkDialog({ type, characterId, characters, genealogy, onClose, addC
               </div>
             </>
           ) : (
-            <div className="space-y-2">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Prénom *"
-                className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
-                autoFocus
-              />
-              <input
-                value={newSurname}
-                onChange={(e) => setNewSurname(e.target.value)}
-                placeholder="Nom de famille"
-                className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
-              />
-              <select
-                value={newSex}
-                onChange={(e) => setNewSex(e.target.value as CharacterSex | '')}
-                className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
-              >
-                <option value="">Sexe non défini</option>
-                <option value="male">Homme</option>
-                <option value="female">Femme</option>
-              </select>
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="text-[10px] text-ink-300">Naissance</label>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Prénom *</label>
+                  <input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="input-field"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Nom de famille</label>
+                  <input
+                    value={newSurname}
+                    onChange={(e) => setNewSurname(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Surnom</label>
+                  <input
+                    value={newNickname}
+                    onChange={(e) => setNewNickname(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Sexe</label>
+                  <select
+                    value={newSex}
+                    onChange={(e) => setNewSex(e.target.value as CharacterSex | '')}
+                    className="input-field"
+                  >
+                    <option value="">Non précisé</option>
+                    <option value="male">Homme</option>
+                    <option value="female">Femme</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="label-field">Description</label>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  className="textarea-field"
+                  rows={2}
+                  placeholder="Quelques mots sur ce personnage…"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Naissance</label>
                   <PartialDateInput
                     value={newBirthDate}
                     onChange={(field, val) => {
@@ -617,119 +697,112 @@ function AddLinkDialog({ type, characterId, characters, genealogy, onClose, addC
                     }}
                   />
                 </div>
-                <div className="w-16">
-                  <label className="text-[10px] text-ink-300">Âge</label>
-                  <input
-                    type="number"
-                    value={newAge}
-                    onChange={(e) => setNewAge(e.target.value)}
-                    placeholder="—"
-                    className="w-full bg-parchment-50 border border-parchment-200 rounded px-1.5 py-0.5 text-xs text-ink-500 mt-0.5"
+                <div>
+                  <label className="label-field">Décès</label>
+                  <PartialDateInput
+                    value={newDeathDate}
+                    onChange={(field, val) => {
+                      const num = val === '' ? undefined : parseInt(val, 10);
+                      setNewDeathDate((prev) => ({ ...prev, [field]: Number.isNaN(num) ? undefined : num }));
+                    }}
                   />
                 </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-ink-300">Décès</label>
-                <PartialDateInput
-                  value={newDeathDate}
-                  onChange={(field, val) => {
-                    const num = val === '' ? undefined : parseInt(val, 10);
-                    setNewDeathDate((prev) => ({ ...prev, [field]: Number.isNaN(num) ? undefined : num }));
-                  }}
-                />
               </div>
             </div>
           )}
 
           {/* Role selector */}
-          <div className="pt-2 border-t border-parchment-100 space-y-2">
-            <label className="text-xs text-ink-400 font-medium">Rôle</label>
-            {type === 'parent' && (
-              <select
-                value={parentRole}
-                onChange={(e) => setParentRole(e.target.value as GenealogyParentRole)}
-                className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
-              >
-                {Object.entries(GENEALOGY_PARENT_ROLE_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            )}
-            {type === 'spouse' && (
-              <>
+          <div className="pt-3 border-t border-parchment-200 space-y-3">
+            <div>
+              <label className="label-field">Rôle</label>
+              {type === 'parent' && (
+                <select
+                  value={parentRole}
+                  onChange={(e) => setParentRole(e.target.value as GenealogyParentRole)}
+                  className="input-field"
+                >
+                  {Object.entries(GENEALOGY_PARENT_ROLE_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              )}
+              {type === 'spouse' && (
                 <select
                   value={spouseRole}
                   onChange={(e) => setSpouseRole(e.target.value as GenealogySpouseRole)}
-                  className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
+                  className="input-field"
                 >
                   {Object.entries(GENEALOGY_SPOUSE_ROLE_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
-                <label className="flex items-center gap-2 text-sm text-ink-400">
-                  <input
-                    type="checkbox"
-                    checked={current}
-                    onChange={(e) => setCurrent(e.target.checked)}
-                    className="rounded border-parchment-300"
-                  />
-                  Encore ensemble
-                </label>
-              </>
-            )}
-            {type === 'child' && (
-              <>
+              )}
+              {type === 'child' && (
                 <select
                   value={childRole}
                   onChange={(e) => setChildRole(e.target.value as GenealogyChildRole)}
-                  className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
+                  className="input-field"
                 >
                   {Object.entries(GENEALOGY_CHILD_ROLE_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
-                {genealogy.spouses.length > 0 && (
-                  <div>
-                    <label className="text-xs text-ink-400">Autre parent (conjoint)</label>
-                    <select
-                      value={spouseId}
-                      onChange={(e) => setSpouseId(e.target.value)}
-                      className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm mt-0.5"
-                    >
-                      <option value="">Aucun</option>
-                      {genealogy.spouses.map((s) => {
-                        const sc = characters.find((c) => c.id === s.characterId);
-                        return (
-                          <option key={s.id} value={s.id}>
-                            {sc ? `${sc.name} ${sc.surname ?? ''}` : 'Inconnu'}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                )}
-              </>
-            )}
+              )}
+            </div>
             {isCustom && (
-              <input
-                value={customRole}
-                onChange={(e) => setCustomRole(e.target.value)}
-                placeholder="Précisez le rôle…"
-                className="w-full bg-parchment-50 border border-parchment-200 rounded-lg px-3 py-1.5 text-sm"
-              />
+              <div>
+                <label className="label-field">Rôle personnalisé</label>
+                <input
+                  value={customRole}
+                  onChange={(e) => setCustomRole(e.target.value)}
+                  placeholder="Précisez le rôle…"
+                  className="input-field"
+                />
+              </div>
+            )}
+            {type === 'spouse' && (
+              <label className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={current}
+                  onChange={(e) => setCurrent(e.target.checked)}
+                  className="rounded border-parchment-300 accent-bordeaux-500"
+                />
+                Encore ensemble
+              </label>
+            )}
+            {type === 'child' && genealogy.spouses.length > 0 && (
+              <div>
+                <label className="label-field">Autre parent (conjoint)</label>
+                <select
+                  value={spouseId}
+                  onChange={(e) => setSpouseId(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Aucun</option>
+                  {genealogy.spouses.map((s) => {
+                    const sc = characters.find((c) => c.id === s.characterId);
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {sc ? `${sc.name} ${sc.surname ?? ''}` : 'Inconnu'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             )}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 p-3 border-t border-parchment-200">
-          <button onClick={onClose} className="px-3 py-1.5 text-sm text-ink-400 hover:text-ink-500">
+        <div className="flex justify-end gap-3 p-6 border-t border-parchment-300">
+          <button onClick={onClose} className="btn-secondary">
             Annuler
           </button>
           <button
             onClick={handleSubmit}
             disabled={tab === 'existing' ? !selectedId : !newName.trim()}
-            className="px-4 py-1.5 text-sm bg-bordeaux-500 text-white rounded-lg hover:bg-bordeaux-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Ajouter
           </button>

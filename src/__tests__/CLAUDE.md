@@ -8,7 +8,8 @@ Tests unitaires **Vitest** pour les logiques critiques de l'application. Les tes
 
 - **Framework** : Vitest 1.x (compatible Vite 5)
 - **Environnement** : `node` (pas de `jsdom` — tests de logique pure uniquement)
-- **Config** : section `test` dans `vite.config.ts` (globals activés)
+- **Config** : section `test` dans `vite.config.ts` (globals activés, setup file)
+- **Setup** : `src/__tests__/setup.ts` — polyfill `crypto` pour Node 18 (crypto.randomUUID n'est pas global)
 - **Commandes** : `npm test` (run), `npm run test:watch` (watch)
 
 ## Convention
@@ -159,6 +160,7 @@ Teste les fonctions pures de `src/store/encyclopedia-helpers.ts`, partagées ent
 | `addRelationship` | 2 | Ajout avec ID auto, autres personnages intacts |
 | `updateRelationship` | 1 | Mise à jour ciblée d'une relation |
 | `deleteRelationship` | 1 | Suppression d'une relation |
+| `reciprocal workflow` | 5 | Création bidirectionnelle, suppression bilatérale complète, orphelin si suppression unilatérale, relation non-réciproque, détection de réciprocité |
 | `addKeyEvent` | 1 | Ajout événement clé avec ID auto |
 | `deleteKeyEvent` | 1 | Suppression événement clé |
 | `createPlace` | 1 | Defaults (type 'other', inGlossary false) |

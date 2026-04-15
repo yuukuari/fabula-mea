@@ -37,7 +37,7 @@ function getReverseFamilyRole(role: string, targetSex?: string): string {
 }
 
 export function RelationshipEditor({ characterId, existingRelationship, onClose }: RelationshipEditorProps) {
-  const { characters, addRelationship, updateRelationship } = useEncyclopediaStore();
+  const { characters, addRelationship, updateRelationship, deleteRelationship } = useEncyclopediaStore();
 
   const currentChar = characters.find((c) => c.id === characterId);
   const otherCharacters = characters.filter((c) => c.id !== characterId);
@@ -48,7 +48,17 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
   const [type, setType] = useState<RelationshipType>(existingRelationship?.type ?? 'friend');
   const [customType, setCustomType] = useState(existingRelationship?.customType ?? '');
   const [description, setDescription] = useState(existingRelationship?.description ?? '');
-  const [bidirectional, setBidirectional] = useState(true);
+  // When editing, check if a reverse relationship exists to determine initial bidirectional state
+  const initialBidirectional = (() => {
+    if (existingRelationship) {
+      const tc = characters.find((c) => c.id === existingRelationship.targetCharacterId);
+      return !!tc?.relationships.some(
+        (r) => r.targetCharacterId === characterId && r.type === existingRelationship.type
+      );
+    }
+    return true;
+  })();
+  const [bidirectional, setBidirectional] = useState(initialBidirectional);
 
   // Family roles
   const [familyRoleSource, setFamilyRoleSource] = useState(existingRelationship?.familyRoleSource ?? 'pere');
@@ -79,9 +89,10 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
       customType !== (existingRelationship.customType ?? '') ||
       description !== (existingRelationship.description ?? '') ||
       familyRoleSource !== (existingRelationship.familyRoleSource ?? 'pere') ||
-      familyRoleTarget !== (existingRelationship.familyRoleTarget ?? 'fils')
+      familyRoleTarget !== (existingRelationship.familyRoleTarget ?? 'fils') ||
+      bidirectional !== initialBidirectional
     );
-  }, [targetId, type, customType, description, familyRoleSource, familyRoleTarget, existingRelationship]);
+  }, [targetId, type, customType, description, familyRoleSource, familyRoleTarget, existingRelationship, bidirectional, initialBidirectional]);
 
   const handleClose = () => {
     if (isDirty()) {
@@ -112,11 +123,12 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
       // Update existing
       updateRelationship(characterId, existingRelationship.id, relData);
 
-      // If always reciprocal, also update the reverse
-      if (isAlwaysReciprocal) {
-        const reverseRel = targetChar?.relationships.find(
-          (r) => r.targetCharacterId === characterId && r.type === type
-        );
+      const reverseRel = targetChar?.relationships.find(
+        (r) => r.targetCharacterId === characterId && r.type === existingRelationship.type
+      );
+
+      if (isAlwaysReciprocal || bidirectional) {
+        // Update or create the reverse relationship
         if (reverseRel) {
           updateRelationship(targetId, reverseRel.id, {
             targetCharacterId: characterId,
@@ -126,7 +138,19 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
             familyRoleTarget: type === 'family' ? familyRoleSource : undefined,
             description,
           });
+        } else {
+          addRelationship(targetId, {
+            targetCharacterId: characterId,
+            type,
+            customType: type === 'custom' ? customType : undefined,
+            familyRoleSource: type === 'family' ? familyRoleTarget : undefined,
+            familyRoleTarget: type === 'family' ? familyRoleSource : undefined,
+            description,
+          });
         }
+      } else if (!bidirectional && reverseRel) {
+        // Toggled from reciprocal to non-reciprocal: remove the reverse
+        deleteRelationship(targetId, reverseRel.id);
       }
     } else {
       // Add new relationship
@@ -258,7 +282,7 @@ export function RelationshipEditor({ characterId, existingRelationship, onClose 
           )}
 
           {/* Bidirectional toggle for non-always-reciprocal types */}
-          {showBidirectionalCheckbox && !isEditing && (
+          {showBidirectionalCheckbox && (
             <label className="flex items-start gap-3 p-3 bg-parchment-100 rounded-lg cursor-pointer">
               <input
                 type="checkbox"

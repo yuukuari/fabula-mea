@@ -30,7 +30,6 @@ Recherche dans le livre, avec résultats
 Générer un wiki, réorganiser les fiches
 Evolution des scènes sur la carte
 
-Musiques associées à des personnages (pour s'imprégner du personnage)
 Envoi de tips (café)
 Expliquer dès l'inscription qu'on est en mode béta
 Réglage des notifications par mail

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useBookStore } from '@/store/useBookStore';
-import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
+import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS, ALWAYS_RECIPROCAL_TYPES } from '@/lib/utils';
 import type { Character, CharacterSex, Relationship } from '@/types';
 
 interface Node {
@@ -900,12 +900,23 @@ export function RelationshipGraph() {
     );
   }
 
-  function getRelTooltipLabel(rel: Relationship): string {
-    if (rel.type === 'custom') return rel.customType ?? 'Autre';
-    if (rel.type === 'family' && rel.familyRoleSource) {
-      return `Famille (${FAMILY_ROLE_LABELS[rel.familyRoleSource] ?? rel.familyRoleSource})`;
+  function getRelTooltipLabel(rel: Relationship, sourceCharId: string): string {
+    let label: string;
+    if (rel.type === 'custom') label = rel.customType ?? 'Autre';
+    else if (rel.type === 'family' && rel.familyRoleSource) label = `Famille (${FAMILY_ROLE_LABELS[rel.familyRoleSource] ?? rel.familyRoleSource})`;
+    else label = RELATIONSHIP_TYPE_LABELS[rel.type] ?? rel.type;
+
+    // Check if the reverse relationship exists (reciprocal)
+    if (!ALWAYS_RECIPROCAL_TYPES.includes(rel.type)) {
+      const targetChar = characters.find((c) => c.id === rel.targetCharacterId);
+      const reverseExists = targetChar?.relationships.some(
+        (r) => r.targetCharacterId === sourceCharId && r.type === rel.type
+      );
+      if (!reverseExists) {
+        label += ' (non réciproque)';
+      }
     }
-    return RELATIONSHIP_TYPE_LABELS[rel.type] ?? rel.type;
+    return label;
   }
 
   return (
@@ -1012,7 +1023,7 @@ export function RelationshipGraph() {
                 {tooltip.relationships.map(({ rel, target }) => (
                   <li key={rel.id} className="text-xs">
                     <span className="font-medium" style={{ color: EDGE_COLORS[rel.type] ?? '#999' }}>
-                      {getRelTooltipLabel(rel)}
+                      {getRelTooltipLabel(rel, tooltip.character.id)}
                     </span>
                     {' → '}
                     <span className="text-ink-400">{target?.name ?? 'Inconnu'}</span>

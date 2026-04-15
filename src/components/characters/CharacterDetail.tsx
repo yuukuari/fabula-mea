@@ -42,7 +42,19 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
 
   const handleDeleteRelationship = () => {
     if (!deleteRelTarget) return;
+    // Find the relationship to get target info before deleting
+    const rel = character.relationships.find((r) => r.id === deleteRelTarget.relId);
     deleteRelationship(character.id, deleteRelTarget.relId);
+    // Also delete the reverse relationship if it exists
+    if (rel) {
+      const targetChar = characters.find((c) => c.id === rel.targetCharacterId);
+      const reverseRel = targetChar?.relationships.find(
+        (r) => r.targetCharacterId === character.id && r.type === rel.type
+      );
+      if (reverseRel) {
+        deleteRelationship(rel.targetCharacterId, reverseRel.id);
+      }
+    }
     setDeleteRelTarget(null);
   };
 
