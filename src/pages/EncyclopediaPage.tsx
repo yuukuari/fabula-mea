@@ -1,12 +1,13 @@
 import { useNavigate } from 'react-router-dom';
-import { Users, MapPin, Map, Globe, BookOpen, Target, Eye, Lightbulb, LayoutDashboard, Timer } from 'lucide-react';
+import { Users, MapPin, Map, Globe, BookOpen, Target, Eye, Lightbulb, LayoutDashboard, Timer, FileText } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useEffect, useMemo } from 'react';
-import { getTodayProgress, getDailyGoal, getOverallProgress } from '@/lib/calculations';
+import { useEffect, useMemo, useState } from 'react';
+import { getTodayProgress, getDailyGoal, getOverallProgress, getSmartPageEstimate } from '@/lib/calculations';
 import { countUnitLabel, isSpecialChapter, formatWritingTime } from '@/lib/utils';
+import { BookReader } from '@/components/edition/BookReader';
 
 export function EncyclopediaPage() {
   const navigate = useNavigate();
@@ -65,6 +66,16 @@ export function EncyclopediaPage() {
   // Writing time today
   const todayDateStr = new Date().toISOString().split('T')[0];
   const writingMinutesToday = dailySnapshots.find((s) => s.date === todayDateStr)?.writingMinutesToday ?? 0;
+
+  // Edition status
+  const layout = useBookStore((s) => s.layout);
+  const [readerOpen, setReaderOpen] = useState(false);
+  const chapterCount = chapters.filter((c) => !isSpecialChapter(c)).length;
+  const estimatedPages = getSmartPageEstimate(totalCount, countUnit, layout, chapterCount);
+  const hasCovers = !!(layout?.coverFront || layout?.coverBack);
+  const hasPrintEdition = !!layout?.printEdition;
+  const editionProgress = [hasPrintEdition, hasCovers, !!layout?.digitalEdition, chapters.length > 0].filter(Boolean).length;
+  const canPreview = chapters.length > 0;
   const encyclopediaCards = [
     { label: 'Personnages', count: characters.length, icon: Users, color: 'bg-bordeaux-100 text-bordeaux-500', to: '/characters' },
     { label: 'Lieux', count: places.length, icon: MapPin, color: 'bg-gold-100 text-gold-600', to: '/places' },
@@ -216,7 +227,50 @@ export function EncyclopediaPage() {
             </div>
           </div>
         </button>
+
+        {/* Édition — spans 2 columns on large screens for a richer card */}
+        <div className="card-fantasy p-5 lg:col-span-2 flex flex-col sm:flex-row items-stretch gap-4">
+          <button
+            onClick={() => navigate('/edition')}
+            className="flex items-start gap-3 text-left hover:opacity-80 transition-opacity flex-1 min-w-0 group"
+          >
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-bordeaux-100 flex items-center justify-center text-bordeaux-500 group-hover:scale-105 transition-transform">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-display font-bold text-ink-500">Édition</h3>
+              <p className="text-xs text-ink-300 mt-0.5">
+                {hasPrintEdition
+                  ? <>Format <b>{layout?.printEdition?.trimSize.toUpperCase()}</b> · <b>~{estimatedPages}</b> pages estimées</>
+                  : <>Pas encore configurée · <b>~{estimatedPages}</b> pages estimées</>}
+              </p>
+              <div className="mt-2 flex items-center gap-1.5">
+                <div className="w-full bg-parchment-200 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-bordeaux-400 to-gold-400"
+                    style={{ width: `${(editionProgress / 4) * 100}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-ink-200 shrink-0">{editionProgress}/4</span>
+              </div>
+            </div>
+          </button>
+
+          {/* Quick action: preview the book */}
+          <button
+            onClick={() => setReaderOpen(true)}
+            disabled={!canPreview}
+            className="btn-primary sm:min-w-[180px] justify-center disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 self-stretch sm:self-center shrink-0"
+            title={canPreview ? 'Feuilleter le livre' : 'Ajoutez du contenu pour prévisualiser'}
+          >
+            <BookOpen className="w-4 h-4" />
+            Feuilleter le livre
+          </button>
+        </div>
       </div>
+
+      {/* Reader is mounted only when opened — avoids expensive pagination on every dashboard render */}
+      {readerOpen && <BookReader open={readerOpen} onClose={() => setReaderOpen(false)} />}
 
       {/* Encyclopedia grid */}
       <div className="mb-4">

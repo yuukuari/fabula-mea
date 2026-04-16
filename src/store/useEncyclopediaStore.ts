@@ -105,6 +105,10 @@ export function useEncyclopediaStore() {
   const sagaDeletePlace = useSagaStore((s) => s.deletePlace);
   const deletePlace = isSagaMode ? sagaDeletePlace : bookDeletePlace;
 
+  const bookReorderPlaces = useBookStore((s) => s.reorderPlaces);
+  const sagaReorderPlaces = useSagaStore((s) => s.reorderPlaces);
+  const reorderPlaces = isSagaMode ? sagaReorderPlaces : bookReorderPlaces;
+
   // Tags
   const bookTags = useBookStore((s) => s.tags);
   const sagaTags = useSagaStore((s) => s.tags);
@@ -138,6 +142,10 @@ export function useEncyclopediaStore() {
   const bookDeleteWorldNote = useBookStore((s) => s.deleteWorldNote);
   const sagaDeleteWorldNote = useSagaStore((s) => s.deleteWorldNote);
   const deleteWorldNote = isSagaMode ? sagaDeleteWorldNote : bookDeleteWorldNote;
+
+  const bookReorderWorldNotes = useBookStore((s) => s.reorderWorldNotes);
+  const sagaReorderWorldNotes = useSagaStore((s) => s.reorderWorldNotes);
+  const reorderWorldNotes = isSagaMode ? sagaReorderWorldNotes : bookReorderWorldNotes;
 
   // Maps
   const bookMaps = useBookStore((s) => s.maps);
@@ -208,6 +216,7 @@ export function useEncyclopediaStore() {
     addPlace,
     updatePlace,
     deletePlace,
+    reorderPlaces,
 
     // Tags
     tags,
@@ -220,6 +229,7 @@ export function useEncyclopediaStore() {
     addWorldNote,
     updateWorldNote,
     deleteWorldNote,
+    reorderWorldNotes,
 
     // Maps
     maps,

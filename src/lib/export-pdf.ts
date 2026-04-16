@@ -8,16 +8,20 @@ import type { BookLayout } from '@/types';
 import { FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
 import { escapeXml, cleanHtml } from '@/lib/export-shared';
 import type { ExportBook } from '@/lib/export-shared';
+import { getTrimSize } from '@/lib/print-edition';
 
 function buildPdfStyles(layout?: BookLayout): string {
   const fontStack = FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily];
   const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
   const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
+  const pe = layout?.printEdition;
+  const trim = pe ? getTrimSize(pe.trimSize) : { widthMm: 148, heightMm: 210 };
+  const margins = pe?.margins ?? { topMm: 12, bottomMm: 18, innerMm: 15, outerMm: 15 };
 
   return `
   @page {
-    size: A5;
-    margin: 1.2cm 1.5cm 1.8cm;
+    size: ${trim.widthMm}mm ${trim.heightMm}mm;
+    margin: ${margins.topMm}mm ${margins.outerMm}mm ${margins.bottomMm}mm ${margins.innerMm}mm;
     @bottom-center {
       content: counter(page);
       font-family: ${fontStack};
@@ -85,6 +89,22 @@ function buildPdfStyles(layout?: BookLayout): string {
     margin-top: 0.4em;
     color: #888;
   }
+  .blank-page {
+    page-break-after: always;
+    height: 100vh;
+  }
+  .copyright-page {
+    page-break-after: always;
+    font-size: 9pt;
+    color: #444;
+    padding-top: 65vh;
+    text-align: center;
+    line-height: 1.6;
+  }
+  .copyright-page p { margin: 0.3em 0; }
+  .copyright-page .title { font-style: italic; margin-bottom: 0.6em; }
+  .copyright-page .copyright-symbol { font-size: 10pt; }
+  .copyright-page .rights { margin-top: 1em; font-size: 8pt; color: #666; }
   .toc {
     page-break-after: always;
   }
@@ -190,7 +210,47 @@ function buildPdfStyles(layout?: BookLayout): string {
 `;
 }
 
-export function exportPdf(book: ExportBook): void {
+export interface PdfExportOptions {
+  /** When true, add technical pages (blank after cover, auto-generated copyright page). */
+  printReady?: boolean;
+}
+
+/** Human-readable text for a license/rights code. */
+function rightsLabel(rights?: string): string | null {
+  const map: Record<string, string> = {
+    all_rights_reserved: 'Tous droits réservés.',
+    cc_by: 'Licence Creative Commons Attribution 4.0 (CC BY 4.0).',
+    cc_by_sa: 'Licence Creative Commons Attribution - Partage dans les mêmes conditions 4.0 (CC BY-SA 4.0).',
+    cc_by_nc: 'Licence Creative Commons Attribution - Pas d\'utilisation commerciale 4.0 (CC BY-NC 4.0).',
+    cc_by_nc_sa: 'Licence Creative Commons Attribution - Pas d\'utilisation commerciale - Partage dans les mêmes conditions 4.0 (CC BY-NC-SA 4.0).',
+    cc_by_nd: 'Licence Creative Commons Attribution - Pas de modification 4.0 (CC BY-ND 4.0).',
+    cc_by_nc_nd: 'Licence Creative Commons Attribution - Pas d\'utilisation commerciale - Pas de modification 4.0 (CC BY-NC-ND 4.0).',
+    public_domain: 'Œuvre placée dans le domaine public.',
+  };
+  return rights && map[rights] ? map[rights] : null;
+}
+
+/** Generate copyright page HTML (auto). */
+function buildCopyrightPage(book: ExportBook): string {
+  const pe = book.layout?.printEdition;
+  const de = book.layout?.digitalEdition;
+  const year = (pe?.printDate ? pe.printDate.slice(0, 4) : String(new Date().getFullYear()));
+  const publisher = pe?.publisher || de?.publisher;
+  const isbn = pe?.isbn;
+  const rights = rightsLabel(de?.rights);
+
+  const lines: string[] = [];
+  lines.push(`<p class="title">${escapeXml(book.title)}</p>`);
+  lines.push(`<p class="copyright-symbol">© ${escapeXml(year)} ${escapeXml(book.author || 'Auteur')}</p>`);
+  if (publisher) lines.push(`<p>${escapeXml(publisher)}</p>`);
+  if (isbn) lines.push(`<p>ISBN : ${escapeXml(isbn)}</p>`);
+  if (pe?.printDate) lines.push(`<p>Dépôt légal : ${escapeXml(pe.printDate)}</p>`);
+  if (rights) lines.push(`<p class="rights">${escapeXml(rights)}</p>`);
+
+  return `<div class="copyright-page">${lines.join('\n')}</div>`;
+}
+
+export function exportPdf(book: ExportBook, opts: PdfExportOptions = {}): void {
   const win = window.open('', '_blank');
   if (!win) {
     alert('Impossible d\'ouvrir la fenêtre d\'impression. Vérifiez que les popups ne sont pas bloqués.');
@@ -285,11 +345,22 @@ export function exportPdf(book: ExportBook): void {
     ? `<div class="back-cover-page"><img src="${book.layout.coverBack}" alt="4ème de couverture" /></div>`
     : '';
 
+  // Print-ready technical pages
+  const blankAfterCoverHtml = opts.printReady && book.layout?.coverFront
+    ? `<div class="blank-page"></div>`
+    : '';
+  const copyrightHtml = opts.printReady
+    ? buildCopyrightPage(book)
+    : '';
+  const blankBeforeBackCoverHtml = opts.printReady && book.layout?.coverBack
+    ? `<div class="blank-page"></div>`
+    : '';
+
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <title>${escapeXml(book.title)} — PDF</title>
+  <title>${escapeXml(book.title)} — PDF${opts.printReady ? ' (prêt à imprimer)' : ''}</title>
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet" />
   <style>${buildPdfStyles(book.layout)}</style>
 </head>
@@ -297,6 +368,7 @@ export function exportPdf(book: ExportBook): void {
   <button class="print-btn no-print" onclick="window.print()">Imprimer / Enregistrer en PDF</button>
 
   ${frontCoverHtml}
+  ${blankAfterCoverHtml}
 
   <div class="title-page">
     <h1>${escapeXml(book.title)}</h1>
@@ -304,11 +376,14 @@ export function exportPdf(book: ExportBook): void {
     ${book.genre ? `<p class="genre">${escapeXml(book.genre)}</p>` : ''}
   </div>
 
+  ${copyrightHtml}
+
   ${tocHtml}
 
   ${chaptersHtml}
   ${glossaryHtml}
 
+  ${blankBeforeBackCoverHtml}
   ${backCoverHtml}
 </body>
 </html>`;

@@ -1,6 +1,6 @@
 import type { Character } from '@/types';
 import { CharacterAvatar } from './CharacterAvatar';
-import { BookText } from 'lucide-react';
+import { BookText, GitFork } from 'lucide-react';
 
 interface CharacterCardProps {
   character: Character;
@@ -24,6 +24,12 @@ export function CharacterCard({ character, onClick }: CharacterCardProps) {
             <h3 className="font-display font-bold text-ink-500 truncate">
               {character.name} {character.surname}
             </h3>
+            {character.hideFromRelationshipGraph && (
+              <span className="flex items-center gap-0.5 text-[10px] text-ink-300 bg-parchment-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                <GitFork className="w-3 h-3" />
+                Généalogie
+              </span>
+            )}
             {character.inGlossary && (
               <BookText className="w-3.5 h-3.5 text-bordeaux-400 flex-shrink-0" />
             )}

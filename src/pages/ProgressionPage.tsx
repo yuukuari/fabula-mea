@@ -4,17 +4,21 @@ import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import {
   getOverallProgress, getCompletedScenesCount,
-  getBookType, getPageEstimate, estimateFromScenes, BOOK_TYPE_THRESHOLDS,
+  getBookType, getSmartPageEstimate, estimateFromScenes, BOOK_TYPE_THRESHOLDS,
 } from '@/lib/calculations';
-import { cn, formatWritingTime } from '@/lib/utils';
+import { cn, formatWritingTime, isSpecialChapter } from '@/lib/utils';
 import type { GoalMode } from '@/types';
 
 export function ProgressionPage() {
   const scenes = useBookStore((s) => s.scenes);
+  const chapters = useBookStore((s) => s.chapters);
   const goals = useBookStore((s) => s.goals);
   const updateGoals = useBookStore((s) => s.updateGoals);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const dailySnapshots = useBookStore((s) => s.dailySnapshots);
+  const layout = useBookStore((s) => s.layout);
+  const chapterCount = chapters.filter((c) => !isSpecialChapter(c)).length;
+  const hasPrintEdition = !!layout?.printEdition;
 
   const unitLabel = countUnit === 'characters' ? 'signes' : 'mots';
   const unitLabelCap = countUnit === 'characters' ? 'Signes' : 'Mots';
@@ -28,6 +32,10 @@ export function ProgressionPage() {
   const overallProgress = getOverallProgress(scenes, goals);
   const completedScenes = getCompletedScenesCount(scenes);
   const totalWords = scenes.reduce((sum, s) => sum + s.currentWordCount, 0);
+  const writtenPages = useMemo(
+    () => getSmartPageEstimate(totalWords, countUnit, layout, chapterCount),
+    [totalWords, countUnit, layout, chapterCount],
+  );
 
   // Scene status breakdown
   const outlineCount = scenes.filter((s) => s.status === 'outline').length;
@@ -37,37 +45,28 @@ export function ProgressionPage() {
 
   // Estimations based on mode
   const estimation = useMemo(() => {
+    const buildEst = (totalWords: number, perScene: number, source: 'target' | 'estimated', completedCount?: number) => {
+      const bookType = getBookType(totalWords, countUnit);
+      // Use print-edition-aware calc if the user configured one; otherwise falls back to ~250 words/page.
+      const pages = getSmartPageEstimate(totalWords, countUnit, layout, chapterCount);
+      return { totalWords, perScene, bookType, pages, source, ...(completedCount !== undefined ? { completedCount } : {}) };
+    };
+
     if (goals.mode === 'total' && goals.targetTotalCount && goals.targetTotalCount > 0) {
       const perScene = scenes.length > 0 ? Math.round(goals.targetTotalCount / scenes.length) : 0;
-      return {
-        totalWords: goals.targetTotalCount,
-        perScene,
-        bookType: getBookType(goals.targetTotalCount, countUnit),
-        source: 'target' as const,
-      };
+      return buildEst(goals.targetTotalCount, perScene, 'target');
     }
     if (goals.mode === 'perScene' && goals.targetCountPerScene && goals.targetCountPerScene > 0) {
       const total = goals.targetCountPerScene * scenes.length;
-      return {
-        totalWords: total,
-        perScene: goals.targetCountPerScene,
-        bookType: getBookType(total, countUnit),
-        source: 'target' as const,
-      };
+      return buildEst(total, goals.targetCountPerScene, 'target');
     }
     // Mode 'none' — estimate from written scenes
     const est = estimateFromScenes(scenes);
     if (est.estimatedTotal > 0) {
-      return {
-        totalWords: est.estimatedTotal,
-        perScene: est.estimatedPerScene,
-        bookType: getBookType(est.estimatedTotal, countUnit),
-        completedCount: est.completedCount,
-        source: 'estimated' as const,
-      };
+      return buildEst(est.estimatedTotal, est.estimatedPerScene, 'estimated', est.completedCount);
     }
     return null;
-  }, [goals, scenes, countUnit]);
+  }, [goals, scenes, countUnit, layout, chapterCount]);
 
   return (
     <div className="page-container">
@@ -112,8 +111,10 @@ export function ProgressionPage() {
                 <StatCard icon={TrendingUp} label={`${unitLabelCap} écrits`} value={totalWords.toLocaleString('fr-FR')} />
                 <div className="text-center">
                   <BookOpen className="w-5 h-5 text-gold-500 mx-auto mb-1" />
-                  <div className="text-lg font-bold text-ink-500">{getPageEstimate(totalWords, countUnit)}</div>
-                  <div className="text-xs text-ink-200 flex items-center justify-center gap-0.5">Pages estimées <PageInfoTip /></div>
+                  <div className="text-lg font-bold text-ink-500">{writtenPages}</div>
+                  <div className="text-xs text-ink-200 flex items-center justify-center gap-0.5">
+                    Pages estimées <PageInfoTip hasPrintEdition={hasPrintEdition} />
+                  </div>
                 </div>
                 {totalWritingMinutes > 0 && (
                   <StatCard
@@ -167,6 +168,9 @@ export function ProgressionPage() {
             unitLabel={unitLabel}
             countUnit={countUnit}
             scenesCount={scenes.length}
+            hasPrintEdition={hasPrintEdition}
+            layout={layout}
+            chapterCount={chapterCount}
           />
         </div>
       )}
@@ -183,6 +187,9 @@ function IdealBookCard({
   unitLabel,
   countUnit,
   scenesCount,
+  hasPrintEdition,
+  layout,
+  chapterCount,
 }: {
   goals: { mode: GoalMode; targetTotalCount?: number; targetCountPerScene?: number };
   updateGoals: (data: Partial<{ mode: GoalMode; targetTotalCount?: number; targetCountPerScene?: number }>) => void;
@@ -190,12 +197,16 @@ function IdealBookCard({
     totalWords: number;
     perScene: number;
     bookType: { label: string; pages: number };
+    pages: number;
     source: 'target' | 'estimated';
     completedCount?: number;
   } | null;
   unitLabel: string;
   countUnit: 'words' | 'characters';
   scenesCount: number;
+  hasPrintEdition: boolean;
+  layout: import('@/types').BookLayout | undefined;
+  chapterCount: number;
 }) {
   const [showModal, setShowModal] = useState(false);
   const unitLabelCap = countUnit === 'characters' ? 'Signes' : 'Mots';
@@ -260,10 +271,10 @@ function IdealBookCard({
             </div>
             <div>
               <p className="text-[11px] text-ink-200 uppercase tracking-wider flex items-center gap-1">
-                Pages estimées <PageInfoTip />
+                Pages estimées <PageInfoTip hasPrintEdition={hasPrintEdition} />
               </p>
               <p className="text-sm font-semibold text-ink-500 mt-0.5">
-                ~{estimation.bookType.pages}
+                ~{estimation.pages}
               </p>
             </div>
             {scenesCount > 0 && (
@@ -295,6 +306,9 @@ function IdealBookCard({
           updateGoals={updateGoals}
           unitLabel={unitLabel}
           countUnit={countUnit}
+          hasPrintEdition={hasPrintEdition}
+          layout={layout}
+          chapterCount={chapterCount}
           onClose={() => setShowModal(false)}
         />
       )}
@@ -307,10 +321,16 @@ function IdealBookModal({
   updateGoals,
   unitLabel,
   countUnit,
+  hasPrintEdition,
+  layout,
+  chapterCount,
   onClose,
 }: {
   goals: { mode: GoalMode; targetTotalCount?: number; targetCountPerScene?: number };
   updateGoals: (data: Partial<{ mode: GoalMode; targetTotalCount?: number; targetCountPerScene?: number }>) => void;
+  hasPrintEdition: boolean;
+  layout: import('@/types').BookLayout | undefined;
+  chapterCount: number;
   unitLabel: string;
   countUnit: 'words' | 'characters';
   onClose: () => void;
@@ -347,8 +367,8 @@ function IdealBookModal({
             />
             {goals.targetTotalCount != null && goals.targetTotalCount > 0 && (
               <p className="text-xs text-ink-300 mt-1.5 flex items-center gap-1">
-                ~{getPageEstimate(goals.targetTotalCount, countUnit)} pages estimées
-                <PageInfoTip />
+                ~{getSmartPageEstimate(goals.targetTotalCount, countUnit, layout, chapterCount)} pages estimées
+                <PageInfoTip hasPrintEdition={hasPrintEdition} />
               </p>
             )}
           </div>
@@ -366,8 +386,8 @@ function IdealBookModal({
             />
             {goals.targetCountPerScene != null && goals.targetCountPerScene > 0 && (
               <p className="text-xs text-ink-300 mt-1.5 flex items-center gap-1">
-                ~{getPageEstimate(goals.targetCountPerScene, countUnit)} pages/scène
-                <PageInfoTip />
+                ~{getSmartPageEstimate(goals.targetCountPerScene, countUnit, layout, 0)} pages/scène
+                <PageInfoTip hasPrintEdition={hasPrintEdition} />
               </p>
             )}
           </div>
@@ -391,13 +411,15 @@ function StatCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ cl
   );
 }
 
-/** Small (i) tooltip indicating page estimates are for "livre de poche" format */
-function PageInfoTip() {
+/** Small (i) tooltip explaining how the page estimate is computed */
+function PageInfoTip({ hasPrintEdition = false }: { hasPrintEdition?: boolean } = {}) {
   return (
     <span className="relative group/tip inline-flex items-center">
       <Info className="w-3 h-3 text-ink-200 cursor-help" />
       <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] text-white bg-ink-500 rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none group-hover/tip:opacity-100 transition-opacity z-10">
-        Estimation format livre de poche
+        {hasPrintEdition
+          ? "Estimation basée sur votre édition papier (format, marges, police)"
+          : "Estimation format livre de poche · configurable dans Édition"}
       </span>
     </span>
   );

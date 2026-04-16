@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { BookMeta, SagaMeta, WritingMode, CountUnit, BookLayout } from '@/types';
+import type { BookMeta, SagaMeta, WritingMode, CountUnit } from '@/types';
 import { generateId, now } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useSyncStore } from './useSyncStore';
@@ -21,7 +21,7 @@ interface LibraryStore {
   loadFromCloud: () => Promise<void>;
 
   // Saga management
-  createSaga: (title: string, opts?: { description?: string; author?: string; genre?: string; writingMode?: WritingMode; countUnit?: CountUnit; layout?: BookLayout }) => string;
+  createSaga: (title: string, opts?: { description?: string; author?: string; genre?: string; writingMode?: WritingMode; countUnit?: CountUnit }) => string;
   deleteSaga: (id: string) => void;
   updateSagaMeta: (id: string, data: Partial<SagaMeta>) => void;
   addBookToSaga: (sagaId: string, bookId: string) => void;
@@ -157,8 +157,6 @@ export const useLibraryStore = create<LibraryStore>()(
       createSaga: (title, opts = {}) => {
         const id = generateId();
         const timestamp = now();
-        // Strip cover images from layout to avoid bloating localStorage
-        const { coverFront: _cf, coverBack: _cb, ...layoutWithoutCovers } = opts.layout ?? {} as BookLayout;
         const meta: SagaMeta = {
           id, title,
           description: opts.description ?? '',
@@ -166,7 +164,6 @@ export const useLibraryStore = create<LibraryStore>()(
           genre: opts.genre ?? '',
           writingMode: opts.writingMode ?? 'count',
           countUnit: opts.countUnit ?? 'words',
-          layout: opts.layout ? layoutWithoutCovers as BookLayout : undefined,
           bookIds: [],
           createdAt: timestamp, updatedAt: timestamp,
         };
@@ -194,15 +191,9 @@ export const useLibraryStore = create<LibraryStore>()(
       },
 
       updateSagaMeta: (id, data) => {
-        // Strip cover images from layout to avoid bloating localStorage
-        const cleaned = { ...data };
-        if (cleaned.layout) {
-          const { coverFront: _cf, coverBack: _cb, ...rest } = cleaned.layout;
-          cleaned.layout = rest as BookLayout;
-        }
         set((s) => ({
           sagas: s.sagas.map((sg) =>
-            sg.id === id ? { ...sg, ...cleaned, updatedAt: now() } : sg
+            sg.id === id ? { ...sg, ...data, updatedAt: now() } : sg
           ),
         }));
         if (shouldSync()) {

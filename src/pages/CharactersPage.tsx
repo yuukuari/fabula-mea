@@ -24,6 +24,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Character } from '@/types';
 
+type CharacterFilter = 'all' | 'book' | 'genealogy';
+
 function SortableCharacterCard({ character, onClick }: { character: Character; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: character.id });
   const style = {
@@ -52,12 +54,34 @@ export function CharactersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<CharacterFilter>('all');
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const sorted = useMemo(
-    () => [...characters].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
+  const hasGenealogyOnly = useMemo(
+    () => characters.some((c) => c.hideFromRelationshipGraph),
     [characters],
+  );
+
+  const genealogyCount = useMemo(
+    () => characters.filter((c) => c.hideFromRelationshipGraph).length,
+    [characters],
+  );
+
+  const bookCount = useMemo(
+    () => characters.filter((c) => !c.hideFromRelationshipGraph).length,
+    [characters],
+  );
+
+  const visibleCharacters = useMemo(() => {
+    if (filter === 'book') return characters.filter((c) => !c.hideFromRelationshipGraph);
+    if (filter === 'genealogy') return characters.filter((c) => c.hideFromRelationshipGraph);
+    return characters;
+  }, [characters, filter]);
+
+  const sorted = useMemo(
+    () => [...visibleCharacters].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
+    [visibleCharacters],
   );
 
   const filtered = sorted.filter((c) =>
@@ -66,7 +90,7 @@ export function CharactersPage() {
     c.profession?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const isSearching = search.length > 0;
+  const isSearchingOrFiltering = search.length > 0 || filter !== 'all';
 
   const selectedChar = id ? characters.find((c) => c.id === id) : null;
 
@@ -75,6 +99,7 @@ export function CharactersPage() {
     if (!over || active.id === over.id) return;
     const oldIndex = sorted.findIndex((c) => c.id === active.id);
     const newIndex = sorted.findIndex((c) => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
     const reordered = arrayMove(sorted, oldIndex, newIndex);
     reorderCharacters(reordered.map((c) => c.id));
   }
@@ -110,6 +135,29 @@ export function CharactersPage() {
         </button>
       </div>
 
+      {characters.length > 0 && hasGenealogyOnly && (
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <button
+            onClick={() => setFilter('all')}
+            className={`badge cursor-pointer ${filter === 'all' ? 'bg-bordeaux-500 text-white' : 'bg-parchment-200 text-ink-400'}`}
+          >
+            Tous ({characters.length})
+          </button>
+          <button
+            onClick={() => setFilter('book')}
+            className={`badge cursor-pointer ${filter === 'book' ? 'bg-bordeaux-500 text-white' : 'bg-parchment-200 text-ink-400'}`}
+          >
+            Livre ({bookCount})
+          </button>
+          <button
+            onClick={() => setFilter('genealogy')}
+            className={`badge cursor-pointer ${filter === 'genealogy' ? 'bg-bordeaux-500 text-white' : 'bg-parchment-200 text-ink-400'}`}
+          >
+            Généalogie ({genealogyCount})
+          </button>
+        </div>
+      )}
+
       {characters.length > 0 && (
         <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-200" />
@@ -136,7 +184,7 @@ export function CharactersPage() {
         />
       ) : (
         <>
-          {isSearching ? (
+          {isSearchingOrFiltering ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((char) => (
                 <CharacterCard

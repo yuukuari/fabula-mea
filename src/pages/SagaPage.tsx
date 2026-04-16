@@ -4,8 +4,7 @@ import { ArrowLeft, GripVertical, Trash2, Library, X, AlertTriangle, Hash, PenLi
 import { cn } from '@/lib/utils';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
-import { AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, AVAILABLE_LINE_HEIGHTS, FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
-import type { BookMeta, SagaMeta, WritingMode, CountUnit, BookFont, BookFontSize, BookLineHeight, BookLayout } from '@/types';
+import type { BookMeta, SagaMeta, WritingMode, CountUnit } from '@/types';
 import {
   DndContext,
   closestCenter,
@@ -146,17 +145,9 @@ export function SagaPage() {
     navigate('/');
   };
 
-  const sagaLayout = saga.layout ?? DEFAULT_LAYOUT;
-
   /** Update saga meta AND propagate relevant fields to all books in the saga */
-  const handleSagaUpdate = (data: Partial<Omit<SagaMeta, 'layout'>> & { layout?: Partial<BookLayout> }) => {
-    // If layout is a partial update, merge it into a full BookLayout
-    const { layout: partialLayout, ...rest } = data;
-    const resolved: Partial<SagaMeta> = { ...rest };
-    if (partialLayout) {
-      resolved.layout = { ...sagaLayout, ...partialLayout };
-    }
-    updateSagaMeta(saga.id, resolved);
+  const handleSagaUpdate = (data: Partial<SagaMeta>) => {
+    updateSagaMeta(saga.id, data);
 
     // Fields that propagate to BookMeta (library store)
     const metaFields: Partial<BookMeta> = {};
@@ -175,7 +166,6 @@ export function SagaPage() {
     if (data.genre !== undefined) projectFields.genre = data.genre;
     if (data.writingMode !== undefined) projectFields.writingMode = data.writingMode;
     if (data.countUnit !== undefined) projectFields.countUnit = data.countUnit;
-    if (resolved.layout !== undefined) projectFields.layout = resolved.layout;
 
     if (Object.keys(projectFields).length > 0) {
       const BOOK_PREFIX = 'fabula-mea-book-';
@@ -367,73 +357,6 @@ export function SagaPage() {
             </SortableContext>
           </DndContext>
         )}
-      </div>
-
-      {/* Mise en page */}
-      <div className="card-fantasy p-6 mb-6">
-        <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Mise en page</h3>
-        <p className="text-sm text-ink-300 mb-4">
-          Ces paramètres s'appliquent à tous les livres de la saga : éditeur, relecture et exports (EPUB/PDF).
-        </p>
-
-        <div className="space-y-5">
-          {/* Font family */}
-          <div>
-            <label className="label-field">Police par défaut</label>
-            <select
-              value={sagaLayout.fontFamily}
-              onChange={(e) => handleSagaUpdate({ layout: { fontFamily: e.target.value as BookFont } })}
-              className="input-field"
-            >
-              {AVAILABLE_FONTS.map((f) => (
-                <option key={f} value={f} style={{ fontFamily: FONT_STACKS[f] }}>{f}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Font size + line height */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label-field">Taille de police</label>
-              <select
-                value={sagaLayout.fontSize}
-                onChange={(e) => handleSagaUpdate({ layout: { fontSize: Number(e.target.value) as BookFontSize } })}
-                className="input-field"
-              >
-                {AVAILABLE_FONT_SIZES.map((s) => (
-                  <option key={s} value={s}>{s} pt</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label-field">Interligne</label>
-              <select
-                value={sagaLayout.lineHeight}
-                onChange={(e) => handleSagaUpdate({ layout: { lineHeight: Number(e.target.value) as BookLineHeight } })}
-                className="input-field"
-              >
-                {AVAILABLE_LINE_HEIGHTS.map((lh) => (
-                  <option key={lh} value={lh}>{lh === 1.0 ? 'Simple (1.0)' : lh === 1.5 ? 'Standard (1.5)' : lh === 2.0 ? 'Double (2.0)' : lh.toString()}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Preview */}
-          <div className="border border-parchment-200 rounded-lg p-4 bg-white/60">
-            <p className="text-xs text-ink-200 mb-2 font-sans">Aperçu</p>
-            <p
-              className="text-ink-500 text-justify"
-              style={{
-                fontFamily: FONT_STACKS[sagaLayout.fontFamily],
-                fontSize: `${sagaLayout.fontSize}pt`,
-                lineHeight: `${sagaLayout.lineHeight}`,
-              }}
-            >
-              « Il est des lieux où souffle l'esprit, des pages où chaque mot porte le poids d'un monde. L'écrivain, tel un artisan patient, tisse ses phrases avec le soin d'un orfèvre — car chaque virgule, chaque silence, chaque élan du récit est une promesse faite au lecteur. »
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* Danger zone */}

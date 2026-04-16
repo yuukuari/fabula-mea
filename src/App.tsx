@@ -14,7 +14,12 @@ import { WorldPage } from '@/pages/WorldPage';
 import { MapsPage } from '@/pages/MapsPage';
 import { NotesIdeasPage } from '@/pages/NotesIdeasPage';
 import { SettingsPage } from '@/pages/SettingsPage';
-import { EditionPage } from '@/pages/EditionPage';
+import { EditionOverviewPage } from '@/pages/edition/EditionOverviewPage';
+import { EditionLayoutPage } from '@/pages/edition/EditionLayoutPage';
+import { EditionCoversPage } from '@/pages/edition/EditionCoversPage';
+import { EditionPrintPage } from '@/pages/edition/EditionPrintPage';
+import { EditionDigitalPage } from '@/pages/edition/EditionDigitalPage';
+import { EditionExportPage } from '@/pages/edition/EditionExportPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { AuthPage } from '@/pages/AuthPage';
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
@@ -86,7 +91,12 @@ const router = createBrowserRouter([
           { path: 'maps', element: <MapsPage /> },
           { path: 'notes', element: <NotesIdeasPage /> },
           { path: 'reviews', element: <ReviewsPage /> },
-          { path: 'edition', element: <EditionPage /> },
+          { path: 'edition', element: <EditionOverviewPage /> },
+          { path: 'edition/layout', element: <EditionLayoutPage /> },
+          { path: 'edition/covers', element: <EditionCoversPage /> },
+          { path: 'edition/print', element: <EditionPrintPage /> },
+          { path: 'edition/digital', element: <EditionDigitalPage /> },
+          { path: 'edition/export', element: <EditionExportPage /> },
           { path: 'settings', element: <SettingsPage /> },
         ],
       },

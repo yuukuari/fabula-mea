@@ -5,10 +5,9 @@ import { useBookStore } from '@/store/useBookStore';
 import { useLibraryStore, getBookStorageKey } from '@/store/useLibraryStore';
 import { useSagaStore } from '@/store/useSagaStore';
 import { useSyncStore } from '@/store/useSyncStore';
-import { AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, AVAILABLE_LINE_HEIGHTS, FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/shared/Modal';
-import type { WritingMode, BookFont, BookFontSize, BookLineHeight, BookLayout, VersionMeta, BookProject } from '@/types';
+import type { WritingMode, BookLayout, VersionMeta, BookProject } from '@/types';
 
 /** Modale de confirmation de changement de mode */
 function WritingModeChangeDialog({
@@ -101,36 +100,6 @@ function WritingModeChangeDialog({
             </div>
           </>
         )}
-      </div>
-    </div>
-  );
-}
-
-/** Modale d'information sur le changement de mise en page */
-function LayoutChangeInfoDialog({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-parchment-50 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-        <button onClick={onClose} className="absolute top-4 right-4 btn-ghost p-1">
-          <X className="w-4 h-4" />
-        </button>
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-            <AlertTriangle className="w-5 h-5 text-blue-500" />
-          </div>
-          <div>
-            <h3 className="font-display font-bold text-ink-500">Changement de mise en page</h3>
-            <p className="text-sm text-ink-300 mt-1">
-              Ce paramètre s'applique au texte dont la police n'a pas été modifiée manuellement dans l'éditeur (texte « par défaut »).
-            </p>
-          </div>
-        </div>
-        <p className="text-sm text-ink-300 mb-5">
-          Les passages auxquels vous avez appliqué une police spécifique dans l'éditeur conservent leur mise en forme individuelle.
-          Pour uniformiser tout le texte, utilisez le bouton « Supprimer le formatage » dans l'éditeur de scènes.
-        </p>
-        <button onClick={onClose} className="w-full btn-primary">Compris</button>
       </div>
     </div>
   );
@@ -513,11 +482,7 @@ export function SettingsPage() {
   const updateWritingMode = useBookStore((s) => s.updateWritingMode);
   const updateCountUnit = useBookStore((s) => s.updateCountUnit);
   const [pendingMode, setPendingMode] = useState<WritingMode | null>(null);
-  const [showLayoutInfo, setShowLayoutInfo] = useState(false);
   const [showTransformSaga, setShowTransformSaga] = useState(false);
-
-  const layout = useBookStore((s) => s.layout);
-  const updateLayout = useBookStore((s) => s.updateLayout);
 
   const handleTransformToSaga = () => {
     const bookState = useBookStore.getState();
@@ -527,7 +492,6 @@ export function SettingsPage() {
       genre: bookState.genre ?? '',
       writingMode: bookState.writingMode,
       countUnit: bookState.countUnit ?? 'words',
-      layout: bookState.layout,
     });
     // 2. Init saga store with book's encyclopedia data
     useSagaStore.getState().initNewSaga(newSagaId, bookState.title);
@@ -599,14 +563,6 @@ export function SettingsPage() {
               <div>
                 <span className="text-ink-200 text-xs">Unité de comptage</span>
                 <p className="text-ink-500 font-medium">{saga.countUnit === 'characters' ? 'Signes (espaces compris)' : 'Mots'}</p>
-              </div>
-              <div>
-                <span className="text-ink-200 text-xs">Police</span>
-                <p className="text-ink-500 font-medium">{(saga.layout ?? DEFAULT_LAYOUT).fontFamily}</p>
-              </div>
-              <div>
-                <span className="text-ink-200 text-xs">Taille / Interligne</span>
-                <p className="text-ink-500 font-medium">{(saga.layout ?? DEFAULT_LAYOUT).fontSize} pt / {(saga.layout ?? DEFAULT_LAYOUT).lineHeight}</p>
               </div>
             </div>
           </div>
@@ -751,78 +707,6 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Mise en page — only for standalone books */}
-      {!saga && (
-        <div className="card-fantasy p-6 mb-6">
-          <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Mise en page</h3>
-          <p className="text-sm text-ink-300 mb-4">
-            Ces paramètres s'appliquent à l'éditeur, au mode relecture et aux exports (EPUB/PDF).
-          </p>
-
-          <div className="space-y-5">
-            {/* Font family */}
-            <div>
-              <label className="label-field">Police par défaut</label>
-              <select
-                value={layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily}
-                onChange={(e) => { updateLayout({ fontFamily: e.target.value as BookFont }); setShowLayoutInfo(true); }}
-                className="input-field"
-              >
-                {AVAILABLE_FONTS.map((f) => (
-                  <option key={f} value={f} style={{ fontFamily: FONT_STACKS[f] }}>{f}</option>
-                ))}
-              </select>
-              <p className="text-xs text-ink-200 mt-1">
-                Vous pouvez aussi changer la police d'un texte sélectionné dans l'éditeur.
-              </p>
-            </div>
-
-            {/* Font size + line height side by side */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label-field">Taille de police</label>
-                <select
-                  value={layout?.fontSize ?? DEFAULT_LAYOUT.fontSize}
-                  onChange={(e) => { updateLayout({ fontSize: Number(e.target.value) as BookFontSize }); setShowLayoutInfo(true); }}
-                  className="input-field"
-                >
-                  {AVAILABLE_FONT_SIZES.map((s) => (
-                    <option key={s} value={s}>{s} pt</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label-field">Interligne</label>
-                <select
-                  value={layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight}
-                  onChange={(e) => updateLayout({ lineHeight: Number(e.target.value) as BookLineHeight })}
-                  className="input-field"
-                >
-                  {AVAILABLE_LINE_HEIGHTS.map((lh) => (
-                    <option key={lh} value={lh}>{lh === 1.0 ? 'Simple (1.0)' : lh === 1.5 ? 'Standard (1.5)' : lh === 2.0 ? 'Double (2.0)' : lh.toString()}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Preview */}
-            <div className="border border-parchment-200 rounded-lg p-4 bg-white/60">
-              <p className="text-xs text-ink-200 mb-2 font-sans">Aperçu</p>
-              <p
-                className="text-ink-500 text-justify"
-                style={{
-                  fontFamily: FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily],
-                  fontSize: `${layout?.fontSize ?? DEFAULT_LAYOUT.fontSize}pt`,
-                  lineHeight: `${layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight}`,
-                }}
-              >
-                « Il est des lieux où souffle l'esprit, des pages où chaque mot porte le poids d'un monde. L'écrivain, tel un artisan patient, tisse ses phrases avec le soin d'un orfèvre — car chaque virgule, chaque silence, chaque élan du récit est une promesse faite au lecteur. »
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Transform to saga — only for standalone books */}
       {!saga && (
         <div className="card-fantasy p-6 mb-6 border-bordeaux-100">
@@ -845,7 +729,6 @@ export function SettingsPage() {
       <VersionHistorySection bookId={bookId} />
 
       {/* Layout info dialog */}
-      {showLayoutInfo && <LayoutChangeInfoDialog onClose={() => setShowLayoutInfo(false)} />}
 
       {/* Writing mode change dialog */}
       {pendingMode && (

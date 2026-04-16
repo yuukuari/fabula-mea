@@ -284,6 +284,23 @@ export function countFromHtml(html: string, unit: 'words' | 'characters'): numbe
   return unit === 'characters' ? countCharacters(html) : countWordsFromHtml(html);
 }
 
+/**
+ * Sum total count across all scenes, honoring the chosen unit.
+ * For scenes with a stored `currentWordCount`, prefer that value (only when
+ * unit is 'words', since the stored count is in words).
+ */
+export function totalScenesCount(
+  scenes: Array<{ content?: string; currentWordCount?: number }>,
+  unit: 'words' | 'characters' = 'words',
+): number {
+  return scenes.reduce((sum, s) => {
+    const c = unit === 'words'
+      ? (s.currentWordCount ?? countWordsFromHtml(s.content ?? ''))
+      : countCharacters(s.content ?? '');
+    return sum + c;
+  }, 0);
+}
+
 /** Format count with unit label */
 export function formatCount(value: number, unit: 'words' | 'characters'): string {
   return unit === 'characters'

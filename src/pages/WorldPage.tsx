@@ -1,16 +1,73 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText, Search } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText, Search, GripVertical } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn, WORLD_NOTE_CATEGORY_LABELS, WORLD_NOTE_CATEGORY_COLORS } from '@/lib/utils';
-import type { WorldNoteCategory } from '@/types';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { WorldNote, WorldNoteCategory } from '@/types';
+
+function SortableWorldNoteCard({ note, onClick }: { note: WorldNote; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: note.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative group/sort">
+      <button
+        {...attributes}
+        {...listeners}
+        className="absolute left-1 top-1 z-10 p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100 opacity-0 group-hover/sort:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <WorldNoteCard note={note} onClick={onClick} />
+    </div>
+  );
+}
+
+function WorldNoteCard({ note, onClick }: { note: WorldNote; onClick: () => void }) {
+  return (
+    <div onClick={onClick} className="card-fantasy cursor-pointer overflow-hidden">
+      {note.imageUrl ? (
+        <img src={note.imageUrl} alt={note.title} className="w-full h-36 object-contain bg-parchment-100" />
+      ) : (
+        <div className="w-full h-36 bg-parchment-200 flex items-center justify-center">
+          <Globe className="w-12 h-12 text-ink-100" />
+        </div>
+      )}
+      <div className="p-4">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className={cn('badge text-xs', WORLD_NOTE_CATEGORY_COLORS[note.category] ?? 'bg-parchment-200 text-ink-300')}>{WORLD_NOTE_CATEGORY_LABELS[note.category]}</span>
+          {note.inGlossary && (
+            <BookText className="w-3.5 h-3.5 text-bordeaux-400" />
+          )}
+        </div>
+        <h3 className="font-display font-bold text-ink-500">{note.title}</h3>
+        <p className="text-sm text-ink-300 mt-1 line-clamp-2">{note.content}</p>
+      </div>
+    </div>
+  );
+}
 
 export function WorldPage() {
   const [searchParams] = useSearchParams();
-  const { worldNotes, addWorldNote, updateWorldNote, deleteWorldNote } = useEncyclopediaStore();
+  const { worldNotes, addWorldNote, updateWorldNote, deleteWorldNote, reorderWorldNotes } = useEncyclopediaStore();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -26,9 +83,28 @@ export function WorldPage() {
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [search, setSearch] = useState('');
 
-  const filtered = worldNotes
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const sorted = useMemo(
+    () => [...worldNotes].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
+    [worldNotes],
+  );
+
+  const filtered = sorted
     .filter((n) => !filterCategory || n.category === filterCategory)
     .filter((n) => !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase()));
+
+  const isSearchingOrFiltering = search.length > 0 || filterCategory.length > 0;
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = sorted.findIndex((n) => n.id === active.id);
+    const newIndex = sorted.findIndex((n) => n.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(sorted, oldIndex, newIndex);
+    reorderWorldNotes(reordered.map((n) => n.id));
+  }
 
   const selectedNote = selectedId ? worldNotes.find((n) => n.id === selectedId) : null;
 
@@ -142,30 +218,22 @@ export function WorldPage() {
           description="Creez des fiches pour décrire votre univers : histoire, culture, magie, politique..."
           action={<button onClick={() => setShowForm(true)} className="btn-primary">Créer une fiche</button>}
         />
-      ) : (
+      ) : isSearchingOrFiltering ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((note) => (
-            <div key={note.id} onClick={() => setSelectedId(note.id)} className="card-fantasy cursor-pointer overflow-hidden">
-              {note.imageUrl ? (
-                <img src={note.imageUrl} alt={note.title} className="w-full h-36 object-contain bg-parchment-100" />
-              ) : (
-                <div className="w-full h-36 bg-parchment-200 flex items-center justify-center">
-                  <Globe className="w-12 h-12 text-ink-100" />
-                </div>
-              )}
-              <div className="p-4">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className={cn('badge text-xs', WORLD_NOTE_CATEGORY_COLORS[note.category] ?? 'bg-parchment-200 text-ink-300')}>{WORLD_NOTE_CATEGORY_LABELS[note.category]}</span>
-                  {note.inGlossary && (
-                    <BookText className="w-3.5 h-3.5 text-bordeaux-400" />
-                  )}
-                </div>
-                <h3 className="font-display font-bold text-ink-500">{note.title}</h3>
-                <p className="text-sm text-ink-300 mt-1 line-clamp-2">{note.content}</p>
-              </div>
-            </div>
+            <WorldNoteCard key={note.id} note={note} onClick={() => setSelectedId(note.id)} />
           ))}
         </div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sorted.map((n) => n.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sorted.map((note) => (
+                <SortableWorldNoteCard key={note.id} note={note} onClick={() => setSelectedId(note.id)} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {showForm && <WorldNoteForm noteId={editingId} onClose={() => { setShowForm(false); setEditingId(null); }} />}

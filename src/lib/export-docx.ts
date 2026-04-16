@@ -25,6 +25,7 @@ import {
 import { saveAs } from 'file-saver';
 import { DEFAULT_LAYOUT } from '@/lib/fonts';
 import type { ExportBook } from '@/lib/export-shared';
+import { getTrimSize } from '@/lib/print-edition';
 
 // ── HTML to DOCX paragraphs converter ────────────────────────────
 
@@ -923,18 +924,23 @@ export async function exportDocx(book: ExportBook): Promise<void> {
     sections: [
       {
         properties: {
-          page: {
-            size: {
-              width: convertMillimetersToTwip(148), // A5 width
-              height: convertMillimetersToTwip(210), // A5 height
-            },
-            margin: {
-              top: convertMillimetersToTwip(15),
-              bottom: convertMillimetersToTwip(20),
-              left: convertMillimetersToTwip(18),
-              right: convertMillimetersToTwip(15),
-            },
-          },
+          page: (() => {
+            const pe = book.layout?.printEdition;
+            const trim = pe ? getTrimSize(pe.trimSize) : { widthMm: 148, heightMm: 210 };
+            const margins = pe?.margins ?? { topMm: 15, bottomMm: 20, innerMm: 18, outerMm: 15 };
+            return {
+              size: {
+                width: convertMillimetersToTwip(trim.widthMm),
+                height: convertMillimetersToTwip(trim.heightMm),
+              },
+              margin: {
+                top: convertMillimetersToTwip(margins.topMm),
+                bottom: convertMillimetersToTwip(margins.bottomMm),
+                left: convertMillimetersToTwip(margins.innerMm),
+                right: convertMillimetersToTwip(margins.outerMm),
+              },
+            };
+          })(),
         },
         children: sections,
       },

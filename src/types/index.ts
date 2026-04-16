@@ -131,6 +131,7 @@ export interface Place {
   connectedPlaceIds: EntityId[];
   tags: EntityId[];
   notes?: string;
+  order?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -277,6 +278,7 @@ export interface WorldNote {
   imageUrl?: string;
   linkedNoteIds: EntityId[];
   tags: EntityId[];
+  order?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -355,7 +357,6 @@ export interface SagaMeta {
   genre?: string;
   writingMode: WritingMode;
   countUnit: CountUnit;
-  layout?: BookLayout;
   imageUrl?: string;
   bookIds: EntityId[];    // ordered list of book IDs in this saga
   createdAt: string;
@@ -585,6 +586,49 @@ export interface BookLayout {
   coverFront?: string;   // base64 image
   coverBack?: string;    // base64 image
   coverSpine?: string;   // base64 image
+  printEdition?: PrintEdition;
+  digitalEdition?: DigitalEdition;
+}
+
+// ─── Print Edition ───
+export type TrimSizeId = 'poche' | 'a5' | '6x9' | 'royal' | 'digest';
+export type PaperType = 'white_80' | 'cream_80' | 'white_90';
+
+export interface PrintMargins {
+  topMm: number;
+  bottomMm: number;
+  innerMm: number;   // côté reliure (gouttière)
+  outerMm: number;
+}
+
+export interface PrintEdition {
+  trimSize: TrimSizeId;
+  paperType: PaperType;
+  margins: PrintMargins;
+  bleedMm: number;
+  isbn?: string;
+  publisher?: string;
+  printDate?: string;  // YYYY-MM format
+}
+
+// ─── Digital Edition (EPUB metadata) ───
+export type BookRights =
+  | 'all_rights_reserved'
+  | 'cc_by'
+  | 'cc_by_sa'
+  | 'cc_by_nc'
+  | 'cc_by_nc_sa'
+  | 'cc_by_nd'
+  | 'cc_by_nc_nd'
+  | 'public_domain';
+
+export interface DigitalEdition {
+  description?: string;      // Long description for online stores (distinct from synopsis)
+  keywords?: string[];       // Search keywords / subjects
+  isbnDigital?: string;      // ISBN for digital edition (distinct from print ISBN)
+  rights?: BookRights;
+  language?: string;         // ISO 639-1 code (fr, en, es, de, it, pt...)
+  publisher?: string;        // Digital publisher (may differ from print publisher)
 }
 
 // ─── Root Store ───

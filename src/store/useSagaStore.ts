@@ -79,6 +79,7 @@ interface SagaStore extends SagaProject {
   addPlace: (place: Partial<Place> & { name: string }) => string;
   updatePlace: (id: string, data: Partial<Place>) => void;
   deletePlace: (id: string) => void;
+  reorderPlaces: (placeIds: string[]) => void;
 
   // Tags
   addTag: (tag: Omit<Tag, 'id'>) => string;
@@ -89,6 +90,7 @@ interface SagaStore extends SagaProject {
   addWorldNote: (note: Partial<WorldNote> & { title: string }) => string;
   updateWorldNote: (id: string, data: Partial<WorldNote>) => void;
   deleteWorldNote: (id: string) => void;
+  reorderWorldNotes: (noteIds: string[]) => void;
 
   // Maps
   addMap: (map: Partial<MapItem> & { name: string; imageUrl: string }) => string;
@@ -325,6 +327,8 @@ export const useSagaStore = create<SagaStore>()(
         set((s) => ({ places: enc.updatePlace(s.places, id, data), ...touchSave() })),
       deletePlace: (id) =>
         set((s) => ({ places: enc.deletePlace(s.places, id), ...touchSave() })),
+      reorderPlaces: (placeIds) =>
+        set((s) => ({ places: enc.reorderPlaces(s.places, placeIds), ...touchSave() })),
 
       // ─── Tags ───
 
@@ -349,6 +353,8 @@ export const useSagaStore = create<SagaStore>()(
         set((s) => ({ worldNotes: enc.updateWorldNote(s.worldNotes, id, data), ...touchSave() })),
       deleteWorldNote: (id) =>
         set((s) => ({ worldNotes: enc.deleteWorldNote(s.worldNotes, id), ...touchSave() })),
+      reorderWorldNotes: (noteIds) =>
+        set((s) => ({ worldNotes: enc.reorderWorldNotes(s.worldNotes, noteIds), ...touchSave() })),
 
       // ─── Maps ───
 

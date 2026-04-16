@@ -1,6 +1,7 @@
 import { differenceInDays, eachDayOfInterval, parseISO, isWithinInterval, startOfDay } from 'date-fns';
-import type { Scene, ProjectGoals, ExcludedPeriod, CountUnit } from '@/types';
+import type { Scene, ProjectGoals, ExcludedPeriod, CountUnit, BookLayout } from '@/types';
 import { WORDS_TO_CHARS_RATIO } from '@/lib/utils';
+import { estimatePageCount } from '@/lib/print-edition';
 
 // ─── Helpers ───
 
@@ -219,6 +220,29 @@ export function getPageEstimate(count: number, unit: CountUnit = 'words'): numbe
   const words = unit === 'characters' ? Math.round(count / WORDS_TO_CHARS_RATIO) : count;
   return Math.ceil(words / WORDS_PER_PAGE);
 }
+
+/**
+ * Smart page estimate that uses the book's printEdition when available, or the
+ * simple word-based formula otherwise. Keeps Progression and Édition in sync.
+ *
+ * When `layout.printEdition` is configured, delegates to `estimatePageCount`
+ * which accounts for the real trim size, font, margins and chapter breaks.
+ * Otherwise falls back to `getPageEstimate` (~250 words/page).
+ */
+export function getSmartPageEstimate(
+  count: number,
+  unit: CountUnit,
+  layout: BookLayout | undefined,
+  chapterCount: number = 0,
+): number {
+  const pe = layout?.printEdition;
+  if (!pe) return getPageEstimate(count, unit);
+  const words = unit === 'characters' ? Math.round(count / WORDS_TO_CHARS_RATIO) : count;
+  const fontSize = layout?.fontSize ?? 12;
+  const lineHeight = layout?.lineHeight ?? 1.5;
+  return estimatePageCount(words, pe.trimSize, fontSize, lineHeight, pe.margins, chapterCount);
+}
+
 
 /**
  * Book type thresholds (source: monde-fantasy.com)

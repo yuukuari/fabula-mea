@@ -4,7 +4,7 @@ import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WorldNote, ExcludedPeriod, ProjectGoals, DailySnapshot,
   Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
-  BookLayout, TimelineEvent, EventDuration, DurationUnit,
+  BookLayout, PrintEdition, DigitalEdition, TimelineEvent, EventDuration, DurationUnit,
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR, computeEventEndDate, getEventStartDate, countFromHtml, convertCount } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
@@ -73,6 +73,8 @@ interface BookStore extends BookProject {
   setGlossaryEnabled: (enabled: boolean) => void;
   setTableOfContents: (enabled: boolean) => void;
   updateLayout: (data: Partial<BookLayout>) => void;
+  updatePrintEdition: (data: Partial<PrintEdition>) => void;
+  updateDigitalEdition: (data: Partial<DigitalEdition>) => void;
 
   // Characters
   addCharacter: (char: Partial<Character> & { name: string }) => string;
@@ -99,6 +101,7 @@ interface BookStore extends BookProject {
   addPlace: (place: Partial<Place> & { name: string }) => string;
   updatePlace: (id: string, data: Partial<Place>) => void;
   deletePlace: (id: string) => void;
+  reorderPlaces: (placeIds: string[]) => void;
 
   // Chapters
   addChapter: (chapter: Partial<Chapter>) => string;
@@ -128,6 +131,7 @@ interface BookStore extends BookProject {
   addWorldNote: (note: Partial<WorldNote> & { title: string }) => string;
   updateWorldNote: (id: string, data: Partial<WorldNote>) => void;
   deleteWorldNote: (id: string) => void;
+  reorderWorldNotes: (noteIds: string[]) => void;
 
   // Maps
   addMap: (map: Partial<MapItem> & { name: string; imageUrl: string }) => string;
@@ -628,6 +632,26 @@ export const useBookStore = create<BookStore>()(
           ...touchSave(),
         })),
 
+      updatePrintEdition: (data) =>
+        set((s) => {
+          const currentLayout = s.layout ?? { fontFamily: 'Times New Roman' as const, fontSize: 12 as const, lineHeight: 1.5 as const };
+          const currentPrint = currentLayout.printEdition ?? { trimSize: 'a5' as const, paperType: 'white_80' as const, margins: { topMm: 12, bottomMm: 18, innerMm: 18, outerMm: 15 }, bleedMm: 3 };
+          return {
+            layout: { ...currentLayout, printEdition: { ...currentPrint, ...data } },
+            ...touchSave(),
+          };
+        }),
+
+      updateDigitalEdition: (data) =>
+        set((s) => {
+          const currentLayout = s.layout ?? { fontFamily: 'Times New Roman' as const, fontSize: 12 as const, lineHeight: 1.5 as const };
+          const currentDigital = currentLayout.digitalEdition ?? {};
+          return {
+            layout: { ...currentLayout, digitalEdition: { ...currentDigital, ...data } },
+            ...touchSave(),
+          };
+        }),
+
       // ─── Characters ───
       addCharacter: (char) => {
         const { characters, id } = enc.createCharacter(get().characters, char);
@@ -689,6 +713,8 @@ export const useBookStore = create<BookStore>()(
           scenes: s.scenes.map((sc) => sc.placeId === id ? { ...sc, placeId: undefined } : sc),
           ...touchSave(),
         })),
+      reorderPlaces: (placeIds) =>
+        set((s) => ({ places: enc.reorderPlaces(s.places, placeIds), ...touchSave() })),
 
       // ─── Chapters ───
       addChapter: (chapter) => {
@@ -965,6 +991,8 @@ export const useBookStore = create<BookStore>()(
         set((s) => ({ worldNotes: enc.updateWorldNote(s.worldNotes, id, data), ...touchSave() })),
       deleteWorldNote: (id) =>
         set((s) => ({ worldNotes: enc.deleteWorldNote(s.worldNotes, id), ...touchSave() })),
+      reorderWorldNotes: (noteIds) =>
+        set((s) => ({ worldNotes: enc.reorderWorldNotes(s.worldNotes, noteIds), ...touchSave() })),
 
       // ─── Maps ───
       addMap: (map) => {

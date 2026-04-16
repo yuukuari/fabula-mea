@@ -432,14 +432,44 @@ ${tocEntries
     `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:${uuid}</dc:identifier>
+    <dc:identifier id="bookid">${(() => {
+      const isbn = book.layout?.digitalEdition?.isbnDigital || book.layout?.printEdition?.isbn;
+      return isbn ? `urn:isbn:${isbn.replace(/[^0-9X]/gi, '')}` : `urn:uuid:${uuid}`;
+    })()}</dc:identifier>
     <dc:title>${escapeXml(book.title)}</dc:title>
     <dc:creator id="creator">${escapeXml(book.author || 'Auteur')}</dc:creator>
     <meta refines="#creator" property="role" scheme="marc:relators">aut</meta>
-    <dc:language>fr</dc:language>
+    <dc:language>${escapeXml(book.layout?.digitalEdition?.language || 'fr')}</dc:language>
     <dc:date>${now}</dc:date>
-    ${book.synopsis ? `<dc:description>${escapeXml(book.synopsis)}</dc:description>` : ''}
-    ${book.genre ? `<dc:subject>${escapeXml(book.genre)}</dc:subject>` : ''}
+    ${(() => {
+      const pub = book.layout?.digitalEdition?.publisher || book.layout?.printEdition?.publisher;
+      return pub ? `<dc:publisher>${escapeXml(pub)}</dc:publisher>` : '';
+    })()}
+    ${(() => {
+      const desc = book.layout?.digitalEdition?.description || book.synopsis;
+      return desc ? `<dc:description>${escapeXml(desc)}</dc:description>` : '';
+    })()}
+    ${(() => {
+      const kws = book.layout?.digitalEdition?.keywords;
+      if (kws && kws.length > 0) {
+        return kws.map((kw) => `<dc:subject>${escapeXml(kw)}</dc:subject>`).join('\n    ');
+      }
+      return book.genre ? `<dc:subject>${escapeXml(book.genre)}</dc:subject>` : '';
+    })()}
+    ${(() => {
+      const rightsMap: Record<string, string> = {
+        all_rights_reserved: 'All rights reserved',
+        cc_by: 'CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/',
+        cc_by_sa: 'CC BY-SA 4.0 — https://creativecommons.org/licenses/by-sa/4.0/',
+        cc_by_nc: 'CC BY-NC 4.0 — https://creativecommons.org/licenses/by-nc/4.0/',
+        cc_by_nc_sa: 'CC BY-NC-SA 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/',
+        cc_by_nd: 'CC BY-ND 4.0 — https://creativecommons.org/licenses/by-nd/4.0/',
+        cc_by_nc_nd: 'CC BY-NC-ND 4.0 — https://creativecommons.org/licenses/by-nc-nd/4.0/',
+        public_domain: 'Public domain',
+      };
+      const r = book.layout?.digitalEdition?.rights;
+      return r && rightsMap[r] ? `<dc:rights>${escapeXml(rightsMap[r])}</dc:rights>` : '';
+    })()}
     <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d{3}Z/, 'Z')}</meta>
     ${coverImageId ? `<meta name="cover" content="${coverImageId}"/>` : ''}
   </metadata>

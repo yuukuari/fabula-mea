@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  Plus, Lightbulb, Edit, Trash2, X, ArrowLeft, ListChecks, Search,
+  Plus, Lightbulb, Edit, Trash2, X, ArrowLeft, ListChecks, Search, GripVertical,
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Heading1, Heading2, Heading3, Quote, List, ListOrdered,
@@ -20,13 +20,88 @@ import { useBookStore } from '@/store/useBookStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn } from '@/lib/utils';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { NoteIdea } from '@/types';
+
+function SortableNoteIdeaCard({ note, onClick }: { note: NoteIdea; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: note.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative group/sort">
+      <button
+        {...attributes}
+        {...listeners}
+        className="absolute left-1 top-1 z-10 p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100 opacity-0 group-hover/sort:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <NoteIdeaCard note={note} onClick={onClick} />
+    </div>
+  );
+}
+
+function NoteIdeaCard({ note, onClick }: { note: NoteIdea; onClick: () => void }) {
+  const plainText = note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const totalMatch = note.content.match(/data-type="taskItem"/g);
+  const checkedMatch = note.content.match(/data-checked="true"/g);
+  const checklistTotal = totalMatch?.length ?? 0;
+  const checklistChecked = checkedMatch?.length ?? 0;
+
+  return (
+    <div onClick={onClick} className="card-fantasy cursor-pointer overflow-hidden">
+      <div className="p-4">
+        {note.title && (
+          <h3 className="font-display font-bold text-ink-500 mb-2">{note.title}</h3>
+        )}
+        {plainText && (
+          <div
+            className="tiptap text-sm text-ink-300 overflow-hidden font-serif leading-relaxed max-h-36 relative"
+            style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}
+            dangerouslySetInnerHTML={{ __html: note.content }}
+          />
+        )}
+        {!plainText && !note.title && (
+          <p className="text-sm text-ink-200 italic">Note vide</p>
+        )}
+        {checklistTotal > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-parchment-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-bordeaux-400 rounded-full transition-all"
+                style={{ width: `${Math.round((checklistChecked / checklistTotal) * 100)}%` }}
+              />
+            </div>
+            <span className="text-xs text-ink-300 whitespace-nowrap">
+              {checklistChecked}/{checklistTotal}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function NotesIdeasPage() {
   const [searchParams] = useSearchParams();
   const noteIdeas = useBookStore((s) => s.noteIdeas ?? []);
   const addNoteIdea = useBookStore((s) => s.addNoteIdea);
   const deleteNoteIdea = useBookStore((s) => s.deleteNoteIdea);
+  const reorderNoteIdeas = useBookStore((s) => s.reorderNoteIdeas);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -42,9 +117,29 @@ export function NotesIdeasPage() {
 
   const [search, setSearch] = useState('');
 
-  const sorted = [...noteIdeas]
-    .filter((n) => !search || (n.title ?? '').toLowerCase().includes(search.toLowerCase()) || n.content.replace(/<[^>]*>/g, ' ').toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => a.order - b.order);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const sorted = useMemo(
+    () => [...noteIdeas].sort((a, b) => a.order - b.order),
+    [noteIdeas],
+  );
+
+  const filtered = sorted.filter((n) =>
+    !search || (n.title ?? '').toLowerCase().includes(search.toLowerCase()) || n.content.replace(/<[^>]*>/g, ' ').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const isSearching = search.length > 0;
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = sorted.findIndex((n) => n.id === active.id);
+    const newIndex = sorted.findIndex((n) => n.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(sorted, oldIndex, newIndex);
+    reorderNoteIdeas(reordered.map((n) => n.id));
+  }
+
   const selectedNote = selectedId ? noteIdeas.find((n) => n.id === selectedId) : null;
 
   // ─── Detail view ───
@@ -122,61 +217,29 @@ export function NotesIdeasPage() {
         </div>
       )}
 
-      {sorted.length === 0 && !search ? (
+      {filtered.length === 0 && !search ? (
         <EmptyState
           icon={Lightbulb}
           title="Aucune note"
           description="Notez vos idées, vos recherches, passages inspirants, checklists et réflexions en vrac."
           action={<button onClick={() => setShowForm(true)} className="btn-primary">Créer une note</button>}
         />
-      ) : (
+      ) : isSearching ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((note) => {
-            const plainText = note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-            // Count checklist items
-            const totalMatch = note.content.match(/data-type="taskItem"/g);
-            const checkedMatch = note.content.match(/data-checked="true"/g);
-            const checklistTotal = totalMatch?.length ?? 0;
-            const checklistChecked = checkedMatch?.length ?? 0;
-
-            return (
-              <div
-                key={note.id}
-                onClick={() => setSelectedId(note.id)}
-                className="card-fantasy cursor-pointer overflow-hidden"
-              >
-                <div className="p-4">
-                  {note.title && (
-                    <h3 className="font-display font-bold text-ink-500 mb-2">{note.title}</h3>
-                  )}
-                  {plainText && (
-                    <div
-                      className="tiptap text-sm text-ink-300 overflow-hidden font-serif leading-relaxed max-h-36 relative"
-                      style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}
-                      dangerouslySetInnerHTML={{ __html: note.content }}
-                    />
-                  )}
-                  {!plainText && !note.title && (
-                    <p className="text-sm text-ink-200 italic">Note vide</p>
-                  )}
-                  {checklistTotal > 0 && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-parchment-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-bordeaux-400 rounded-full transition-all"
-                          style={{ width: `${Math.round((checklistChecked / checklistTotal) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-ink-300 whitespace-nowrap">
-                        {checklistChecked}/{checklistTotal}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {filtered.map((note) => (
+            <NoteIdeaCard key={note.id} note={note} onClick={() => setSelectedId(note.id)} />
+          ))}
         </div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sorted.map((n) => n.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sorted.map((note) => (
+                <SortableNoteIdeaCard key={note.id} note={note} onClick={() => setSelectedId(note.id)} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {showForm && (

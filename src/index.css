@@ -398,6 +398,25 @@
   color: #7a1b3a;
 }
 
+/* ── Page-flip reader styles ── */
+.stf__parent {
+  overflow: visible !important;
+}
+.stf__wrapper {
+  overflow: visible !important;
+}
+.stf__item {
+  background-color: transparent;
+}
+.stf__item > div {
+  width: 100%;
+  height: 100%;
+}
+.page-flip-page {
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
 /* Review content typography (mirrors TipTap editor styles) */
 .review-content p { margin-bottom: 0.75em; }
 .review-content p:last-child { margin-bottom: 0; }

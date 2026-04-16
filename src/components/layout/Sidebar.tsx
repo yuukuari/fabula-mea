@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudAlert, Loader2, LogOut, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard, FileText, Library, UserCircle, TrendingUp, BarChart3 } from 'lucide-react';
+import { Users, MapPin, BookOpen, Clock, Target, Globe, Settings, Feather, Search, ChevronDown, ChevronUp, ChevronRight, X, Map, Cloud, CloudAlert, Loader2, LogOut, Shield, MessageSquare, MessageSquarePlus, Tag, Eye, Lightbulb, BookMarked, ScrollText, HelpCircle, Plus, List, Compass, LayoutDashboard, FileText, Library, UserCircle, TrendingUp, BarChart3, Printer, Smartphone, Download, Type, Image as ImageIcon } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useBookStore } from '@/store/useBookStore';
@@ -18,7 +18,7 @@ interface NavGroup {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   basePaths: string[];
-  items: { to: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
+  items: { to: string; icon: React.ComponentType<{ className?: string }>; label: string; end?: boolean }[];
 }
 
 const navGroups: NavGroup[] = [
@@ -36,12 +36,11 @@ const navGroups: NavGroup[] = [
   {
     label: 'Manuscrit',
     icon: ScrollText,
-    basePaths: ['/chapters', '/timeline', '/reviews', '/edition'],
+    basePaths: ['/chapters', '/timeline', '/reviews'],
     items: [
       { to: '/timeline', icon: Clock, label: 'Chronologie' },
       { to: '/chapters', icon: BookOpen, label: 'Chapitres' },
       { to: '/reviews', icon: Eye, label: 'Relectures' },
-      { to: '/edition', icon: FileText, label: 'Édition' },
     ],
   },
   {
@@ -51,6 +50,19 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/progression', icon: TrendingUp, label: 'Progression' },
       { to: '/objectifs', icon: Target, label: 'Objectifs' },
+    ],
+  },
+  {
+    label: 'Édition',
+    icon: FileText,
+    basePaths: ['/edition'],
+    items: [
+      { to: '/edition', icon: LayoutDashboard, label: 'Récapitulatif', end: true },
+      { to: '/edition/layout', icon: Type, label: 'Mise en page' },
+      { to: '/edition/covers', icon: ImageIcon, label: 'Couvertures' },
+      { to: '/edition/print', icon: Printer, label: 'Édition papier' },
+      { to: '/edition/digital', icon: Smartphone, label: 'Édition numérique' },
+      { to: '/edition/export', icon: Download, label: 'Export' },
     ],
   },
 ];
@@ -368,10 +380,11 @@ export function Sidebar({ onSearchClick, mobileOpen, onMobileClose }: SidebarPro
               </button>
               {isExpanded && (
                 <div className="ml-4 mt-0.5 space-y-0.5">
-                  {group.items.map(({ to, icon: Icon, label }) => (
+                  {group.items.map(({ to, icon: Icon, label, end }) => (
                     <NavLink
                       key={to}
                       to={to}
+                      end={end}
                       onClick={onMobileClose}
                       className={({ isActive }) =>
                         cn(

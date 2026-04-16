@@ -1,16 +1,75 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map, BookText } from 'lucide-react';
+import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map, BookText, GripVertical } from 'lucide-react';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { PlaceMapLinker } from '@/components/maps/PlaceMapLinker';
 import { PLACE_TYPE_LABELS } from '@/lib/utils';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Place, PlaceType } from '@/types';
 
+function SortablePlaceCard({ place, onClick }: { place: Place; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: place.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative group/sort">
+      <button
+        {...attributes}
+        {...listeners}
+        className="absolute left-1 top-1 z-10 p-1 rounded text-ink-200 hover:text-ink-400 hover:bg-parchment-100 opacity-0 group-hover/sort:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <PlaceCard place={place} onClick={onClick} />
+    </div>
+  );
+}
+
+function PlaceCard({ place, onClick }: { place: Place; onClick: () => void }) {
+  return (
+    <div onClick={onClick} className="card-fantasy cursor-pointer overflow-hidden">
+      {place.imageUrl ? (
+        <img src={place.imageUrl} alt={place.name} className="w-full h-36 object-contain bg-parchment-100" />
+      ) : (
+        <div className="w-full h-36 bg-parchment-200 flex items-center justify-center">
+          <MapPin className="w-12 h-12 text-ink-100" />
+        </div>
+      )}
+      <div className="p-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-display font-bold text-ink-500">{place.name}</h3>
+          <span className="badge bg-parchment-200 text-ink-300 text-xs">{PLACE_TYPE_LABELS[place.type]}</span>
+          {place.inGlossary && (
+            <BookText className="w-3.5 h-3.5 text-bordeaux-400" />
+          )}
+        </div>
+        {place.description && (
+          <p className="text-sm text-ink-300 mt-1 line-clamp-2">{place.description}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PlacesPage() {
-  const { places, maps: rawMaps, addPlace, updatePlace, deletePlace } = useEncyclopediaStore();
+  const { places, maps: rawMaps, addPlace, updatePlace, deletePlace, reorderPlaces } = useEncyclopediaStore();
   const maps = rawMaps ?? [];
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -30,9 +89,28 @@ export function PlacesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
-  const filtered = places.filter((p) =>
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const sorted = useMemo(
+    () => [...places].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
+    [places],
+  );
+
+  const filtered = sorted.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const isSearching = search.length > 0;
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = sorted.findIndex((p) => p.id === active.id);
+    const newIndex = sorted.findIndex((p) => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(sorted, oldIndex, newIndex);
+    reorderPlaces(reordered.map((p) => p.id));
+  }
 
   const selectedPlace = selectedId ? places.find((p) => p.id === selectedId) : null;
 
@@ -189,32 +267,22 @@ export function PlacesPage() {
           description="Ajoutez les lieux, villes et villages qui composent votre univers."
           action={<button onClick={() => setShowForm(true)} className="btn-primary">Créer un lieu</button>}
         />
-      ) : (
+      ) : isSearching ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((place) => (
-            <div key={place.id} onClick={() => setSelectedId(place.id)} className="card-fantasy cursor-pointer overflow-hidden">
-              {place.imageUrl ? (
-                <img src={place.imageUrl} alt={place.name} className="w-full h-36 object-contain bg-parchment-100" />
-              ) : (
-                <div className="w-full h-36 bg-parchment-200 flex items-center justify-center">
-                  <MapPin className="w-12 h-12 text-ink-100" />
-                </div>
-              )}
-              <div className="p-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-display font-bold text-ink-500">{place.name}</h3>
-                  <span className="badge bg-parchment-200 text-ink-300 text-xs">{PLACE_TYPE_LABELS[place.type]}</span>
-                  {place.inGlossary && (
-                    <BookText className="w-3.5 h-3.5 text-bordeaux-400" />
-                  )}
-                </div>
-                {place.description && (
-                  <p className="text-sm text-ink-300 mt-1 line-clamp-2">{place.description}</p>
-                )}
-              </div>
-            </div>
+            <PlaceCard key={place.id} place={place} onClick={() => setSelectedId(place.id)} />
           ))}
         </div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sorted.map((p) => p.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sorted.map((place) => (
+                <SortablePlaceCard key={place.id} place={place} onClick={() => setSelectedId(place.id)} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {showForm && <PlaceForm placeId={editingId} onClose={() => { setShowForm(false); setEditingId(null); }} />}

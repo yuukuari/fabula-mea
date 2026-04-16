@@ -157,12 +157,8 @@ export function HomePage() {
       sagaId = selectedSagaId;
     }
 
-    // Resolve layout from saga if applicable
-    const effectiveSaga = sagaId ? sagas.find((s) => s.id === sagaId) : null;
-    const effectiveLayout = effectiveSaga?.layout;
-
     const bookId = createBook(newTitle.trim(), effectiveAuthor.trim(), effectiveGenre.trim(), effectiveWritingMode, effectiveCountUnit, sagaId);
-    initNewBook(bookId, newTitle.trim(), effectiveAuthor.trim(), effectiveGenre.trim(), effectiveWritingMode, effectiveCountUnit, sagaId, effectiveLayout);
+    initNewBook(bookId, newTitle.trim(), effectiveAuthor.trim(), effectiveGenre.trim(), effectiveWritingMode, effectiveCountUnit, sagaId);
     if (newSynopsis.trim()) {
       useBookStore.getState().updateProject({ synopsis: newSynopsis.trim() });
     }

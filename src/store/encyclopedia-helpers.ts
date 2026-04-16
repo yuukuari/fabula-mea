@@ -103,6 +103,20 @@ export function reorderCharacters(characters: Character[], characterIds: string[
   });
 }
 
+export function reorderPlaces(places: Place[], placeIds: string[]): Place[] {
+  return placeIds.map((id, i) => {
+    const place = places.find((p) => p.id === id)!;
+    return { ...place, order: i };
+  });
+}
+
+export function reorderWorldNotes(notes: WorldNote[], noteIds: string[]): WorldNote[] {
+  return noteIds.map((id, i) => {
+    const note = notes.find((n) => n.id === id)!;
+    return { ...note, order: i };
+  });
+}
+
 // ─── Relationship CRUD ───────────────────────────────────────────────────────
 
 export function addRelationship(characters: Character[], charId: string, rel: Omit<Relationship, 'id'>): Character[] {
@@ -156,6 +170,7 @@ export function createPlace(places: Place[], data: Partial<Place>): { places: Pl
     connectedPlaceIds: data.connectedPlaceIds ?? [],
     tags: data.tags ?? [],
     notes: data.notes ?? '',
+    order: places.length,
     inGlossary: data.inGlossary ?? false,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -200,6 +215,7 @@ export function createWorldNote(notes: WorldNote[], data: Partial<WorldNote>): {
     imageUrl: data.imageUrl ?? '',
     linkedNoteIds: data.linkedNoteIds ?? [],
     tags: data.tags ?? [],
+    order: notes.length,
     inGlossary: data.inGlossary ?? false,
     createdAt: timestamp,
     updatedAt: timestamp,
