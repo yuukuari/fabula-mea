@@ -251,7 +251,7 @@ export function checkConformity(input: ConformityInput): ConformityCheck[] {
         category: 'print',
         title: 'Nombre de pages estimé',
         status: signatureOk ? 'pass' : 'info',
-        message: `~${pageCount} pages · dos ${spine} mm`,
+        message: `~${pageCount} pages · dos ~${spine} mm (±10 %)`,
         solution: signatureOk ? undefined : "L'imprimeur ajoutera automatiquement des pages vierges pour arriver à un multiple de 4 (cahier d'impression).",
       });
 

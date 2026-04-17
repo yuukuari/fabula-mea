@@ -4,7 +4,8 @@ import type {
   BookProject, Character, Place, Chapter, Scene, Tag,
   WorldNote, ExcludedPeriod, ProjectGoals, DailySnapshot,
   Relationship, KeyEvent, MapItem, MapPin, SelfComment, NoteIdea,
-  BookLayout, PrintEdition, DigitalEdition, TimelineEvent, EventDuration, DurationUnit,
+  BookLayout, PrintEdition, DigitalEdition, CoverSimplifiedConfig, CoverAdvancedConfig,
+  TimelineEvent, EventDuration, DurationUnit,
 } from '@/types';
 import { generateId, now, CHAPTER_COLORS, FRONT_MATTER_LABEL, BACK_MATTER_LABEL, FRONT_MATTER_NUMBER, BACK_MATTER_NUMBER, SPECIAL_CHAPTER_COLOR, computeEventEndDate, getEventStartDate, countFromHtml, convertCount } from '@/lib/utils';
 import { getBookStorageKey, useLibraryStore } from './useLibraryStore';
@@ -75,6 +76,8 @@ interface BookStore extends BookProject {
   updateLayout: (data: Partial<BookLayout>) => void;
   updatePrintEdition: (data: Partial<PrintEdition>) => void;
   updateDigitalEdition: (data: Partial<DigitalEdition>) => void;
+  updateCoverSimplified: (data: Partial<CoverSimplifiedConfig>) => void;
+  updateCoverAdvanced: (data: Partial<CoverAdvancedConfig>) => void;
 
   // Characters
   addCharacter: (char: Partial<Character> & { name: string }) => string;
@@ -648,6 +651,26 @@ export const useBookStore = create<BookStore>()(
           const currentDigital = currentLayout.digitalEdition ?? {};
           return {
             layout: { ...currentLayout, digitalEdition: { ...currentDigital, ...data } },
+            ...touchSave(),
+          };
+        }),
+
+      updateCoverSimplified: (data) =>
+        set((s) => {
+          const currentLayout = s.layout ?? { fontFamily: 'Times New Roman' as const, fontSize: 12 as const, lineHeight: 1.5 as const };
+          const currentSimplified = currentLayout.coverSimplified ?? {};
+          return {
+            layout: { ...currentLayout, coverSimplified: { ...currentSimplified, ...data } },
+            ...touchSave(),
+          };
+        }),
+
+      updateCoverAdvanced: (data) =>
+        set((s) => {
+          const currentLayout = s.layout ?? { fontFamily: 'Times New Roman' as const, fontSize: 12 as const, lineHeight: 1.5 as const };
+          const currentAdvanced = currentLayout.coverAdvanced ?? {};
+          return {
+            layout: { ...currentLayout, coverAdvanced: { ...currentAdvanced, ...data } },
             ...touchSave(),
           };
         }),

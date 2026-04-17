@@ -2,11 +2,17 @@ import { useRef, useState } from 'react';
 import { Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { uploadImage } from '@/lib/upload';
-import { DEFAULT_LAYOUT } from '@/lib/fonts';
+import { DEFAULT_LAYOUT, AVAILABLE_FONTS, FONT_STACKS } from '@/lib/fonts';
 import {
   getTrimSize, calculateSpineWidth, calculateCoverDimensions, estimatePageCount,
+  type CoverDimensions,
 } from '@/lib/print-edition';
-import { countFromHtml } from '@/lib/utils';
+import { isSpecialChapter, totalScenesCount } from '@/lib/utils';
+import type { BookFont, CoverMode, CoverSimplifiedConfig } from '@/types';
+import { getCoverMode, getSimplifiedCover, SPINE_MIN_TEXT_MM } from '@/lib/cover-composition';
+import { SpineWidthTooltip } from './SpineWidthLabel';
+import { CoverFlatPreview } from './CoverFlatPreview';
+import { CoverAdvancedEditor } from './CoverAdvancedEditor';
 
 function CoverUpload({
   label,
@@ -83,130 +89,284 @@ function CoverUpload({
 export function CoverSection() {
   const layout = useBookStore((s) => s.layout);
   const updateLayout = useBookStore((s) => s.updateLayout);
+  const updateCoverSimplified = useBookStore((s) => s.updateCoverSimplified);
+  const updateCoverAdvanced = useBookStore((s) => s.updateCoverAdvanced);
   const printEdition = layout?.printEdition;
   const scenes = useBookStore((s) => s.scenes);
   const chapters = useBookStore((s) => s.chapters);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
+  const title = useBookStore((s) => s.title);
+  const author = useBookStore((s) => s.author);
+
+  const mode = getCoverMode(layout);
+  const simplified = getSimplifiedCover(layout);
 
   // Calculate cover dimensions if print edition is configured
-  let coverDims: ReturnType<typeof calculateCoverDimensions> | null = null;
+  let coverDims: CoverDimensions | null = null;
   if (printEdition) {
     const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
     const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
-    const totalWords = scenes.reduce((sum, s) => {
-      const count = countUnit === 'words'
-        ? (s.currentWordCount ?? countFromHtml(s.content ?? '', 'words'))
-        : countFromHtml(s.content ?? '', 'characters');
-      return sum + count;
-    }, 0);
-    const chapterCount = chapters.filter((c) => c.type === 'chapter').length;
+    const totalWords = totalScenesCount(scenes, countUnit);
+    const chapterCount = chapters.filter((c) => !isSpecialChapter(c)).length;
     const pageCount = estimatePageCount(totalWords, printEdition.trimSize, fontSize, lineHeight, printEdition.margins, chapterCount);
     coverDims = calculateCoverDimensions(printEdition.trimSize, pageCount, printEdition.paperType, printEdition.bleedMm);
   }
 
   const trim = printEdition ? getTrimSize(printEdition.trimSize) : null;
+  const spineWidth = printEdition && coverDims ? coverDims.spineWidthMm : 0;
+  const isSpineThin = spineWidth < SPINE_MIN_TEXT_MM;
+
+  const setMode = (next: CoverMode) => {
+    updateLayout({ coverMode: next });
+  };
 
   return (
     <div className="card-fantasy p-6 mb-6">
-      <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Couvertures</h3>
-      <p className="text-sm text-ink-300 mb-4">
-        Images utilisées pour les exports et la présentation du livre.
-      </p>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h3 className="font-display text-lg font-semibold text-ink-500">Couvertures</h3>
+          <p className="text-sm text-ink-300 mt-0.5">
+            {mode === 'simplified'
+              ? 'Téléversez la 1ère et la 4ème de couverture. Le dos est composé automatiquement.'
+              : 'Mode avancé — téléversez une couverture dépliée et positionnez les textes.'}
+          </p>
+        </div>
 
+        {/* Mode toggle */}
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-parchment-100 shrink-0">
+          <ModeButton active={mode === 'simplified'} onClick={() => setMode('simplified')} label="Simplifié" />
+          <ModeButton active={mode === 'advanced'} onClick={() => setMode('advanced')} label="Avancé" />
+        </div>
+      </div>
+
+      {/* Dimensions info */}
       {coverDims && trim && (
-        <>
-          {/* Dimensions summary */}
-          <div className="text-xs text-ink-300 mb-3 p-2 bg-parchment-50 rounded-lg border border-parchment-200">
-            <p className="font-medium text-ink-400 mb-1">
-              Couverture complète : {coverDims.totalWidthMm} × {coverDims.totalHeightMm} mm
-            </p>
-            <p>Dos : {coverDims.spineWidthMm} mm · Fond perdu : {coverDims.bleedMm} mm de chaque côté</p>
-          </div>
-
-          {/* SVG cover diagram */}
-          <CoverDiagram dims={coverDims} />
-        </>
+        <div className="text-xs text-ink-300 mb-4 p-2.5 bg-parchment-50 rounded-lg border border-parchment-200">
+          <p className="font-medium text-ink-400 mb-0.5 inline-flex items-center gap-1">
+            Couverture dépliée : <b>{coverDims.totalWidthMm} × {coverDims.totalHeightMm} mm</b>
+          </p>
+          <p className="inline-flex items-center gap-1">
+            Dos : <b>~{coverDims.spineWidthMm} mm</b>
+            <SpineWidthTooltip />
+            {' '}· Fond perdu : {coverDims.bleedMm} mm de chaque côté
+          </p>
+        </div>
       )}
 
-      <div className={`grid gap-4 ${printEdition ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
-        <CoverUpload
-          label="1ère de couverture"
-          value={layout?.coverFront}
-          onChange={(img) => updateLayout({ coverFront: img })}
-          recommendedDimensions={trim ? `${trim.widthMm} × ${trim.heightMm} mm` : undefined}
+      {!printEdition && (
+        <div className="p-3 rounded-lg bg-amber-50/50 border border-amber-200 text-xs text-ink-400 mb-4">
+          L'édition papier n'est pas configurée. Les dimensions et l'aperçu déplié ne seront disponibles qu'après configuration du format.
+        </div>
+      )}
+
+      {/* ─── Simplified mode ─── */}
+      {mode === 'simplified' && (
+        <div className="space-y-4">
+          <div className={`grid gap-4 ${printEdition ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
+            <CoverUpload
+              label="1ère de couverture"
+              value={layout?.coverFront}
+              onChange={(img) => updateLayout({ coverFront: img })}
+              recommendedDimensions={trim ? `${trim.widthMm} × ${trim.heightMm} mm` : undefined}
+            />
+            <CoverUpload
+              label="4ème de couverture"
+              value={layout?.coverBack}
+              onChange={(img) => updateLayout({ coverBack: img })}
+              recommendedDimensions={trim ? `${trim.widthMm} × ${trim.heightMm} mm` : undefined}
+            />
+          </div>
+
+          {/* Spine configuration (only meaningful if printEdition configured) */}
+          {printEdition && (
+            <SpineConfig
+              simplified={simplified}
+              onChange={(data) => updateCoverSimplified(data)}
+              spineWidth={spineWidth}
+              isSpineThin={isSpineThin}
+              bookFont={layout?.fontFamily ?? 'Times New Roman'}
+            />
+          )}
+
+          {/* Flat preview */}
+          {coverDims && (
+            <div>
+              <p className="text-xs text-ink-300 mb-1.5">Aperçu couverture dépliée</p>
+              <CoverFlatPreview
+                layout={layout}
+                dims={coverDims}
+                title={title}
+                author={author}
+                widthPx={500}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Advanced mode ─── */}
+      {mode === 'advanced' && coverDims && (
+        <CoverAdvancedEditor
+          layout={layout}
+          title={title}
+          author={author}
+          dims={coverDims}
+          onUpdateAdvanced={(data) => updateCoverAdvanced(data)}
         />
-        {printEdition && (
-          <CoverUpload
-            label="Dos"
-            value={layout?.coverSpine}
-            onChange={(img) => updateLayout({ coverSpine: img })}
-            recommendedDimensions={coverDims ? `${coverDims.spineWidthMm} × ${trim!.heightMm} mm` : undefined}
-          />
+      )}
+
+      {mode === 'advanced' && !coverDims && (
+        <div className="p-6 rounded-lg bg-parchment-100 text-center text-sm text-ink-400">
+          Le mode avancé nécessite de configurer l'édition papier d'abord (format, papier, marges).
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Spine configuration (simplified mode) ───
+
+function SpineConfig({
+  simplified, onChange, spineWidth, isSpineThin, bookFont,
+}: {
+  simplified: CoverSimplifiedConfig;
+  onChange: (data: Partial<CoverSimplifiedConfig>) => void;
+  spineWidth: number;
+  isSpineThin: boolean;
+  bookFont: BookFont;
+}) {
+  const spineFontFamily = simplified.spineFontFamily ?? bookFont;
+
+  return (
+    <div className="p-4 rounded-lg bg-parchment-50 border border-parchment-200">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-display font-semibold text-ink-500 text-sm">Dos du livre</h4>
+        {isSpineThin && (
+          <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+            Dos ~{spineWidth} mm — trop fin pour du texte
+          </span>
         )}
-        <CoverUpload
-          label="4ème de couverture"
-          value={layout?.coverBack}
-          onChange={(img) => updateLayout({ coverBack: img })}
-          recommendedDimensions={trim ? `${trim.widthMm} × ${trim.heightMm} mm` : undefined}
-        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Spine color */}
+        <div>
+          <label className="text-[11px] font-medium text-ink-300 uppercase tracking-wide">Couleur du dos</label>
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="color"
+              value={simplified.spineColor ?? '#7a1b3a'}
+              onChange={(e) => onChange({ spineColor: e.target.value })}
+              className="w-10 h-10 rounded cursor-pointer border border-parchment-300"
+            />
+            <input
+              type="text"
+              value={simplified.spineColor ?? '#7a1b3a'}
+              onChange={(e) => onChange({ spineColor: e.target.value })}
+              className="input-field text-sm flex-1 font-mono"
+              placeholder="#7a1b3a"
+            />
+          </div>
+        </div>
+
+        {/* Show title toggle */}
+        <div>
+          <label className="text-[11px] font-medium text-ink-300 uppercase tracking-wide">Titre + auteur</label>
+          <div className="mt-1">
+            <label className="flex items-center gap-2 text-sm text-ink-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={simplified.spineShowTitle ?? true}
+                onChange={(e) => onChange({ spineShowTitle: e.target.checked })}
+                disabled={isSpineThin}
+                className="accent-bordeaux-500"
+              />
+              <span>Afficher verticalement sur le dos</span>
+            </label>
+            {isSpineThin && (
+              <p className="text-[10px] text-ink-200 mt-1">Désactivé car le dos est trop fin.</p>
+            )}
+          </div>
+        </div>
+
+        {(simplified.spineShowTitle ?? true) && !isSpineThin && (
+          <>
+            <div>
+              <label className="text-[11px] font-medium text-ink-300 uppercase tracking-wide">Police</label>
+              <select
+                value={spineFontFamily}
+                onChange={(e) => onChange({ spineFontFamily: e.target.value as BookFont })}
+                className="input-field text-sm mt-1"
+                style={{ fontFamily: FONT_STACKS[spineFontFamily] }}
+              >
+                {AVAILABLE_FONTS.map((f) => (
+                  <option key={f} value={f} style={{ fontFamily: FONT_STACKS[f] }}>{f}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-medium text-ink-300 uppercase tracking-wide">Couleur du texte</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="color"
+                  value={simplified.spineTextColor ?? '#fafafa'}
+                  onChange={(e) => onChange({ spineTextColor: e.target.value })}
+                  className="w-10 h-10 rounded cursor-pointer border border-parchment-300"
+                />
+                <input
+                  type="text"
+                  value={simplified.spineTextColor ?? '#fafafa'}
+                  onChange={(e) => onChange({ spineTextColor: e.target.value })}
+                  className="input-field text-sm flex-1 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-[11px] font-medium text-ink-300 uppercase tracking-wide">Orientation du texte</label>
+              <div className="flex items-center gap-2 mt-1">
+                <OrientationButton
+                  active={simplified.spineOrientation !== 'btt'}
+                  onClick={() => onChange({ spineOrientation: 'ttb' })}
+                  label="Haut → bas (standard américain / KDP)"
+                />
+                <OrientationButton
+                  active={simplified.spineOrientation === 'btt'}
+                  onClick={() => onChange({ spineOrientation: 'btt' })}
+                  label="Bas → haut (standard européen)"
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-function CoverDiagram({ dims }: { dims: ReturnType<typeof calculateCoverDimensions> }) {
-  const totalW = dims.totalWidthMm;
-  const totalH = dims.totalHeightMm;
-
-  // Scale to fit in a container (max width ~500px)
-  const svgWidth = 500;
-  const scale = svgWidth / totalW;
-  const svgHeight = totalH * scale;
-
-  const bleed = dims.bleedMm * scale;
-  const backW = dims.backWidthMm * scale;
-  const spineW = Math.max(dims.spineWidthMm * scale, 4); // min 4px for visibility
-  const frontW = dims.frontWidthMm * scale;
-
-  const y = 0;
-  let x = 0;
-
+function ModeButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
-    <div className="mb-4 overflow-x-auto">
-      <svg width={svgWidth} height={svgHeight + 40} className="mx-auto block" viewBox={`0 0 ${svgWidth} ${svgHeight + 40}`}>
-        {/* Bleed left */}
-        <rect x={x} y={y} width={bleed} height={svgHeight} fill="#fce4ec" stroke="#e57373" strokeWidth={0.5} />
-        <text x={x + bleed / 2} y={svgHeight + 12} textAnchor="middle" fontSize={8} fill="#999">{dims.bleedMm}</text>
-        {x += bleed}
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+        active ? 'bg-white text-bordeaux-500 shadow-sm' : 'text-ink-300 hover:text-ink-500'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
 
-        {/* Back cover */}
-        <rect x={x} y={y} width={backW} height={svgHeight} fill="#e3f2fd" stroke="#90caf9" strokeWidth={0.5} />
-        <text x={x + backW / 2} y={svgHeight / 2} textAnchor="middle" dominantBaseline="middle" fontSize={10} fill="#666">4ème</text>
-        <text x={x + backW / 2} y={svgHeight + 12} textAnchor="middle" fontSize={8} fill="#999">{dims.backWidthMm}</text>
-        {x += backW}
-
-        {/* Spine */}
-        <rect x={x} y={y} width={spineW} height={svgHeight} fill="#fff3e0" stroke="#ffb74d" strokeWidth={0.5} />
-        <text x={x + spineW / 2} y={svgHeight + 12} textAnchor="middle" fontSize={7} fill="#999">{dims.spineWidthMm}</text>
-        {x += spineW}
-
-        {/* Front cover */}
-        <rect x={x} y={y} width={frontW} height={svgHeight} fill="#e8f5e9" stroke="#81c784" strokeWidth={0.5} />
-        <text x={x + frontW / 2} y={svgHeight / 2} textAnchor="middle" dominantBaseline="middle" fontSize={10} fill="#666">1ère</text>
-        <text x={x + frontW / 2} y={svgHeight + 12} textAnchor="middle" fontSize={8} fill="#999">{dims.frontWidthMm}</text>
-        {x += frontW}
-
-        {/* Bleed right */}
-        <rect x={x} y={y} width={bleed} height={svgHeight} fill="#fce4ec" stroke="#e57373" strokeWidth={0.5} />
-        <text x={x + bleed / 2} y={svgHeight + 12} textAnchor="middle" fontSize={8} fill="#999">{dims.bleedMm}</text>
-
-        {/* Total width annotation */}
-        <line x1={0} y1={svgHeight + 25} x2={svgWidth} y2={svgHeight + 25} stroke="#bbb" strokeWidth={0.5} />
-        <text x={svgWidth / 2} y={svgHeight + 36} textAnchor="middle" fontSize={9} fill="#888">{dims.totalWidthMm} mm</text>
-
-        {/* Height annotation */}
-        <text x={svgWidth + 2} y={svgHeight / 2} textAnchor="start" dominantBaseline="middle" fontSize={8} fill="#888" transform={`rotate(90, ${svgWidth + 2}, ${svgHeight / 2})`}>{dims.totalHeightMm} mm</text>
-      </svg>
-    </div>
+function OrientationButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 px-3 py-2 text-xs font-medium rounded border-2 transition-all ${
+        active ? 'border-bordeaux-400 bg-bordeaux-50/40 text-bordeaux-600' : 'border-parchment-200 text-ink-300 hover:border-parchment-400'
+      }`}
+    >
+      {label}
+    </button>
   );
 }

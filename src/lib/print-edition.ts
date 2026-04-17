@@ -177,7 +177,11 @@ function charsPerPage(
   const lineHeightMm = fontSizeMm * lineHeight;
   const linesPerPage = Math.floor(usableHeightMm / lineHeightMm);
   const charsPerLine = Math.floor(usableWidthMm / (fontSizeMm * 0.5));
-  return Math.max(50, linesPerPage * charsPerLine);
+  // The naive `lines × chars` product over-estimates actual capacity because
+  // it ignores paragraph spacing, orphan/widow breaks, variable glyph widths,
+  // and the fact that most paragraphs don't fill their last line. Apply a
+  // conservative safety factor so the preview doesn't clip the last line.
+  return Math.max(50, Math.floor(linesPerPage * charsPerLine * 0.88));
 }
 
 /** Strip HTML tags to get approximate text length */

@@ -7,10 +7,14 @@ import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { DEFAULT_LAYOUT, FONT_STACKS } from '@/lib/fonts';
 import {
   paginateContent, getTrimSize, getPaperType, DEFAULT_PRINT_EDITION,
-  type BookPageData,
+  calculateCoverDimensions, estimatePageCount,
+  type BookPageData, type CoverDimensions,
 } from '@/lib/print-edition';
 import type { PrintEdition } from '@/types';
 import { PageRuler } from './PageRuler';
+import { getCoverMode, getAdvancedCover } from '@/lib/cover-composition';
+import { CoverFlatPreview } from './CoverFlatPreview';
+import { totalScenesCount, isSpecialChapter } from '@/lib/utils';
 
 type ViewMode = 'flip' | 'grid' | 'actual-size';
 /** 1 inch = 2.54 cm at 96 CSS DPI. */
@@ -28,6 +32,7 @@ export function BookReader({ open, onClose }: Props) {
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const glossaryEnabled = useBookStore((s) => s.glossaryEnabled);
+  const countUnit = useBookStore((s) => s.countUnit ?? 'words');
   const { characters, places, worldNotes } = useEncyclopediaStore();
 
   const printEdition: PrintEdition = layout?.printEdition ?? DEFAULT_PRINT_EDITION;
@@ -37,6 +42,31 @@ export function BookReader({ open, onClose }: Props) {
   const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
   const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
   const fontStack = FONT_STACKS[fontFamily];
+
+  // Resolve covers — in advanced mode, the flat image contains back+spine+front
+  // and takes priority over simplified covers (even if the user has leftover
+  // simplified uploads from a previous session).
+  const coverMode = getCoverMode(layout);
+  const advancedFlat = coverMode === 'advanced' ? getAdvancedCover(layout).flatImage : undefined;
+  const isAdvanced = coverMode === 'advanced' && !!advancedFlat;
+  const resolvedCoverFront = isAdvanced ? advancedFlat : layout?.coverFront;
+  const resolvedCoverBack = isAdvanced ? advancedFlat : layout?.coverBack;
+
+  // Compute full cover dimensions (flat spread) — used in advanced mode to
+  // clip the flat image to the front/back trim in the reader.
+  const coverDims: CoverDimensions | null = useMemo(() => {
+    if (!isAdvanced || !layout?.printEdition) return null;
+    const pe = layout.printEdition;
+    const totalCount = totalScenesCount(scenes, countUnit);
+    const chapterCount = chapters.filter((c) => !isSpecialChapter(c)).length;
+    const pageCount = estimatePageCount(
+      totalCount, pe.trimSize,
+      layout.fontSize ?? DEFAULT_LAYOUT.fontSize,
+      layout.lineHeight ?? DEFAULT_LAYOUT.lineHeight,
+      pe.margins, chapterCount,
+    );
+    return calculateCoverDimensions(pe.trimSize, pageCount, pe.paperType, pe.bleedMm);
+  }, [isAdvanced, layout, scenes, chapters, countUnit]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pageFlipRef = useRef<PageFlip | null>(null);
@@ -73,10 +103,10 @@ export function BookReader({ open, onClose }: Props) {
       printEdition,
       title,
       author,
-      coverFront: layout?.coverFront,
-      coverBack: layout?.coverBack,
+      coverFront: resolvedCoverFront,
+      coverBack: resolvedCoverBack,
     });
-  }, [chapters, scenes, glossaryEnabled, characters, places, worldNotes, layout, printEdition, title, author]);
+  }, [chapters, scenes, glossaryEnabled, characters, places, worldNotes, layout, printEdition, title, author, resolvedCoverFront, resolvedCoverBack]);
 
   // Ensure even number of pages for page-flip
   const displayPages = useMemo(() => {
@@ -103,37 +133,54 @@ export function BookReader({ open, onClose }: Props) {
   const innerPct = (m.innerMm / trim.widthMm) * 100;
   const outerPct = (m.outerMm / trim.widthMm) * 100;
 
-  // Initialize page-flip (only in flip mode)
+  // Initialize page-flip (only in flip mode).
+  //
+  // Under React.StrictMode (dev), effects run twice. The first run's cleanup
+  // fails to fully undo page-flip's DOM mutations (destroy() can throw), so
+  // the second run inits on a mangled DOM and breaks silently — covers don't
+  // render and flipNext/flipPrev do nothing. We defer the init by a tick so
+  // StrictMode's cleanup gets a chance to abort the first attempt before any
+  // DOM is touched.
   useEffect(() => {
     if (!open || viewMode !== 'flip' || !containerRef.current || displayPages.length === 0) return;
 
-    const pf = new PageFlip(containerRef.current, {
-      width: pageWidth,
-      height: pageHeight,
-      size: 'fixed',
-      showCover: true,
-      maxShadowOpacity: 0.5,
-      drawShadow: true,
-      mobileScrollSupport: false,
-      usePortrait: false,
-      flippingTime: 600,
-    });
-    pageFlipRef.current = pf;
+    let aborted = false;
+    const timer = setTimeout(() => {
+      if (aborted) return;
+      const container = containerRef.current;
+      if (!container) return;
 
-    const pagesEl = containerRef.current.querySelectorAll('.page-flip-page');
-    if (pagesEl.length > 0) {
-      pf.loadFromHTML(pagesEl as unknown as HTMLElement[]);
-      pf.on('flip', (e: { data: number }) => {
-        // Guard against events arriving after destroy
-        if (!pageFlipRef.current) return;
-        setCurrentPage(e.data);
+      const pf = new PageFlip(container, {
+        width: pageWidth,
+        height: pageHeight,
+        size: 'fixed',
+        showCover: true,
+        maxShadowOpacity: 0.5,
+        drawShadow: true,
+        mobileScrollSupport: false,
+        usePortrait: false,
+        flippingTime: 600,
       });
-    }
+      pageFlipRef.current = pf;
+
+      const pagesEl = container.querySelectorAll('.page-flip-page');
+      if (pagesEl.length > 0) {
+        pf.loadFromHTML(pagesEl as unknown as HTMLElement[]);
+        pf.on('flip', (e: { data: number }) => {
+          // Guard against events arriving after destroy
+          if (!pageFlipRef.current) return;
+          setCurrentPage(e.data);
+        });
+      }
+    }, 0);
 
     return () => {
-      if (pageFlipRef.current) {
-        pageFlipRef.current.destroy();
-        pageFlipRef.current = null;
+      aborted = true;
+      clearTimeout(timer);
+      const pf = pageFlipRef.current;
+      pageFlipRef.current = null;
+      if (pf) {
+        try { pf.destroy(); } catch { /* noop */ }
       }
     };
     // Re-init when pages content changes (not just length), so edits in the
@@ -141,11 +188,12 @@ export function BookReader({ open, onClose }: Props) {
   }, [open, viewMode, displayPages, pageWidth, pageHeight]);
 
   const handlePrev = useCallback(() => {
-    pageFlipRef.current?.flipPrev();
+    // page-flip may throw if its internals are not ready or already destroyed.
+    try { pageFlipRef.current?.flipPrev(); } catch { /* noop */ }
   }, []);
 
   const handleNext = useCallback(() => {
-    pageFlipRef.current?.flipNext();
+    try { pageFlipRef.current?.flipNext(); } catch { /* noop */ }
   }, []);
 
   // Keyboard navigation
@@ -165,6 +213,14 @@ export function BookReader({ open, onClose }: Props) {
     return () => window.removeEventListener('keydown', handleKey);
   }, [open, viewMode, handlePrev, handleNext, onClose, pages.length]);
 
+  // Hide body scrollbar while reader is open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   if (!open) return null;
 
   // page-flip overrides inline styles on the outer .page-flip-page element,
@@ -178,6 +234,20 @@ export function BookReader({ open, onClose }: Props) {
   const renderPageInner = (page: BookPageData, scale: number = 0.6) => {
     // Cover front
     if (page.isCover === 'front') {
+      // Advanced mode: render the flat cover (image + overlays) clipped to
+      // the front trim area.
+      if (isAdvanced && advancedFlat && coverDims) {
+        return (
+          <ClippedFlatCover
+            side="front"
+            layout={layout}
+            dims={coverDims}
+            trimWidthMm={trim.widthMm}
+            title={title}
+            author={author}
+          />
+        );
+      }
       if (layout?.coverFront) {
         return <img src={layout.coverFront} alt="Couverture" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
       }
@@ -196,6 +266,18 @@ export function BookReader({ open, onClose }: Props) {
 
     // Cover back
     if (page.isCover === 'back') {
+      if (isAdvanced && advancedFlat && coverDims) {
+        return (
+          <ClippedFlatCover
+            side="back"
+            layout={layout}
+            dims={coverDims}
+            trimWidthMm={trim.widthMm}
+            title={title}
+            author={author}
+          />
+        );
+      }
       if (layout?.coverBack) {
         return <img src={layout.coverBack} alt="4ème" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
       }
@@ -222,8 +304,15 @@ export function BookReader({ open, onClose }: Props) {
       return <div style={{ width: '100%', height: '100%', backgroundColor: paper.color }} />;
     }
 
-    // Content page
+    // Content page.
+    // Inner margin is on the spine side and alternates:
+    // - Recto (odd pageNumber, right side of spread) → inner on LEFT
+    // - Verso (even pageNumber, left side of spread) → inner on RIGHT
+    // Pages with pageNumber 0 (covers, blank filler) default to recto-style.
     const contentFontSize = scale === 1 ? fontSize : Math.max(fontSize * scale, 6);
+    const isVerso = page.pageNumber > 0 && page.pageNumber % 2 === 0;
+    const leftPct = isVerso ? outerPct : innerPct;
+    const rightPct = isVerso ? innerPct : outerPct;
     return (
       <div style={{
         width: '100%', height: '100%',
@@ -236,8 +325,8 @@ export function BookReader({ open, onClose }: Props) {
             position: 'absolute',
             top: `${topPct}%`,
             bottom: `${bottomPct}%`,
-            left: `${innerPct}%`,
-            right: `${outerPct}%`,
+            left: `${leftPct}%`,
+            right: `${rightPct}%`,
             fontFamily: fontStack,
             fontSize: `${contentFontSize}pt`,
             lineHeight,
@@ -272,6 +361,19 @@ export function BookReader({ open, onClose }: Props) {
     );
   };
 
+  // Actual-size: one page at 1:1 physical size (using 96 CSS DPI)
+  const actualSizePageWidthPx = trim.widthMm / MM_PER_CSS_PX;
+  const actualSizePageHeightPx = trim.heightMm / MM_PER_CSS_PX;
+
+  // Grid thumbnails: scale to fit
+  const thumbWidth = 140;
+  const thumbHeight = thumbWidth / (trim.widthMm / trim.heightMm);
+
+  // Font scales derived from the page size ratio so the text looks
+  // proportionally identical across the three modes.
+  const flipScale = pageWidth / actualSizePageWidthPx;
+  const thumbScale = thumbWidth / actualSizePageWidthPx;
+
   const renderPage = (page: BookPageData, index: number) => {
     const isCover = page.isCover === 'front' || page.isCover === 'back';
     return (
@@ -285,19 +387,11 @@ export function BookReader({ open, onClose }: Props) {
           backgroundColor: isCover ? '#333' : paper.color,
           overflow: 'hidden',
         }}>
-          {renderPageInner(page)}
+          {renderPageInner(page, flipScale)}
         </div>
       </div>
     );
   };
-
-  // Actual-size: one page at 1:1 physical size (using 96 CSS DPI)
-  const actualSizePageWidthPx = trim.widthMm / MM_PER_CSS_PX;
-  const actualSizePageHeightPx = trim.heightMm / MM_PER_CSS_PX;
-
-  // Grid thumbnails: scale to fit
-  const thumbWidth = 140;
-  const thumbHeight = thumbWidth / (trim.widthMm / trim.heightMm);
 
   return createPortal(
     <div
@@ -333,8 +427,20 @@ export function BookReader({ open, onClose }: Props) {
         </button>
       </div>
 
-      {/* Content area */}
-      <div className="flex-1 flex items-center justify-center overflow-auto p-4">
+      {/* Content area.
+          Flip mode: `overflow-hidden` clips the curling page animation —
+          page-flip renders the turning page slightly outside its container
+          which would otherwise trigger a horizontal scrollbar. */}
+      <div
+        className={`flex-1 flex justify-center p-4 ${
+          viewMode === 'flip'
+            ? 'items-center overflow-hidden'
+            // Non-flip modes can have content taller than the viewport (grid
+            // with many thumbnails, actual-size on a big monitor). Align to
+            // top so the scroll starts at page 1, not in the middle.
+            : 'items-start overflow-auto'
+        }`}
+      >
         {viewMode === 'flip' && (
           <div className="flex items-center gap-4">
             <button onClick={handlePrev} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
@@ -342,10 +448,20 @@ export function BookReader({ open, onClose }: Props) {
             </button>
 
             <div
-              ref={containerRef}
+              className="relative"
               style={{ width: `${pageWidth * 2}px`, height: `${pageHeight}px` }}
             >
-              {displayPages.map((page, i) => renderPage(page, i))}
+              <div
+                ref={containerRef}
+                style={{ width: '100%', height: '100%' }}
+              >
+                {displayPages.map((page, i) => renderPage(page, i))}
+              </div>
+              {/* Per-page inner shadow at the spine is applied via CSS
+                  (`.stf__item` selectors in index.css). The shadow is a
+                  property of each page and moves with it during flipping,
+                  so the turning page naturally carries its own gutter
+                  shading — no z-index juggling needed. */}
             </div>
 
             <button onClick={handleNext} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
@@ -382,7 +498,7 @@ export function BookReader({ open, onClose }: Props) {
                       }}
                       className="transition-transform group-hover:scale-105"
                     >
-                      {renderPageInner(page, 0.28)}
+                      {renderPageInner(page, thumbScale)}
                     </div>
                     <span className="text-white/40 text-xs group-hover:text-white/80 transition-colors">
                       {i + 1}
@@ -467,5 +583,97 @@ function ModeButton({ active, onClick, icon: Icon, label }: {
       <Icon className="w-3.5 h-3.5" />
       <span className="hidden sm:inline">{label}</span>
     </button>
+  );
+}
+
+/**
+ * Render the front or back trim of an advanced (flat) cover inside the
+ * reader's trim-sized page. Reuses CoverFlatPreview so text overlays are
+ * positioned consistently with the rest of the app, and clips the output to
+ * show only the requested side.
+ */
+function ClippedFlatCover({
+  side, layout, dims, trimWidthMm, title, author,
+}: {
+  side: 'front' | 'back';
+  layout: import('@/types').BookLayout | undefined;
+  dims: CoverDimensions;
+  trimWidthMm: number;
+  title: string;
+  author: string;
+}) {
+  // The parent page element has width = trim.widthMm (scaled to CSS px). We
+  // compute everything in percentages relative to that trim, which makes the
+  // clipping resolution-independent (preview, grid thumbnails, actual-size).
+  const ratioFlat = dims.totalWidthMm / trimWidthMm;
+  const fullWidthPct = ratioFlat * 100;
+  // mm offset where the trim region of the requested side starts within the
+  // flat spread:
+  const regionStartMm = side === 'front'
+    ? dims.bleedMm + dims.backWidthMm + dims.spineWidthMm
+    : dims.bleedMm;
+  const offsetLeftPct = -(regionStartMm / trimWidthMm) * 100;
+  // Vertical: we want to show the trim area (not the top/bottom bleed).
+  // Parent height = trim.heightMm; flat preview height = totalHeightMm.
+  const ratioFlatV = dims.totalHeightMm / (dims.totalHeightMm - 2 * dims.bleedMm);
+  const fullHeightPct = ratioFlatV * 100;
+  const offsetTopPct = -(dims.bleedMm / (dims.totalHeightMm - 2 * dims.bleedMm)) * 100;
+
+  return (
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <div
+        style={{
+          position: 'absolute',
+          left: `${offsetLeftPct}%`,
+          top: `${offsetTopPct}%`,
+          width: `${fullWidthPct}%`,
+          height: `${fullHeightPct}%`,
+        }}
+      >
+        {/* CoverFlatPreview scales to whatever widthPx fills the wrapper. We
+            let it render at the wrapper's full width via a ResizeObserver-free
+            trick: wrap it in a CSS size container using a ref. Simpler: pass a
+            reasonably large widthPx — the SVG viewBox handles the rest.       */}
+        <CoverFlatPreviewAutoWidth
+          layout={layout}
+          dims={dims}
+          title={title}
+          author={author}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** CoverFlatPreview that auto-fits its CSS-pixel width to its parent. */
+function CoverFlatPreviewAutoWidth({
+  layout, dims, title, author,
+}: {
+  layout: import('@/types').BookLayout | undefined;
+  dims: CoverDimensions;
+  title: string;
+  author: string;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [widthPx, setWidthPx] = useState<number>(800);
+  useEffect(() => {
+    if (!wrapRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setWidthPx(Math.round(w));
+    });
+    ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={wrapRef} style={{ width: '100%', height: '100%' }}>
+      <CoverFlatPreview
+        layout={layout}
+        dims={dims}
+        title={title}
+        author={author}
+        widthPx={widthPx}
+      />
+    </div>
   );
 }

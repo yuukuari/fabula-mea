@@ -412,6 +412,15 @@
   width: 100%;
   height: 100%;
 }
+/* Spine/gutter shadow on the inner edge of each page. Because it's applied
+   to the page itself (not a separate overlay), it moves with the page
+   during the flipping animation — no z-index stacking issues. */
+.stf__item.--right > div {
+  box-shadow: inset 8px 0 14px -6px rgba(0, 0, 0, 0.18);
+}
+.stf__item:not(.--right) > div {
+  box-shadow: inset -8px 0 14px -6px rgba(0, 0, 0, 0.18);
+}
 .page-flip-page {
   box-sizing: border-box;
   overflow: hidden;

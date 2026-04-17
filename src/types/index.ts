@@ -583,11 +583,62 @@ export interface BookLayout {
   fontFamily: BookFont;
   fontSize: BookFontSize;
   lineHeight: BookLineHeight;
-  coverFront?: string;   // base64 image
-  coverBack?: string;    // base64 image
-  coverSpine?: string;   // base64 image
+  // ─── Covers (simplified mode — used by default) ───
+  coverFront?: string;   // base64 image or CDN URL
+  coverBack?: string;    // base64 image or CDN URL
+  coverSpine?: string;   // Legacy — kept for backwards compat, not used in new simplified mode
+  // ─── Cover composition mode ───
+  coverMode?: CoverMode;                 // default 'simplified'
+  coverSimplified?: CoverSimplifiedConfig;
+  coverAdvanced?: CoverAdvancedConfig;
+  // ─── Print / digital ───
   printEdition?: PrintEdition;
   digitalEdition?: DigitalEdition;
+}
+
+// ─── Cover composition ───
+export type CoverMode = 'simplified' | 'advanced';
+
+/**
+ * Simplified mode: user uploads front + back; the spine is auto-composed
+ * from a solid color and (optionally) the book title rendered vertically.
+ */
+export interface CoverSimplifiedConfig {
+  spineColor?: string;              // hex, default '#7a1b3a' (bordeaux)
+  spineShowTitle?: boolean;         // default true if spine ≥ 6mm
+  spineFontFamily?: BookFont;       // default same as book font
+  spineTextColor?: string;          // hex, default '#fafafa' (near-white)
+  spineOrientation?: 'ttb' | 'btt'; // top-to-bottom (American) or bottom-to-top (European). Default 'ttb'.
+}
+
+/**
+ * Advanced mode: user uploads a background image (the flat cover) and can
+ * overlay positioned text elements (title, author, ISBN, subtitle…) on top.
+ */
+export interface CoverAdvancedConfig {
+  flatImage?: string;         // base64 or CDN URL — full flat cover image
+  overlays?: CoverTextOverlay[];
+}
+
+/**
+ * A text element positioned on top of the advanced cover background.
+ * Coordinates are expressed in percentages of the flat cover dimensions
+ * so they scale across previews / exports.
+ */
+export interface CoverTextOverlay {
+  id: EntityId;
+  xPct: number;             // 0-100, left edge relative to cover width
+  yPct: number;             // 0-100, top edge relative to cover height
+  widthPct: number;         // 0-100
+  heightPct: number;        // 0-100
+  rotation: number;         // degrees (clockwise)
+  content: string;
+  fontFamily: BookFont | 'Playfair Display' | 'Inter';
+  fontSize: number;         // pt (at cover scale)
+  color: string;            // hex
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  textAlign: 'left' | 'center' | 'right';
 }
 
 // ─── Print Edition ───

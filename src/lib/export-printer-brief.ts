@@ -170,7 +170,7 @@ export function exportPrinterBrief(input: PrinterBriefInput): void {
     <tr><td>Marges (haut / bas / intérieur / extérieur)</td><td>${pe.margins.topMm} / ${pe.margins.bottomMm} / ${pe.margins.innerMm} / ${pe.margins.outerMm} mm</td></tr>
     <tr><td>Fond perdu</td><td>${pe.bleedMm} mm sur chaque côté</td></tr>
     <tr><td>Nombre de pages estimé</td><td>~${pageCount} pages</td></tr>
-    <tr><td>Largeur du dos (calculée)</td><td>${spine} mm</td></tr>
+    <tr><td>Largeur du dos (estimation ±10 %)</td><td>~${spine} mm · à vérifier avec votre imprimeur</td></tr>
     <tr><td>Dimensions couverture dépliée</td><td>${dims.totalWidthMm} × ${dims.totalHeightMm} mm</td></tr>
     ${pe.isbn ? `<tr><td>ISBN (papier)</td><td>${esc(pe.isbn)}</td></tr>` : ''}
     ${pe.publisher ? `<tr><td>Éditeur</td><td>${esc(pe.publisher)}</td></tr>` : ''}

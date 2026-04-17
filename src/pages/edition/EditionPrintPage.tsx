@@ -14,6 +14,7 @@ import { StepInterior } from '@/components/edition/wizard/StepInterior';
 import { StepCover } from '@/components/edition/wizard/StepCover';
 import { StepMetadata } from '@/components/edition/wizard/StepMetadata';
 import { PrintHelpModal, HelpTrigger, type HelpTopic } from '@/components/edition/PrintHelpModal';
+import { SpineWidthTooltip } from '@/components/edition/SpineWidthLabel';
 
 interface SectionProps {
   number: number;
@@ -151,7 +152,7 @@ export function EditionPrintPage() {
         <CollapsibleSection
           number={3}
           title="Couverture"
-          summary={<span>Fond perdu <b>{draft.bleedMm} mm</b> · dos <b>{spineWidth} mm</b> · total {coverDims.totalWidthMm} × {coverDims.totalHeightMm} mm</span>}
+          summary={<span className="inline-flex items-center gap-1">Fond perdu <b>{draft.bleedMm} mm</b> · dos <b>~{spineWidth} mm</b><SpineWidthTooltip /> · total {coverDims.totalWidthMm} × {coverDims.totalHeightMm} mm</span>}
           expanded={expanded === 2}
           onToggle={() => toggle(2)}
         >
@@ -187,7 +188,7 @@ export function EditionPrintPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <PreviewCell label="Format" value={trim.label} sub={`${trim.widthMm} × ${trim.heightMm} mm`} />
           <PreviewCell label="Pages estimées" value={`~${pageCount}`} sub="pages" />
-          <PreviewCell label="Largeur du dos" value={`${spineWidth}`} sub="mm" />
+          <PreviewCell label="Largeur du dos" value={`~${spineWidth}`} sub="mm · ±10 %" />
           <PreviewCell label="Couverture à plat" value={`${coverDims.totalWidthMm} × ${coverDims.totalHeightMm}`} sub="mm" />
         </div>
       </div>

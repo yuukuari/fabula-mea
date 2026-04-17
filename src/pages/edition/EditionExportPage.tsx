@@ -10,6 +10,7 @@ import { exportPrinterBrief } from '@/lib/export-printer-brief';
 import { checkConformity, summarizeConformity } from '@/lib/conformity';
 import { ConformityReport } from '@/components/edition/ConformityReport';
 import { totalScenesCount } from '@/lib/utils';
+import { resolveCoverForExport } from '@/lib/cover-for-export';
 
 export function EditionExportPage() {
   const navigate = useNavigate();
@@ -32,7 +33,12 @@ export function EditionExportPage() {
   );
   const summary = summarizeConformity(checks);
 
-  const buildExportBook = () => {
+  const buildExportBook = async () => {
+    // Pre-resolve covers (handles advanced-mode cropping to front/back).
+    const [resolvedCoverFront, resolvedCoverBack] = await Promise.all([
+      resolveCoverForExport(layout, 'front', scenes, chapters, countUnit ?? 'words'),
+      resolveCoverForExport(layout, 'back', scenes, chapters, countUnit ?? 'words'),
+    ]);
     const glossary = glossaryEnabled
       ? [
           ...allCharacters.filter((c) => c.inGlossary).map((c) => ({ name: c.name, type: 'character', description: c.description || '' })),
@@ -62,6 +68,8 @@ export function EditionExportPage() {
       ...(glossary.length > 0 ? { glossary } : {}),
       ...(layout ? { layout } : {}),
       tableOfContents,
+      ...(resolvedCoverFront ? { resolvedCoverFront } : {}),
+      ...(resolvedCoverBack ? { resolvedCoverBack } : {}),
       maps: allMaps
         .filter((m) => m.imageUrl)
         .map((m) => ({ id: m.id, name: m.name, imageUrl: m.imageUrl })),
@@ -70,19 +78,19 @@ export function EditionExportPage() {
 
   const handleExportEpub = async () => {
     try {
-      await exportEpub(buildExportBook());
+      await exportEpub(await buildExportBook());
     } catch (err) {
       console.error('[Export EPUB]', err);
       alert("Erreur lors de l'export EPUB. Vérifiez la console.");
     }
   };
 
-  const handleExportPdf = () => {
-    exportPdf(buildExportBook());
+  const handleExportPdf = async () => {
+    exportPdf(await buildExportBook());
   };
 
-  const handleExportPdfPrintReady = () => {
-    exportPdf(buildExportBook(), { printReady: true });
+  const handleExportPdfPrintReady = async () => {
+    exportPdf(await buildExportBook(), { printReady: true });
   };
 
   const handleExportPrinterBrief = () => {
@@ -93,7 +101,7 @@ export function EditionExportPage() {
 
   const handleExportDocx = async () => {
     try {
-      await exportDocx(buildExportBook());
+      await exportDocx(await buildExportBook());
     } catch (err) {
       console.error('[Export DOCX]', err);
       alert("Erreur lors de l'export DOCX. Vérifiez la console.");

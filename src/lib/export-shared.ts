@@ -27,6 +27,10 @@ export interface ExportBook {
   maps?: ExportMap[];
   layout?: BookLayout;
   tableOfContents?: boolean;
+  /** Cover images resolved by the caller (handles advanced mode cropping).
+   * Exports should prefer these over `layout.coverFront`/`coverBack`. */
+  resolvedCoverFront?: string;
+  resolvedCoverBack?: string;
 }
 
 /** Escape special XML/HTML characters to prevent injection */

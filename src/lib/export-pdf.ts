@@ -18,6 +18,10 @@ function buildPdfStyles(layout?: BookLayout): string {
   const trim = pe ? getTrimSize(pe.trimSize) : { widthMm: 148, heightMm: 210 };
   const margins = pe?.margins ?? { topMm: 12, bottomMm: 18, innerMm: 15, outerMm: 15 };
 
+  // Alternating margins: spine (inner) on the LEFT of recto (right-hand) pages
+  // and on the RIGHT of verso (left-hand) pages. Chromium's print engine honors
+  // the :left / :right page pseudo-selectors; the generic @page rule below is
+  // a fallback for single-page contexts.
   return `
   @page {
     size: ${trim.widthMm}mm ${trim.heightMm}mm;
@@ -28,6 +32,12 @@ function buildPdfStyles(layout?: BookLayout): string {
       font-size: 9pt;
       color: #666;
     }
+  }
+  @page :right {
+    margin: ${margins.topMm}mm ${margins.outerMm}mm ${margins.bottomMm}mm ${margins.innerMm}mm;
+  }
+  @page :left {
+    margin: ${margins.topMm}mm ${margins.innerMm}mm ${margins.bottomMm}mm ${margins.outerMm}mm;
   }
   @media print {
     .no-print { display: none !important; }
@@ -337,22 +347,25 @@ export function exportPdf(book: ExportBook, opts: PdfExportOptions = {}): void {
     }
   }
 
-  // Cover pages
-  const frontCoverHtml = book.layout?.coverFront
-    ? `<div class="cover-page"><img src="${book.layout.coverFront}" alt="Couverture" /></div>`
+  // Cover pages — prefer caller-resolved covers (advanced mode cropped to
+  // front/back), fall back to raw simplified covers.
+  const frontCoverSrc = book.resolvedCoverFront ?? book.layout?.coverFront;
+  const backCoverSrc = book.resolvedCoverBack ?? book.layout?.coverBack;
+  const frontCoverHtml = frontCoverSrc
+    ? `<div class="cover-page"><img src="${frontCoverSrc}" alt="Couverture" /></div>`
     : '';
-  const backCoverHtml = book.layout?.coverBack
-    ? `<div class="back-cover-page"><img src="${book.layout.coverBack}" alt="4ème de couverture" /></div>`
+  const backCoverHtml = backCoverSrc
+    ? `<div class="back-cover-page"><img src="${backCoverSrc}" alt="4ème de couverture" /></div>`
     : '';
 
   // Print-ready technical pages
-  const blankAfterCoverHtml = opts.printReady && book.layout?.coverFront
+  const blankAfterCoverHtml = opts.printReady && frontCoverSrc
     ? `<div class="blank-page"></div>`
     : '';
   const copyrightHtml = opts.printReady
     ? buildCopyrightPage(book)
     : '';
-  const blankBeforeBackCoverHtml = opts.printReady && book.layout?.coverBack
+  const blankBeforeBackCoverHtml = opts.printReady && backCoverSrc
     ? `<div class="blank-page"></div>`
     : '';
 

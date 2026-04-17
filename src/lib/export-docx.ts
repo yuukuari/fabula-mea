@@ -443,9 +443,11 @@ export async function exportDocx(book: ExportBook): Promise<void> {
       }
     }
   }
-  // Resolve cover images
-  if (book.layout?.coverFront) imageSources.add(book.layout.coverFront);
-  if (book.layout?.coverBack) imageSources.add(book.layout.coverBack);
+  // Resolve cover images — prefer caller-resolved covers (advanced mode crop).
+  const frontCoverSrc = book.resolvedCoverFront ?? book.layout?.coverFront;
+  const backCoverSrc = book.resolvedCoverBack ?? book.layout?.coverBack;
+  if (frontCoverSrc) imageSources.add(frontCoverSrc);
+  if (backCoverSrc) imageSources.add(backCoverSrc);
   // Resolve map images
   if (book.maps) {
     for (const map of book.maps) {
@@ -465,8 +467,8 @@ export async function exportDocx(book: ExportBook): Promise<void> {
   const sections: Paragraph[] = [];
 
   // ── Front cover ──────────────────────────────────────────────
-  if (book.layout?.coverFront) {
-    const coverData = imageMap.get(book.layout.coverFront);
+  if (frontCoverSrc) {
+    const coverData = imageMap.get(frontCoverSrc);
     if (coverData) {
       const maxWidth = 450;
       const maxHeight = 700;
@@ -816,8 +818,8 @@ export async function exportDocx(book: ExportBook): Promise<void> {
   }
 
   // ── Back cover ───────────────────────────────────────────────
-  if (book.layout?.coverBack) {
-    const backData = imageMap.get(book.layout.coverBack);
+  if (backCoverSrc) {
+    const backData = imageMap.get(backCoverSrc);
     if (backData) {
       const maxWidth = 450;
       const maxHeight = 700;
@@ -948,10 +950,32 @@ export async function exportDocx(book: ExportBook): Promise<void> {
   });
 
   // ── Generate and download ────────────────────────────────────
-  const blob = await Packer.toBlob(doc);
+  let blob = await Packer.toBlob(doc);
+  // The docx library does not expose a `mirrorMargins` setting, so we
+  // post-process the .docx zip to inject `<w:mirrorMargins/>` into
+  // word/settings.xml. This tells Word to swap left/right margins on
+  // verso pages so "inner" and "outer" margins alternate correctly.
+  blob = await injectMirrorMargins(blob);
   const safeName = book.title
     .replace(/[^a-zA-Z0-9àâäéèêëïîôùûüÿçœæ\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-');
   saveAs(blob, `${safeName}.docx`);
+}
+
+async function injectMirrorMargins(blob: Blob): Promise<Blob> {
+  const JSZip = (await import('jszip')).default;
+  const zip = await JSZip.loadAsync(blob);
+  const settingsFile = zip.file('word/settings.xml');
+  if (!settingsFile) return blob;
+  let xml = await settingsFile.async('string');
+  if (xml.includes('<w:mirrorMargins')) return blob;
+  // Insert <w:mirrorMargins/> as the first child of <w:settings>. The opening
+  // tag carries the namespaces so we insert just after it.
+  xml = xml.replace(/(<w:settings[^>]*>)/, '$1<w:mirrorMargins/>');
+  zip.file('word/settings.xml', xml);
+  return zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
 }

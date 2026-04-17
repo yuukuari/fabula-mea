@@ -1,31 +1,37 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, FileDown } from 'lucide-react';
 import { CoverSection } from '@/components/edition/CoverSection';
 import { useBookStore } from '@/store/useBookStore';
 import { exportCoverTemplate } from '@/lib/export-cover-template';
+import { exportCoverFinal } from '@/lib/export-cover-final';
 import { DEFAULT_LAYOUT } from '@/lib/fonts';
 import { estimatePageCount } from '@/lib/print-edition';
-import { totalScenesCount } from '@/lib/utils';
+import { totalScenesCount, isSpecialChapter } from '@/lib/utils';
 
 export function EditionCoversPage() {
   const navigate = useNavigate();
   const layout = useBookStore((s) => s.layout);
   const title = useBookStore((s) => s.title);
+  const author = useBookStore((s) => s.author);
   const chapters = useBookStore((s) => s.chapters);
   const scenes = useBookStore((s) => s.scenes);
   const countUnit = useBookStore((s) => s.countUnit ?? 'words');
 
   const hasPrintEdition = !!layout?.printEdition;
+  const wordCount = totalScenesCount(scenes, countUnit);
+  const chapterCount = chapters.filter((c) => !isSpecialChapter(c)).length;
 
   const handleDownloadTemplate = () => {
     const pe = layout?.printEdition;
     if (!pe) return;
     const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
     const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
-    const totalWords = totalScenesCount(scenes, countUnit);
-    const chapterCount = chapters.filter((c) => c.type === 'chapter').length;
-    const pageCount = estimatePageCount(totalWords, pe.trimSize, fontSize, lineHeight, pe.margins, chapterCount);
+    const pageCount = estimatePageCount(wordCount, pe.trimSize, fontSize, lineHeight, pe.margins, chapterCount);
     exportCoverTemplate(layout, title || 'Livre', pageCount);
+  };
+
+  const handleDownloadFinal = () => {
+    exportCoverFinal({ layout, title, author, wordCount, chapterCount });
   };
 
   return (
@@ -46,22 +52,48 @@ export function EditionCoversPage() {
 
       <CoverSection />
 
-      {/* Cover template download */}
+      {/* Cover exports */}
       {hasPrintEdition && (
-        <div className="card-fantasy p-6 mt-6">
-          <h3 className="font-display text-lg font-semibold text-ink-500 mb-1">Gabarit de couverture</h3>
-          <p className="text-sm text-ink-300 mb-4">
-            Téléchargez un PDF aux dimensions exactes de votre couverture dépliée (4ème + dos + 1ère + fond perdu).
-            Il contient les guides visuels (zones de coupe, de sécurité, du dos) à utiliser comme base dans
-            Photoshop, GIMP, Canva ou Affinity Designer.
-          </p>
-          <button
-            onClick={handleDownloadTemplate}
-            className="btn-secondary inline-flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Télécharger le gabarit
-          </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          {/* Final print-ready cover */}
+          <div className="card-fantasy p-6 border-bordeaux-200">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-bordeaux-500 rounded-lg flex items-center justify-center shrink-0">
+                <FileDown className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display font-semibold text-ink-500 mb-1">Couverture finale</h3>
+                <p className="text-xs text-ink-300 mb-3">
+                  PDF de la couverture dépliée prête à envoyer à l'imprimeur, aux dimensions exactes avec
+                  1ère + dos + 4ème composés automatiquement selon le mode choisi.
+                </p>
+                <button onClick={handleDownloadFinal} className="btn-primary text-sm inline-flex items-center gap-2">
+                  <FileDown className="w-4 h-4" />
+                  Générer la couverture finale
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Empty template */}
+          <div className="card-fantasy p-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-gold-100 rounded-lg flex items-center justify-center shrink-0">
+                <Download className="w-5 h-5 text-gold-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display font-semibold text-ink-500 mb-1">Gabarit vierge</h3>
+                <p className="text-xs text-ink-300 mb-3">
+                  PDF avec uniquement les guides visuels (fond perdu, zone sécurité, dos) à utiliser comme
+                  base dans Photoshop, GIMP, Canva…
+                </p>
+                <button onClick={handleDownloadTemplate} className="btn-secondary text-sm inline-flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Télécharger le gabarit
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -3,9 +3,11 @@ import { BookOpen } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { DEFAULT_LAYOUT } from '@/lib/fonts';
 import {
-  getTrimSize, getPaperType, estimatePageCount, calculateSpineWidth, DEFAULT_PRINT_EDITION,
+  getTrimSize, getPaperType, estimatePageCount, calculateSpineWidth,
+  calculateCoverDimensions, DEFAULT_PRINT_EDITION,
 } from '@/lib/print-edition';
 import { totalScenesCount } from '@/lib/utils';
+import { resolveSpineRender, getCoverMode, getAdvancedCover } from '@/lib/cover-composition';
 
 interface Props {
   onOpenReader: () => void;
@@ -63,11 +65,47 @@ export function BookPreview3D({ onOpenReader }: Props) {
     setIsDragging(false);
   }, []);
 
-  const coverFront = layout?.coverFront;
-  const coverBack = layout?.coverBack;
+  // In advanced mode, the flat image contains back+spine+front+bleed; we
+  // crop it via CSS `backgroundImage` + `background-size/position` to show
+  // only the front trim (1ère) on the front face and the back trim (4ème)
+  // on the back face.
+  const coverMode = getCoverMode(layout);
+  const advancedFlat = coverMode === 'advanced' ? getAdvancedCover(layout).flatImage : undefined;
+  const flatDims = advancedFlat
+    ? calculateCoverDimensions(printEdition.trimSize, pageCount, printEdition.paperType, printEdition.bleedMm)
+    : null;
+
+  const coverFront = advancedFlat ?? layout?.coverFront;
+  const coverBack = advancedFlat ?? layout?.coverBack;
   const coverSpine = layout?.coverSpine;
   const hasContent = chapters.length > 0;
   const dragAreaRef = useRef<HTMLDivElement>(null);
+
+  // Build CSS for cropping the flat image to a given side (front|back) of the
+  // printed cover. Returns a style object with backgroundImage + size/position.
+  const flatBgStyle = (side: 'front' | 'back'): React.CSSProperties | null => {
+    if (!advancedFlat || !flatDims) return null;
+    // Scale so trim width (what we show) maps to 100% of the face. Total
+    // width / trim width tells us how big to render the image relative to
+    // the face, then we shift so the correct portion is visible.
+    const widthPct = (flatDims.totalWidthMm / trim.widthMm) * 100;
+    const heightPct = (flatDims.totalHeightMm / (flatDims.totalHeightMm - 2 * flatDims.bleedMm)) * 100;
+    const startMm = side === 'front'
+      ? flatDims.bleedMm + flatDims.backWidthMm + flatDims.spineWidthMm
+      : flatDims.bleedMm;
+    const leftPct = -(startMm / trim.widthMm) * 100;
+    const topPct = -(flatDims.bleedMm / (flatDims.totalHeightMm - 2 * flatDims.bleedMm)) * 100;
+    return {
+      backgroundImage: `url(${advancedFlat})`,
+      backgroundSize: `${widthPct}% ${heightPct}%`,
+      backgroundPosition: `${leftPct}% ${topPct}%`,
+      backgroundRepeat: 'no-repeat',
+    };
+  };
+
+  // Auto-composed spine (simplified mode): color + optional vertical title
+  const spineRender = resolveSpineRender(layout, title, author, spineWidth);
+  const useAutoSpine = !coverSpine && coverMode === 'simplified';
 
   return (
     <div className="card-fantasy p-6 mb-6">
@@ -120,7 +158,9 @@ export function BookPreview3D({ onOpenReader }: Props) {
                 }}
                 className="border border-parchment-300"
               >
-                {coverFront ? (
+                {advancedFlat && flatDims ? (
+                  <div className="w-full h-full" style={flatBgStyle('front') ?? undefined} />
+                ) : coverFront ? (
                   <img src={coverFront} alt="Couverture" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-bordeaux-600 to-bordeaux-800 flex flex-col items-center justify-center text-white p-4">
@@ -143,7 +183,9 @@ export function BookPreview3D({ onOpenReader }: Props) {
                 }}
                 className="border border-parchment-300"
               >
-                {coverBack ? (
+                {advancedFlat && flatDims ? (
+                  <div className="w-full h-full" style={flatBgStyle('back') ?? undefined} />
+                ) : coverBack ? (
                   <img src={coverBack} alt="4ème de couverture" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-bordeaux-700 to-bordeaux-900" />
@@ -161,21 +203,45 @@ export function BookPreview3D({ onOpenReader }: Props) {
                   transformOrigin: 'right center',
                   backfaceVisibility: 'hidden',
                   overflow: 'hidden',
+                  backgroundColor: useAutoSpine ? spineRender.color : undefined,
+                  // Advanced mode: crop the flat image to the spine strip.
+                  ...(advancedFlat && flatDims ? (() => {
+                    const widthPct = (flatDims.totalWidthMm / flatDims.spineWidthMm) * 100;
+                    const heightPct = (flatDims.totalHeightMm / (flatDims.totalHeightMm - 2 * flatDims.bleedMm)) * 100;
+                    const startMm = flatDims.bleedMm + flatDims.backWidthMm;
+                    const leftPct = -(startMm / flatDims.spineWidthMm) * 100;
+                    const topPct = -(flatDims.bleedMm / (flatDims.totalHeightMm - 2 * flatDims.bleedMm)) * 100;
+                    return {
+                      backgroundImage: `url(${advancedFlat})`,
+                      backgroundSize: `${widthPct}% ${heightPct}%`,
+                      backgroundPosition: `${leftPct}% ${topPct}%`,
+                      backgroundRepeat: 'no-repeat',
+                    };
+                  })() : {}),
                 }}
-                className={coverSpine ? '' : 'bg-bordeaux-700 border border-bordeaux-800 flex items-center justify-center'}
+                className={advancedFlat
+                  ? ''
+                  : coverSpine
+                    ? ''
+                    : useAutoSpine
+                      ? 'flex items-center justify-center'
+                      : 'bg-bordeaux-700 border border-bordeaux-800 flex items-center justify-center'}
               >
-                {coverSpine ? (
+                {advancedFlat ? null : coverSpine ? (
                   <img src={coverSpine} alt="Dos" className="w-full h-full object-cover" />
                 ) : (
                   bookD > 20 && (
                     <p
-                      className="text-white font-display text-[9px] font-semibold whitespace-nowrap"
+                      className="font-semibold whitespace-nowrap"
                       style={{
                         writingMode: 'vertical-rl',
                         textOrientation: 'mixed',
-                        transform: 'rotate(180deg)',
+                        transform: spineRender.orientation === 'ttb' ? 'rotate(180deg)' : 'none',
                         maxHeight: bookH - 10,
                         overflow: 'hidden',
+                        fontSize: Math.max(bookD * 0.35, 7),
+                        fontFamily: useAutoSpine ? spineRender.fontStack : undefined,
+                        color: useAutoSpine ? spineRender.textColor : '#ffffff',
                       }}
                     >
                       {title || 'Mon livre'} — {author || 'Auteur'}

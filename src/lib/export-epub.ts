@@ -196,12 +196,14 @@ export async function exportEpub(book: ExportBook): Promise<void> {
   // 3. Style
   zip.file('OEBPS/style.css', buildBookCss(book.layout));
 
-  // 4. Couverture (si disponible)
+  // 4. Couverture (si disponible) — prefer caller-resolved cover (advanced
+  // mode crop) over the raw simplified coverFront.
   let coverImageId = '';
   let coverImageFilename = '';
   let coverImageMimeType = '';
-  if (book.layout?.coverFront) {
-    const parsed = await resolveImageData(book.layout.coverFront);
+  const coverSource = book.resolvedCoverFront ?? book.layout?.coverFront;
+  if (coverSource) {
+    const parsed = await resolveImageData(coverSource);
     if (parsed) {
       coverImageFilename = `cover.${parsed.ext}`;
       coverImageMimeType = parsed.mimeType;
