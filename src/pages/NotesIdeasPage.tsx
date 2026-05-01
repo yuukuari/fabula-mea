@@ -20,6 +20,7 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { useSearchParams } from 'react-router-dom';
 import { useBookStore } from '@/store/useBookStore';
+import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { cn } from '@/lib/utils';
@@ -105,7 +106,7 @@ export function NotesIdeasPage() {
   const addNoteIdea = useBookStore((s) => s.addNoteIdea);
   const deleteNoteIdea = useBookStore((s) => s.deleteNoteIdea);
   const reorderNoteIdeas = useBookStore((s) => s.reorderNoteIdeas);
-  const addWorldNote = useBookStore((s) => s.addWorldNote);
+  const { addWorldNote } = useEncyclopediaStore();
   const navigate = useNavigate();
 
   const [showForm, setShowForm] = useState(false);
