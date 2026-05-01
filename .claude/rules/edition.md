@@ -96,7 +96,21 @@ Palette parchment (cohérent avec SceneEditor) — fond `bg-parchment-50`, bordu
 
 ### Pagination
 
-Numérotation typographique : pas de numéro sur couverture / page de titre / copyright / TOC. Compteur démarre à 1 sur le chapitre 1 (`Paginator.startBodyNumbering()`). TOC : numéros résolus en best-effort via overlay rect blanc + redraw (limitations connues si TOC déborde).
+Numérotation typographique : pas de numéro sur couverture / page de titre / copyright / TOC. Compteur démarre à 1 sur le chapitre 1 (`Paginator.startBodyNumbering()`).
+
+### Table des matières (TOC)
+
+Stratégie en deux passes :
+1. **Au rendu** : le label seul est dessiné, et la position Y (`cursorYMm`) + `pageIndex` sont capturés dans `tocRows[]`.
+2. **Après pagination** : `paintTocLeaders()` dessine pour chaque entrée le **leader pointillé** (tile de `". "` calculé via `widthOfTextAtSize`) et le **numéro aligné à droite**. Si l'entrée n'a pas de numéro (front matter dont l'anchor `pageIndex < bodyStartIndex`), pas de leader non plus → ligne orpheline propre.
+
+### Centrage du texte tournant (dos de couverture)
+
+`pdf-lib.drawText({rotate})` tourne autour de l'ancre (baseline-gauche en coords locales). Pour centrer visuellement à `(cx, cy)` :
+- `anchor_x = cx + sign(rotation) · 0.3 · fontSize`
+- `anchor_y = cy − sign(rotation) · textWidth/2`
+
+Le `0.3 · fontSize` correspond au décalage baseline → milieu visuel pour une serif typique.
 
 ### Polices custom dans les exports
 

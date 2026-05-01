@@ -115,14 +115,14 @@ export async function buildInteriorPdf(book: ExportBook, opts: BuildPdfOptions):
     paginator.pageBreak(forceRecto);
   }
 
-  // ─── 4. Table of contents (anchors filled in second pass — for now,
-  //       we skip page numbers in TOC and just list titles. A two-pass
-  //       approach for accurate TOC numbers requires layout to be fully
-  //       deterministic; we add it after generation by overlaying numbers.) ───
-  let tocPlaceholder: { pageIndex: number; entries: { id: string; label: string }[] } | null = null;
+  // ─── 4. Table of contents ───
+  // Two-pass strategy: render labels only here; capture each entry's Y so
+  // we can paint the dotted leader + page number on the right side once
+  // all content is laid out and anchors are known.
+  type TocRow = { id: string; label: string; pageIndex: number; yTopMm: number };
+  const tocRows: TocRow[] = [];
   if (book.tableOfContents) {
     paginator.newPage();
-    const tocPageIndex = paginator.pages.length - 1;
     paginator.drawHeading('Table des matières', { size: 18, font: fonts.bold, align: 'center', spaceAfterMm: 8 });
     const entries: { id: string; label: string }[] = [];
     for (const ch of book.chapters) {
@@ -139,15 +139,11 @@ export async function buildInteriorPdf(book: ExportBook, opts: BuildPdfOptions):
       }
     }
     if (book.glossary && book.glossary.length > 0) entries.push({ id: 'glossaire', label: 'Glossaire' });
-    // Render entries with placeholder dots — page numbers patched after
-    // chapters are laid out (see resolveTocPageNumbers below).
     for (const e of entries) {
-      paginator.drawParagraph(
-        [{ text: e.label }, { text: '   …   ', italic: true }, { text: '___' }],
-        { align: 'left', spaceAfterMm: 1 },
-      );
+      const ctx = paginator.ensurePage();
+      tocRows.push({ id: e.id, label: e.label, pageIndex: ctx.pageIndex, yTopMm: ctx.cursorYMm });
+      paginator.drawParagraph([{ text: e.label }], { align: 'left', spaceAfterMm: 2 });
     }
-    tocPlaceholder = { pageIndex: tocPageIndex, entries };
     paginator.pageBreak(forceRecto);
   }
 
@@ -251,9 +247,9 @@ export async function buildInteriorPdf(book: ExportBook, opts: BuildPdfOptions):
     paginator.padToMultipleOf4();
   }
 
-  // ─── 11. Resolve TOC page numbers (best-effort) ───
-  if (tocPlaceholder) {
-    await resolveTocPageNumbers(paginator, fonts, tocPlaceholder);
+  // ─── 11. Paint TOC dotted leaders + page numbers ───
+  if (tocRows.length > 0) {
+    paintTocLeaders(paginator, fonts, tocRows);
   }
 
   return doc.save();
@@ -296,44 +292,80 @@ function renderBlocks(p: Paginator, blocks: Block[]): void {
 }
 
 /**
- * After all content is laid out, replace the TOC page's "___" placeholders
- * with the real page numbers from the recorded anchors. Implementation:
- * draw a small white rectangle over the placeholder zone, then re-render
- * the page numbers in their correct position.
- *
- * NOTE: This is a "best-effort overlay". It works because we know exactly
- * where placeholders were drawn. If the TOC layout changes, this needs
- * adjustment. For v1 we accept that the dotted leader is approximate.
+ * Paint the dotted leader and page number for each TOC row using the Y
+ * positions captured at TOC render time and the anchor map populated by
+ * the rest of the document.
  */
-async function resolveTocPageNumbers(
+function paintTocLeaders(
   paginator: Paginator,
   fonts: Awaited<ReturnType<typeof loadFontSet>>,
-  toc: { pageIndex: number; entries: { id: string; label: string }[] },
-): Promise<void> {
-  const page = paginator.pages[toc.pageIndex];
-  if (!page) return;
+  rows: { id: string; label: string; pageIndex: number; yTopMm: number }[],
+): void {
   const cfg = paginator.cfg;
-  const m = paginator.marginsMm(toc.pageIndex);
-  const pageWidthPt = mmToPt(cfg.trimWidthMm);
-  // The TOC entries were rendered starting after the heading; estimate Y
-  // for each line. We assume each entry took 1 line at body lineHeight.
-  const lineHeightPt = cfg.fontSize * cfg.lineHeight;
-  const startTopMm = m.topMm + (18 * 1.3 / 72) * 25.4 + 8; // heading height + spaceAfter
-  for (let i = 0; i < toc.entries.length; i++) {
-    const e = toc.entries[i];
-    const anchor = paginator.anchors.find((a) => a.id === e.id);
-    if (!anchor) continue;
-    const yMm = startTopMm + i * (((lineHeightPt) / 72) * 25.4 + 1) + lineHeightPt * 0.78 / 72 * 25.4;
-    const yPt = mmToPt(cfg.trimHeightMm - yMm);
-    const start = paginator.bodyStartIndex ?? 0;
-    const num = anchor.pageIndex >= start
-      ? String(anchor.pageIndex - start + 1)
-      : '';
-    if (!num) continue;
-    const tw = fonts.regular.widthOfTextAtSize(num, cfg.fontSize);
-    const xPt = mmToPt(cfg.trimWidthMm - m.rightMm) - tw;
-    // White-out the "___" placeholder with a small rectangle
-    page.drawRectangle({ x: xPt - 2, y: yPt - 2, width: tw + 4, height: cfg.fontSize + 2, color: rgb(1, 1, 1) });
-    page.drawText(num, { x: xPt, y: yPt, size: cfg.fontSize, font: fonts.regular });
+  const fontSize = cfg.fontSize;
+  const lineHeightMm = (fontSize * cfg.lineHeight / 72) * 25.4;
+  // Baseline sits ~78% down the line from its top — same offset used by
+  // drawParagraph in layout.ts.
+  const baselineFromTopMm = lineHeightMm * 0.78;
+
+  for (const row of rows) {
+    const page = paginator.pages[row.pageIndex];
+    if (!page) continue;
+    const m = paginator.marginsMm(row.pageIndex);
+    const anchor = paginator.anchors.find((a) => a.id === row.id);
+
+    // Build the page number (relative to body start, blank for front-matter
+    // pages that come before chapter 1).
+    let num = '';
+    if (anchor) {
+      const start = paginator.bodyStartIndex ?? 0;
+      if (anchor.pageIndex >= start) num = String(anchor.pageIndex - start + 1);
+    }
+
+    const baselineYMm = row.yTopMm + baselineFromTopMm;
+    const yPt = mmToPt(cfg.trimHeightMm - baselineYMm);
+    // Right edge of the page-number column.
+    const rightEdgePt = mmToPt(cfg.trimWidthMm - m.rightMm);
+    // Left edge of the page-number column (the number is right-aligned to
+    // rightEdgePt — measure its width then offset).
+    const numWidthPt = num ? fonts.regular.widthOfTextAtSize(num, fontSize) : 0;
+    const numLeftPt = rightEdgePt - numWidthPt;
+
+    // Where the label ends (so we can fill dots in between).
+    const labelWidthPt = fonts.regular.widthOfTextAtSize(row.label, fontSize);
+    const labelLeftPt = mmToPt(m.leftMm);
+    const labelRightPt = labelLeftPt + labelWidthPt;
+
+    // Dotted leader: tile " ." between (labelRight + small gap) and
+    // (numLeft - small gap). We measure once per row. Skip the leader
+    // entirely when there is no number — orphan rows (front matter with
+    // no body-page number) look cleaner without trailing dots.
+    const leaderLeftPt = labelRightPt + 4;
+    const leaderRightPt = numLeftPt - 4;
+    if (num && leaderRightPt > leaderLeftPt) {
+      const dot = '.';
+      const dotWidth = fonts.regular.widthOfTextAtSize(dot + ' ', fontSize);
+      const count = Math.floor((leaderRightPt - leaderLeftPt) / dotWidth);
+      if (count > 0) {
+        const leader = (dot + ' ').repeat(count);
+        page.drawText(leader, {
+          x: leaderRightPt - count * dotWidth,
+          y: yPt,
+          size: fontSize,
+          font: fonts.regular,
+          color: rgb(0.5, 0.5, 0.5),
+        });
+      }
+    }
+
+    if (num) {
+      page.drawText(num, {
+        x: numLeftPt,
+        y: yPt,
+        size: fontSize,
+        font: fonts.regular,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+    }
   }
 }
