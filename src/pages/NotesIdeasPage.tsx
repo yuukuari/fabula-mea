@@ -205,7 +205,7 @@ export function NotesIdeasPage() {
             note={selectedNote}
             onCancel={() => setConvertId(null)}
             onConfirm={(title, category) => {
-              const plainContent = htmlToPlainText(selectedNote.content);
+              const plainContent = tiptapHtmlToPlainText(selectedNote.content);
               const newId = addWorldNote({ title, category, content: plainContent });
               deleteNoteIdea(selectedNote.id);
               setConvertId(null);
@@ -518,7 +518,7 @@ function Sep() {
   return <div className="w-px bg-parchment-300 mx-1 h-5" />;
 }
 
-function htmlToPlainText(html: string): string {
+function tiptapHtmlToPlainText(html: string): string {
   return html
     .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
