@@ -1,11 +1,14 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  Plus, Lightbulb, Edit, Trash2, X, ArrowLeft, ListChecks, Search, GripVertical,
+  Plus, Lightbulb, Edit, Trash2, X, ArrowLeft, ListChecks, Search, GripVertical, Sparkles,
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Heading1, Heading2, Heading3, Quote, List, ListOrdered,
   ImagePlus, Link as LinkIcon, Unlink, RemoveFormatting,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { WORLD_NOTE_CATEGORY_LABELS } from '@/lib/utils';
+import type { WorldNoteCategory } from '@/types';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExt from '@tiptap/extension-underline';
@@ -102,10 +105,13 @@ export function NotesIdeasPage() {
   const addNoteIdea = useBookStore((s) => s.addNoteIdea);
   const deleteNoteIdea = useBookStore((s) => s.deleteNoteIdea);
   const reorderNoteIdeas = useBookStore((s) => s.reorderNoteIdeas);
+  const addWorldNote = useBookStore((s) => s.addWorldNote);
+  const navigate = useNavigate();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [convertId, setConvertId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(
     searchParams.get('noteId')
   );
@@ -153,6 +159,13 @@ export function NotesIdeasPage() {
           </button>
           <div className="flex-1" />
           <button
+            onClick={() => setConvertId(selectedNote.id)}
+            className="btn-secondary flex items-center gap-2"
+            title="Transformer cette note en fiche univers"
+          >
+            <Sparkles className="w-4 h-4" /> <span className="hidden sm:inline">Transformer en fiche univers</span>
+          </button>
+          <button
             onClick={() => { setEditingId(selectedNote.id); setShowForm(true); }}
             className="btn-secondary flex items-center gap-2"
           >
@@ -185,6 +198,20 @@ export function NotesIdeasPage() {
           <NoteIdeaForm
             noteId={editingId}
             onClose={() => { setShowForm(false); setEditingId(null); }}
+          />
+        )}
+        {convertId && (
+          <ConvertToWorldNoteModal
+            note={selectedNote}
+            onCancel={() => setConvertId(null)}
+            onConfirm={(title, category) => {
+              const plainContent = htmlToPlainText(selectedNote.content);
+              const newId = addWorldNote({ title, category, content: plainContent });
+              deleteNoteIdea(selectedNote.id);
+              setConvertId(null);
+              setSelectedId(null);
+              navigate(`/world?noteId=${newId}`);
+            }}
           />
         )}
       </div>
@@ -489,4 +516,91 @@ function ToolbarButton({
 
 function Sep() {
   return <div className="w-px bg-parchment-300 mx-1 h-5" />;
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// ─── Convert to world note modal ───
+function ConvertToWorldNoteModal({
+  note,
+  onCancel,
+  onConfirm,
+}: {
+  note: NoteIdea;
+  onCancel: () => void;
+  onConfirm: (title: string, category: WorldNoteCategory) => void;
+}) {
+  const [title, setTitle] = useState(note.title ?? '');
+  const [category, setCategory] = useState<WorldNoteCategory>('custom');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed) {
+      setError('Le titre est obligatoire pour une fiche univers.');
+      return;
+    }
+    onConfirm(trimmed, category);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="relative bg-parchment-50 rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="flex items-center justify-between p-6 border-b border-parchment-300">
+          <h3 className="font-display text-xl font-bold text-ink-500">Transformer en fiche univers</h3>
+          <button onClick={onCancel} className="btn-ghost p-1"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-ink-300">
+              La note actuelle sera <strong>supprimée</strong> et son contenu transféré dans une nouvelle fiche univers. Cette action est irréversible.
+            </p>
+            <div>
+              <label className="label-field">Titre *</label>
+              <input
+                value={title}
+                onChange={(e) => { setTitle(e.target.value); if (error) setError(null); }}
+                className="input-field"
+                placeholder="Titre de la fiche univers"
+                autoFocus
+              />
+              {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+            </div>
+            <div>
+              <label className="label-field">Catégorie</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as WorldNoteCategory)}
+                className="input-field"
+              >
+                {Object.entries(WORLD_NOTE_CATEGORY_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 p-6 border-t border-parchment-300">
+            <button type="button" onClick={onCancel} className="btn-secondary">Annuler</button>
+            <button type="submit" className="btn-primary">Transformer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
