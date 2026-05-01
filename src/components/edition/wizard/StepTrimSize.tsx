@@ -1,7 +1,9 @@
+import { useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { PrintEdition, TrimSizeId } from '@/types';
 import { useBookStore } from '@/store/useBookStore';
 import { DEFAULT_LAYOUT } from '@/lib/fonts';
-import { TRIM_SIZES, DEFAULT_MARGINS, estimatePageCount } from '@/lib/print-edition';
+import { TRIM_SIZES, DEFAULT_MARGINS, estimatePageCount, type TrimSizeInfo } from '@/lib/print-edition';
 import { countFromHtml } from '@/lib/utils';
 
 interface Props {
@@ -36,7 +38,39 @@ export function StepTrimSize({ draft, onChange }: Props) {
   const pageCount = estimatePageCount(totalWords, draft.trimSize, fontSize, lineHeight, draft.margins, chapterCount);
 
   // Reference dimensions for proportional rendering
-  const maxH = 234; // royal height
+  const maxH = 240; // grand_format height
+
+  const classics = TRIM_SIZES.filter((t) => t.classic);
+  const others = TRIM_SIZES.filter((t) => !t.classic);
+  const selectedIsOther = others.some((t) => t.id === draft.trimSize);
+  const [showOthers, setShowOthers] = useState(selectedIsOther);
+
+  const renderCard = (t: TrimSizeInfo) => {
+    const selected = draft.trimSize === t.id;
+    const scaleH = (t.heightMm / maxH) * 80;
+    const scaleW = (t.widthMm / maxH) * 80;
+    return (
+      <button
+        key={t.id}
+        onClick={() => handleSelect(t.id)}
+        className={`p-4 rounded-xl border-2 text-left transition-all ${
+          selected
+            ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
+            : 'border-parchment-200 hover:border-bordeaux-200 hover:bg-parchment-50'
+        }`}
+      >
+        <div className="flex justify-center mb-3">
+          <div
+            className={`rounded-sm border ${selected ? 'border-bordeaux-300 bg-bordeaux-50' : 'border-parchment-300 bg-parchment-50'}`}
+            style={{ width: scaleW, height: scaleH }}
+          />
+        </div>
+        <p className="font-display font-semibold text-sm text-ink-500">{t.label}</p>
+        <p className="text-xs text-ink-300">{t.widthMm} × {t.heightMm} mm</p>
+        <p className="text-[10px] text-ink-200 mt-0.5">{t.description}</p>
+      </button>
+    );
+  };
 
   return (
     <div>
@@ -45,36 +79,24 @@ export function StepTrimSize({ draft, onChange }: Props) {
         Choisissez le format d'impression de votre livre.
       </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-        {TRIM_SIZES.map((t) => {
-          const selected = draft.trimSize === t.id;
-          const scaleH = (t.heightMm / maxH) * 80;
-          const scaleW = (t.widthMm / maxH) * 80;
-
-          return (
-            <button
-              key={t.id}
-              onClick={() => handleSelect(t.id)}
-              className={`p-4 rounded-xl border-2 text-left transition-all ${
-                selected
-                  ? 'border-bordeaux-400 bg-bordeaux-50/50 ring-2 ring-bordeaux-200'
-                  : 'border-parchment-200 hover:border-bordeaux-200 hover:bg-parchment-50'
-              }`}
-            >
-              {/* Proportional book rectangle */}
-              <div className="flex justify-center mb-3">
-                <div
-                  className={`rounded-sm border ${selected ? 'border-bordeaux-300 bg-bordeaux-50' : 'border-parchment-300 bg-parchment-50'}`}
-                  style={{ width: scaleW, height: scaleH }}
-                />
-              </div>
-              <p className="font-display font-semibold text-sm text-ink-500">{t.label}</p>
-              <p className="text-xs text-ink-300">{t.widthMm} × {t.heightMm} mm</p>
-              <p className="text-[10px] text-ink-200 mt-0.5">{t.description}</p>
-            </button>
-          );
-        })}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+        {classics.map(renderCard)}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShowOthers((v) => !v)}
+        className="flex items-center gap-1.5 text-xs text-ink-300 hover:text-ink-500 transition-colors mb-3"
+      >
+        {showOthers ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        Autres formats (étrangers, moins courants)
+      </button>
+
+      {showOthers && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          {others.map(renderCard)}
+        </div>
+      )}
 
       {totalWords > 0 && (
         <p className="text-sm text-ink-400 text-center py-2 bg-parchment-50 rounded-lg border border-parchment-200">

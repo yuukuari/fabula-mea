@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, MapPin, Search, Edit, Trash2, ArrowLeft, X, Map, BookText, GripVertical } from 'lucide-react';
+import { GlossaryBadge } from '@/components/encyclopedia/GlossaryBadge';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
@@ -137,11 +138,10 @@ export function PlacesPage() {
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h2 className="font-display text-3xl font-bold text-ink-500">{selectedPlace.name}</h2>
             <span className="badge bg-parchment-200 text-ink-400">{PLACE_TYPE_LABELS[selectedPlace.type]}</span>
-            {selectedPlace.inGlossary && (
-              <span className="flex items-center gap-1 text-xs text-bordeaux-500">
-                <BookText className="w-3.5 h-3.5" /> Glossaire
-              </span>
-            )}
+            <GlossaryBadge
+              inGlossary={selectedPlace.inGlossary ?? false}
+              onToggle={(next) => updatePlace(selectedPlace.id, { inGlossary: next })}
+            />
           </div>
           {selectedPlace.description && (
             <p className="text-ink-300 font-serif whitespace-pre-wrap mb-4">{selectedPlace.description}</p>

@@ -13,8 +13,9 @@
  */
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { BookLayout } from '@/types';
+import type { BookLayout, BookFont } from '@/types';
 import { FONT_STACKS, DEFAULT_LAYOUT } from '@/lib/fonts';
+import { FONT_URLS } from '@/lib/pdf/fonts';
 import { escapeXml, cleanHtml } from '@/lib/export-shared';
 import type { ExportBook } from '@/lib/export-shared';
 
@@ -69,12 +70,44 @@ async function resolveImageData(src: string): Promise<{ mimeType: string; ext: s
 
 // ── CSS du livre ─────────────────────────────────────────────────
 
-function buildBookCss(layout?: BookLayout): string {
-  const fontStack = FONT_STACKS[layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily];
+function buildBookCss(layout?: BookLayout, embedFontFile?: string): string {
+  const family = layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily;
+  const fontStack = FONT_STACKS[family];
   const lineHeight = layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
   const fontSize = layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
 
-  return `
+  // When the user picked a Google Font we embed in the EPUB, declare
+  // @font-face so the e-reader uses our shipped TTFs rather than its own
+  // substitution. The 4 variants (regular/bold/italic/bold-italic) sit in
+  // OEBPS/fonts/ and follow a deterministic naming convention.
+  const fontFace = embedFontFile ? `
+@font-face {
+  font-family: '${family}';
+  font-weight: normal;
+  font-style: normal;
+  src: url('fonts/${embedFontFile}-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: '${family}';
+  font-weight: bold;
+  font-style: normal;
+  src: url('fonts/${embedFontFile}-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: '${family}';
+  font-weight: normal;
+  font-style: italic;
+  src: url('fonts/${embedFontFile}-Italic.ttf') format('truetype');
+}
+@font-face {
+  font-family: '${family}';
+  font-weight: bold;
+  font-style: italic;
+  src: url('fonts/${embedFontFile}-BoldItalic.ttf') format('truetype');
+}
+` : '';
+
+  return `${fontFace}
 body {
   font-family: ${fontStack};
   line-height: ${lineHeight};
@@ -193,8 +226,43 @@ export async function exportEpub(book: ExportBook): Promise<void> {
 </container>`
   );
 
-  // 3. Style
-  zip.file('OEBPS/style.css', buildBookCss(book.layout));
+  // 3. Style + optional font embedding
+  // Slug from family name, e.g. "Crimson Text" → "CrimsonText" (matches the
+  // jsDelivr filename pattern for Google Fonts repos).
+  const family = (book.layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily) as BookFont;
+  const urls = FONT_URLS[family];
+  let embedSlug: string | undefined;
+  const embeddedFontEntries: { id: string; href: string }[] = [];
+  if (urls) {
+    const slug = family.replace(/\s+/g, '');
+    const variants: { suffix: string; url: string }[] = [
+      { suffix: 'Regular',    url: urls.regular },
+      { suffix: 'Bold',       url: urls.bold },
+      { suffix: 'Italic',     url: urls.italic },
+      { suffix: 'BoldItalic', url: urls.boldItalic },
+    ];
+    let allOk = true;
+    const fetched: { suffix: string; bytes: ArrayBuffer }[] = [];
+    for (const v of variants) {
+      try {
+        const r = await fetch(v.url);
+        if (!r.ok) { allOk = false; break; }
+        fetched.push({ suffix: v.suffix, bytes: await r.arrayBuffer() });
+      } catch {
+        allOk = false;
+        break;
+      }
+    }
+    if (allOk) {
+      for (const f of fetched) {
+        const filename = `${slug}-${f.suffix}.ttf`;
+        zip.file(`OEBPS/fonts/${filename}`, f.bytes);
+        embeddedFontEntries.push({ id: `font-${f.suffix.toLowerCase()}`, href: `fonts/${filename}` });
+      }
+      embedSlug = slug;
+    }
+  }
+  zip.file('OEBPS/style.css', buildBookCss(book.layout, embedSlug));
 
   // 4. Couverture (si disponible) — prefer caller-resolved cover (advanced
   // mode crop) over the raw simplified coverFront.
@@ -481,6 +549,7 @@ ${tocEntries
     <item id="toc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="title-page" href="title.xhtml" media-type="application/xhtml+xml"/>
     ${coverImageId ? `<item id="${coverImageId}" href="${coverImageFilename}" media-type="${coverImageMimeType}" properties="cover-image"/>` : ''}
+${embeddedFontEntries.map((f) => `    <item id="${f.id}" href="${f.href}" media-type="application/font-sfnt"/>`).join('\n')}
 ${allContentFiles.map((ch) => `    <item id="${ch.id}" href="${ch.filename}" media-type="application/xhtml+xml"/>`).join('\n')}
 ${mapFiles.map((m) => `    <item id="${m.id}-img" href="${m.imageFilename}" media-type="${m.imageMimeType}"/>`).join('\n')}
   </manifest>

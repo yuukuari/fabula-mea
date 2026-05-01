@@ -15,10 +15,10 @@ import { FONT_STACKS } from '@/lib/fonts';
 export const SPINE_MIN_TEXT_MM = 6;
 
 export const DEFAULT_SIMPLIFIED_COVER: CoverSimplifiedConfig = {
-  spineColor: '#7a1b3a',             // bordeaux — matches the app palette
+  coverColor: '#7a1b3a',              // bordeaux — used for front/back/spine when no image
   spineShowTitle: true,
   spineTextColor: '#fafafa',
-  spineOrientation: 'ttb',
+  spineOrientation: 'btt',
 };
 
 export const DEFAULT_ADVANCED_COVER: CoverAdvancedConfig = {
@@ -35,6 +35,11 @@ export function getSimplifiedCover(layout: BookLayout | undefined): CoverSimplif
 
 export function getAdvancedCover(layout: BookLayout | undefined): CoverAdvancedConfig {
   return { ...DEFAULT_ADVANCED_COVER, ...(layout?.coverAdvanced ?? {}) };
+}
+
+export function resolveCoverColor(layout: BookLayout | undefined): string {
+  const sc = getSimplifiedCover(layout);
+  return sc.coverColor ?? DEFAULT_SIMPLIFIED_COVER.coverColor!;
 }
 
 export interface SpineRenderProps {
@@ -59,13 +64,13 @@ export function resolveSpineRender(
   const spineFont = sc.spineFontFamily ?? bookFont;
   const fontStack = FONT_STACKS[spineFont as BookFont] ?? FONT_STACKS[bookFont];
   return {
-    color: sc.spineColor ?? DEFAULT_SIMPLIFIED_COVER.spineColor!,
+    color: sc.spineColor ?? sc.coverColor ?? DEFAULT_SIMPLIFIED_COVER.coverColor!,
     showText: (sc.spineShowTitle ?? true) && spineWidthMm >= SPINE_MIN_TEXT_MM,
     title,
     author,
     fontStack,
     textColor: sc.spineTextColor ?? DEFAULT_SIMPLIFIED_COVER.spineTextColor!,
-    orientation: sc.spineOrientation ?? 'ttb',
+    orientation: sc.spineOrientation ?? 'btt',
   };
 }
 

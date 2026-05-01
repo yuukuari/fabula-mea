@@ -118,7 +118,7 @@ export function EditionPrintPage() {
               <p className="text-sm font-medium text-ink-500">Configuration non terminée</p>
               <p className="text-xs text-ink-300 mt-0.5">
                 Parcourez les 4 sections ci-dessous pour préparer votre livre à l'impression.
-                Les valeurs par défaut (A5, blanc 80g) sont appliquées tant que vous n'avez rien modifié.
+                Les valeurs par défaut (Roman, blanc 80g) sont appliquées tant que vous n'avez rien modifié.
               </p>
             </div>
           </div>

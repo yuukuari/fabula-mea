@@ -4,7 +4,7 @@ import { ArrowLeft, BookOpen, FileText, FileType, Printer, Package } from 'lucid
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { exportEpub } from '@/lib/export-epub';
-import { exportPdf } from '@/lib/export-pdf';
+import { exportPdf, exportPdfPrint } from '@/lib/export-pdf';
 import { exportDocx } from '@/lib/export-docx';
 import { exportPrinterBrief } from '@/lib/export-printer-brief';
 import { checkConformity, summarizeConformity } from '@/lib/conformity';
@@ -86,11 +86,21 @@ export function EditionExportPage() {
   };
 
   const handleExportPdf = async () => {
-    exportPdf(await buildExportBook());
+    try {
+      await exportPdf(await buildExportBook());
+    } catch (err) {
+      console.error('[Export PDF]', err);
+      alert("Erreur lors de l'export PDF. Vérifiez la console.");
+    }
   };
 
   const handleExportPdfPrintReady = async () => {
-    exportPdf(await buildExportBook(), { printReady: true });
+    try {
+      await exportPdfPrint(await buildExportBook());
+    } catch (err) {
+      console.error('[Export PDF impression]', err);
+      alert("Erreur lors de l'export PDF impression. Vérifiez la console.");
+    }
   };
 
   const handleExportPrinterBrief = () => {

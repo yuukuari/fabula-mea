@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText, Search, GripVertical } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
+import { GlossaryBadge } from '@/components/encyclopedia/GlossaryBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -127,11 +128,10 @@ export function WorldPage() {
           )}
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <span className={cn('badge', WORLD_NOTE_CATEGORY_COLORS[selectedNote.category] ?? 'bg-parchment-200 text-ink-400')}>{WORLD_NOTE_CATEGORY_LABELS[selectedNote.category]}</span>
-            {selectedNote.inGlossary && (
-              <span className="flex items-center gap-1 text-xs text-bordeaux-500">
-                <BookText className="w-3.5 h-3.5" /> Glossaire
-              </span>
-            )}
+            <GlossaryBadge
+              inGlossary={selectedNote.inGlossary ?? false}
+              onToggle={(next) => updateWorldNote(selectedNote.id, { inGlossary: next })}
+            />
           </div>
           <h2 className="font-display text-2xl font-bold text-ink-500 mt-2 mb-4">{selectedNote.title}</h2>
           <div className="text-ink-300 font-serif whitespace-pre-wrap leading-relaxed">{selectedNote.content}</div>

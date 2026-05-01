@@ -4,10 +4,10 @@ import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useReviewStore } from '@/store/useReviewStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { getTodayProgress, getDailyGoal, getOverallProgress, getSmartPageEstimate } from '@/lib/calculations';
 import { countUnitLabel, isSpecialChapter, formatWritingTime } from '@/lib/utils';
-import { BookReader } from '@/components/edition/BookReader';
+import { useReaderStore } from '@/store/useReaderStore';
 
 export function EncyclopediaPage() {
   const navigate = useNavigate();
@@ -69,7 +69,7 @@ export function EncyclopediaPage() {
 
   // Edition status
   const layout = useBookStore((s) => s.layout);
-  const [readerOpen, setReaderOpen] = useState(false);
+  const openReader = useReaderStore((s) => s.openReader);
   const chapterCount = chapters.filter((c) => !isSpecialChapter(c)).length;
   const estimatedPages = getSmartPageEstimate(totalCount, countUnit, layout, chapterCount);
   const hasCovers = !!(layout?.coverFront || layout?.coverBack);
@@ -258,7 +258,7 @@ export function EncyclopediaPage() {
 
           {/* Quick action: preview the book */}
           <button
-            onClick={() => setReaderOpen(true)}
+            onClick={openReader}
             disabled={!canPreview}
             className="btn-primary sm:min-w-[180px] justify-center disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 self-stretch sm:self-center shrink-0"
             title={canPreview ? 'Feuilleter le livre' : 'Ajoutez du contenu pour prévisualiser'}
@@ -268,9 +268,6 @@ export function EncyclopediaPage() {
           </button>
         </div>
       </div>
-
-      {/* Reader is mounted only when opened — avoids expensive pagination on every dashboard render */}
-      {readerOpen && <BookReader open={readerOpen} onClose={() => setReaderOpen(false)} />}
 
       {/* Encyclopedia grid */}
       <div className="mb-4">

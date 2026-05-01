@@ -7,9 +7,11 @@ import { FloatingWritingTimer } from '@/components/progress/FloatingWritingTimer
 import { FloatingSpotifyPlayer } from '@/components/progress/FloatingSpotifyPlayer';
 import { EditorTabs } from '@/components/editor/EditorTabs';
 import { SceneEditor } from '@/components/editor/SceneEditor';
+import { BookReader } from '@/components/edition/BookReader';
 import { useLibraryStore } from '@/store/useLibraryStore';
 import { useBookStore } from '@/store/useBookStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useReaderStore } from '@/store/useReaderStore';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 export function AppShell() {
@@ -21,6 +23,8 @@ export function AppShell() {
   const loadBook = useBookStore((s) => s.loadBook);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const spotifyEnabled = useAuthStore((s) => s.user?.spotifyEnabled);
+  const readerOpen = useReaderStore((s) => s.open);
+  const closeReader = useReaderStore((s) => s.closeReader);
 
   // Restaure la bibliothèque depuis Redis au démarrage (nouveau device ou nouvelle session)
   useEffect(() => {
@@ -77,6 +81,8 @@ export function AppShell() {
       <SceneEditor />
       {/* Floating editor tabs – fixed bottom center */}
       <EditorTabs />
+      {/* Global book reader (mode lecture) overlay */}
+      {readerOpen && <BookReader open={readerOpen} onClose={closeReader} />}
     </div>
   );
 }

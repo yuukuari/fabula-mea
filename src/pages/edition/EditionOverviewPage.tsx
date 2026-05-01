@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Type, Image as ImageIcon, Printer, Smartphone, Download, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
+import { useReaderStore } from '@/store/useReaderStore';
 import { BookPreview3D } from '@/components/edition/BookPreview3D';
-import { BookReader } from '@/components/edition/BookReader';
 import { DEFAULT_LAYOUT } from '@/lib/fonts';
 
 interface StepCardProps {
@@ -43,7 +42,7 @@ export function EditionOverviewPage() {
   const navigate = useNavigate();
   const layout = useBookStore((s) => s.layout);
   const chapters = useBookStore((s) => s.chapters);
-  const [readerOpen, setReaderOpen] = useState(false);
+  const openReader = useReaderStore((s) => s.openReader);
 
   const hasLayout = !!layout?.fontFamily;
   const hasCovers = !!(layout?.coverFront || layout?.coverBack);
@@ -114,10 +113,7 @@ export function EditionOverviewPage() {
       </div>
 
       {/* Book preview */}
-      <BookPreview3D onOpenReader={() => setReaderOpen(true)} />
-
-      {/* Reader is mounted only when opened — avoids expensive pagination on every overview render */}
-      {readerOpen && <BookReader open={readerOpen} onClose={() => setReaderOpen(false)} />}
+      <BookPreview3D onOpenReader={openReader} />
     </div>
   );
 }

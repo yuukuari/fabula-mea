@@ -22,7 +22,7 @@ paths:
 Architecture multi-niveaux avec navigation avant/arrière. Remplace le menu natif du navigateur.
 - **Sur un mot** : couper/copier/coller, correction (suggestions, ignorer, ajouter), outils d'écriture, rechercher Wikipédia/internet
 - **Sélection multi-mots** : couper/copier/coller, outils d'écriture, rechercher internet
-- **Outils d'écriture** : casse (MAJ/min), définition, conjugaison, étymologie, champ lexical (CNRTL), synonymes/antonymes (inline scrappé CNRTL)
+- **Outils d'écriture** : casse (MAJ/min), définition, conjugaison, étymologie, champ lexical (CNRTL), synonymes/antonymes (inline scrappé CNRTL — clic sur la ligne = remplace, icône copier seule à droite avec `stopPropagation`)
 - **Menu natif** : `⌘+clic droit` (Mac) / `Ctrl+clic droit` (PC)
 
 ## Implémentation

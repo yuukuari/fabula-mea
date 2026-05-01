@@ -41,7 +41,12 @@ const TYPE_LABELS: Record<ResultType, string> = {
 // Static shortcuts that always appear when matched
 const STATIC_RESULTS: SearchResult[] = [
   { type: 'settings', id: 'settings', title: 'Paramètres', subtitle: 'Configuration du projet', navigateTo: '/settings' },
-  { type: 'settings', id: 'export', title: 'Exporter', subtitle: 'Export EPUB / PDF', navigateTo: '/edition' },
+  { type: 'settings', id: 'edition', title: 'Édition', subtitle: 'Préparer le livre pour publication', navigateTo: '/edition' },
+  { type: 'settings', id: 'edition-layout', title: 'Mise en page', subtitle: 'Police, taille, interligne', navigateTo: '/edition/layout' },
+  { type: 'settings', id: 'edition-covers', title: 'Couvertures', subtitle: '1ère et 4ème de couverture, dos', navigateTo: '/edition/covers' },
+  { type: 'settings', id: 'edition-print', title: 'Édition papier', subtitle: 'Format, papier, marges, ISBN', navigateTo: '/edition/print' },
+  { type: 'settings', id: 'edition-digital', title: 'Édition numérique', subtitle: 'Métadonnées EPUB, mots-clés, ISBN', navigateTo: '/edition/digital' },
+  { type: 'settings', id: 'export', title: 'Exporter', subtitle: 'Export EPUB / PDF / DOCX', navigateTo: '/edition/export' },
   { type: 'settings', id: 'save', title: 'Sauvegarder', subtitle: 'Sauvegarde du projet', navigateTo: '/settings' },
 ];
 

@@ -10,7 +10,7 @@
 import type { BookLayout } from '@/types';
 import { getTrimSize, calculateCoverDimensions, calculateSpineWidth, estimatePageCount } from './print-edition';
 import { FONT_STACKS } from './fonts';
-import { getCoverMode, getSimplifiedCover, getAdvancedCover, resolveSpineRender, SPINE_MIN_TEXT_MM } from './cover-composition';
+import { getCoverMode, getSimplifiedCover, getAdvancedCover, resolveSpineRender, resolveCoverColor, SPINE_MIN_TEXT_MM } from './cover-composition';
 
 export interface CoverFinalInput {
   layout: BookLayout | undefined;
@@ -59,6 +59,7 @@ export function exportCoverFinal(input: CoverFinalInput): void {
     return;
   }
 
+  const coverColor = resolveCoverColor(layout);
   let coverSvgContent = '';
 
   if (mode === 'advanced') {
@@ -100,7 +101,7 @@ export function exportCoverFinal(input: CoverFinalInput): void {
     if (layout?.coverBack) {
       coverSvgContent += `<image href="${layout.coverBack}" x="${backX}" y="${trimTop}" width="${trim.widthMm}" height="${innerHeight}" preserveAspectRatio="xMidYMid slice"/>`;
     } else {
-      coverSvgContent += `<rect x="${backX}" y="${trimTop}" width="${trim.widthMm}" height="${innerHeight}" fill="#f0e6d2"/>`;
+      coverSvgContent += `<rect x="${backX}" y="${trimTop}" width="${trim.widthMm}" height="${innerHeight}" fill="${coverColor}"/>`;
     }
 
     // Spine
@@ -124,17 +125,10 @@ export function exportCoverFinal(input: CoverFinalInput): void {
     if (layout?.coverFront) {
       coverSvgContent += `<image href="${layout.coverFront}" x="${frontX}" y="${trimTop}" width="${trim.widthMm}" height="${innerHeight}" preserveAspectRatio="xMidYMid slice"/>`;
     } else {
-      // Placeholder gradient + title/author
       coverSvgContent += `
-  <defs>
-    <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#8b2252"/>
-      <stop offset="100%" stop-color="#5a1636"/>
-    </linearGradient>
-  </defs>
-  <rect x="${frontX}" y="${trimTop}" width="${trim.widthMm}" height="${innerHeight}" fill="url(#fg)"/>
-  <text x="${frontX + trim.widthMm / 2}" y="${totalH / 2}" text-anchor="middle" font-family="'Playfair Display', serif" font-weight="bold" font-size="${trim.widthMm * 0.09}mm" fill="#ffffff">${escapeHtml(title || 'Titre')}</text>
-  <text x="${frontX + trim.widthMm / 2}" y="${totalH / 2 + trim.widthMm * 0.08}" text-anchor="middle" font-family="'Inter', sans-serif" font-size="${trim.widthMm * 0.04}mm" fill="#ffffffaa">${escapeHtml(author || 'Auteur')}</text>`;
+  <rect x="${frontX}" y="${trimTop}" width="${trim.widthMm}" height="${innerHeight}" fill="${coverColor}"/>
+  <text x="${frontX + trim.widthMm / 2}" y="${totalH / 2}" text-anchor="middle" font-family="'Playfair Display', serif" font-weight="bold" font-size="${trim.widthMm * 0.06}mm" fill="#ffffff">${escapeHtml(title || 'Titre')}</text>
+  <text x="${frontX + trim.widthMm / 2}" y="${totalH / 2 + trim.widthMm * 0.05}" text-anchor="middle" font-family="'Inter', sans-serif" font-size="${trim.widthMm * 0.03}mm" fill="#ffffffaa">${escapeHtml(author || 'Auteur')}</text>`;
     }
   }
 

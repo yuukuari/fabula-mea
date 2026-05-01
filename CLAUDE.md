@@ -94,7 +94,8 @@ Les modules complexes ont leur documentation dans `.claude/rules/` (chargée aut
 - **Graphe relations** : edges normalisés par tri d'ID. Types always-reciprocal (`friend`/`enemy`/`colleague`/`family`) vs optionnellement réciproques. `arrowTarget` pour les flèches.
 - **Arbre généalogique** : `CharacterGenealogy` (parents, conjoints ordonnables, enfants groupés par conjoint). Rôles typés + custom. Composants dans `src/components/genealogy/`.
 - **Timer écriture** : 3 modes (libre, minuteur, pomodoro). `FloatingWritingTimer` + `useWritingTimer`. Document PiP. Alarmes Web Audio.
-- **Glossaire** : `glossaryEnabled` + `inGlossary` par entité. Affiché dans manuscrit, éditeur, relectures, exports.
+- **Glossaire** : `glossaryEnabled` + `inGlossary` par entité. Affiché dans manuscrit, éditeur, relectures, exports. Toggle direct depuis fiche personnage/lieu/univers via `<GlossaryBadge>` (composant partagé `src/components/encyclopedia/`).
+- **Mode lecture (BookReader)** : globalisé via `useReaderStore` (Zustand), monté dans `AppShell`. Pilule « Mode lecture » dans `EditorTabs` à côté de « Mode écriture » (mutuellement exclusifs).
 - **Table des matières** : `tableOfContents` dans BookProject. PDF/EPUB/DOCX. CSS `target-counter()` pour les numéros de page.
 - **Profil** : `/profile` dans HomeShell. Avatar avec recadrage rond.
 - **Sidebar livre** : Vue d'ensemble → Encyclopédie → Manuscrit (Chronologie en 1er) → Suivi → **Édition** (groupe top-level) → Notes & Idées → Paramètres → Aide & Support.

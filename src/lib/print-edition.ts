@@ -9,14 +9,20 @@ export interface TrimSizeInfo {
   widthMm: number;
   heightMm: number;
   description: string;
+  /** When true: French/European classic. Otherwise: foreign / less common. */
+  classic: boolean;
 }
 
 export const TRIM_SIZES: TrimSizeInfo[] = [
-  { id: 'poche', widthMm: 108, heightMm: 178, label: 'Poche', description: 'Format poche français' },
-  { id: 'a5', widthMm: 148, heightMm: 210, label: 'A5', description: 'Standard européen' },
-  { id: '6x9', widthMm: 152, heightMm: 229, label: '6×9', description: 'Trade US' },
-  { id: 'royal', widthMm: 156, heightMm: 234, label: 'Royal', description: 'Royal britannique' },
-  { id: 'digest', widthMm: 140, heightMm: 216, label: 'Digest', description: 'Demi-lettre US' },
+  // ─── Classiques (édition française) ───
+  { id: 'poche', widthMm: 108, heightMm: 178, label: 'Poche', description: 'Folio, J\'ai lu, 10/18, Pocket', classic: true },
+  { id: 'roman', widthMm: 140, heightMm: 205, label: 'Roman', description: 'Format standard du roman français', classic: true },
+  { id: 'grand_format', widthMm: 155, heightMm: 240, label: 'Grand format', description: 'Beau livre, hardcover français', classic: true },
+  { id: 'a5', widthMm: 148, heightMm: 210, label: 'A5', description: 'Standard européen', classic: true },
+  // ─── Autres formats (étrangers ou moins courants) ───
+  { id: '6x9', widthMm: 152, heightMm: 229, label: '6×9', description: 'Trade US', classic: false },
+  { id: 'royal', widthMm: 156, heightMm: 234, label: 'Royal', description: 'Royal britannique', classic: false },
+  { id: 'digest', widthMm: 140, heightMm: 216, label: 'Digest', description: 'Demi-lettre US', classic: false },
 ];
 
 export function getTrimSize(id: TrimSizeId): TrimSizeInfo {
@@ -53,19 +59,21 @@ export function getPaperType(id: PaperType): PaperTypeInfo {
 // ─── Default Margins per Trim Size ───
 
 export const DEFAULT_MARGINS: Record<TrimSizeId, PrintMargins> = {
-  poche:  { topMm: 10, bottomMm: 14, innerMm: 15, outerMm: 10 },
-  a5:     { topMm: 12, bottomMm: 18, innerMm: 18, outerMm: 15 },
-  '6x9':  { topMm: 13, bottomMm: 19, innerMm: 19, outerMm: 15 },
-  royal:  { topMm: 14, bottomMm: 20, innerMm: 20, outerMm: 16 },
-  digest: { topMm: 12, bottomMm: 17, innerMm: 17, outerMm: 14 },
+  poche:        { topMm: 10, bottomMm: 14, innerMm: 15, outerMm: 10 },
+  roman:        { topMm: 12, bottomMm: 17, innerMm: 17, outerMm: 13 },
+  grand_format: { topMm: 14, bottomMm: 19, innerMm: 19, outerMm: 15 },
+  a5:           { topMm: 12, bottomMm: 18, innerMm: 18, outerMm: 15 },
+  '6x9':        { topMm: 13, bottomMm: 19, innerMm: 19, outerMm: 15 },
+  royal:        { topMm: 14, bottomMm: 20, innerMm: 20, outerMm: 16 },
+  digest:       { topMm: 12, bottomMm: 17, innerMm: 17, outerMm: 14 },
 };
 
 export const DEFAULT_BLEED_MM = 3;
 
 export const DEFAULT_PRINT_EDITION: PrintEdition = {
-  trimSize: 'a5',
+  trimSize: 'roman',
   paperType: 'white_80',
-  margins: DEFAULT_MARGINS.a5,
+  margins: DEFAULT_MARGINS.roman,
   bleedMm: DEFAULT_BLEED_MM,
 };
 
@@ -242,12 +250,16 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
   const pages: BookPageData[] = [];
   let pageNum = 1;
 
-  // Front cover
-  if (input.coverFront) {
-    pages.push({ html: '', pageNumber: 0, isCover: 'front' });
-  }
+  // Front cover (always — uses image if uploaded, otherwise the cover color)
+  pages.push({ html: '', pageNumber: 0, isCover: 'front' });
 
-  // Title page
+  // Blank back-of-cover (verso of front cover, left of first inner spread).
+  // Without this, the title page would land on the verso (left) side of the
+  // first spread, and the spread parity (verso/recto) would be inverted from
+  // the standard book layout where odd page numbers are recto (right).
+  pages.push({ html: '', pageNumber: 0 });
+
+  // Title page (recto)
   pages.push({ html: '', pageNumber: pageNum++, isTitlePage: true });
 
   // Blank verso after title
@@ -282,10 +294,17 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
     }
   }
 
-  // Back cover
-  if (input.coverBack) {
-    pages.push({ html: '', pageNumber: 0, isCover: 'back' });
+  // Pad with a blank verso if needed so the back cover lands alone on the
+  // recto (like a real closed book). Page-flip with showCover groups pages
+  // into spreads [1,2], [3,4], ...; if the total length before the back cover
+  // results in odd parity, the back cover would be paired with the last
+  // content page instead of being alone.
+  if ((pages.length + 1) % 2 !== 0) {
+    pages.push({ html: '', pageNumber: 0 });
   }
+
+  // Back cover (always — uses image if uploaded, otherwise the cover color)
+  pages.push({ html: '', pageNumber: 0, isCover: 'back' });
 
   return pages;
 }

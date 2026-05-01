@@ -9,7 +9,7 @@ import {
 } from '@/lib/print-edition';
 import { isSpecialChapter, totalScenesCount } from '@/lib/utils';
 import type { BookFont, CoverMode, CoverSimplifiedConfig } from '@/types';
-import { getCoverMode, getSimplifiedCover, SPINE_MIN_TEXT_MM } from '@/lib/cover-composition';
+import { getCoverMode, getSimplifiedCover, SPINE_MIN_TEXT_MM, DEFAULT_SIMPLIFIED_COVER } from '@/lib/cover-composition';
 import { SpineWidthTooltip } from './SpineWidthLabel';
 import { CoverFlatPreview } from './CoverFlatPreview';
 import { CoverAdvancedEditor } from './CoverAdvancedEditor';
@@ -162,6 +162,29 @@ export function CoverSection() {
       {/* ─── Simplified mode ─── */}
       {mode === 'simplified' && (
         <div className="space-y-4">
+          {/* Cover background color — used for faces without an image */}
+          <div className="p-4 rounded-lg bg-parchment-50 border border-parchment-200">
+            <h4 className="font-display font-semibold text-ink-500 text-sm mb-2">Couleur de fond</h4>
+            <p className="text-[11px] text-ink-300 mb-3">
+              Utilisée pour l'avant, l'arrière et la tranche quand aucune image n'est définie.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={simplified.coverColor ?? DEFAULT_SIMPLIFIED_COVER.coverColor!}
+                onChange={(e) => updateCoverSimplified({ coverColor: e.target.value })}
+                className="w-10 h-10 rounded cursor-pointer border border-parchment-300"
+              />
+              <input
+                type="text"
+                value={simplified.coverColor ?? DEFAULT_SIMPLIFIED_COVER.coverColor!}
+                onChange={(e) => updateCoverSimplified({ coverColor: e.target.value })}
+                className="input-field text-sm flex-1 font-mono"
+                placeholder="#7a1b3a"
+              />
+            </div>
+          </div>
+
           <div className={`grid gap-4 ${printEdition ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
             <CoverUpload
               label="1ère de couverture"
@@ -252,19 +275,20 @@ function SpineConfig({
         {/* Spine color */}
         <div>
           <label className="text-[11px] font-medium text-ink-300 uppercase tracking-wide">Couleur du dos</label>
+          <p className="text-[10px] text-ink-200 mb-1">Si vide, hérite de la couleur de fond.</p>
           <div className="flex items-center gap-2 mt-1">
             <input
               type="color"
-              value={simplified.spineColor ?? '#7a1b3a'}
+              value={simplified.spineColor ?? simplified.coverColor ?? '#7a1b3a'}
               onChange={(e) => onChange({ spineColor: e.target.value })}
               className="w-10 h-10 rounded cursor-pointer border border-parchment-300"
             />
             <input
               type="text"
-              value={simplified.spineColor ?? '#7a1b3a'}
-              onChange={(e) => onChange({ spineColor: e.target.value })}
+              value={simplified.spineColor ?? ''}
+              onChange={(e) => onChange({ spineColor: e.target.value || undefined })}
               className="input-field text-sm flex-1 font-mono"
-              placeholder="#7a1b3a"
+              placeholder={simplified.coverColor ?? '#7a1b3a'}
             />
           </div>
         </div>
@@ -327,14 +351,14 @@ function SpineConfig({
               <label className="text-[11px] font-medium text-ink-300 uppercase tracking-wide">Orientation du texte</label>
               <div className="flex items-center gap-2 mt-1">
                 <OrientationButton
-                  active={simplified.spineOrientation !== 'btt'}
-                  onClick={() => onChange({ spineOrientation: 'ttb' })}
-                  label="Haut → bas (standard américain / KDP)"
-                />
-                <OrientationButton
-                  active={simplified.spineOrientation === 'btt'}
+                  active={simplified.spineOrientation !== 'ttb'}
                   onClick={() => onChange({ spineOrientation: 'btt' })}
                   label="Bas → haut (standard européen)"
+                />
+                <OrientationButton
+                  active={simplified.spineOrientation === 'ttb'}
+                  onClick={() => onChange({ spineOrientation: 'ttb' })}
+                  label="Haut → bas (standard américain / KDP)"
                 />
               </div>
             </div>

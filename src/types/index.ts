@@ -604,11 +604,12 @@ export type CoverMode = 'simplified' | 'advanced';
  * from a solid color and (optionally) the book title rendered vertically.
  */
 export interface CoverSimplifiedConfig {
+  coverColor?: string;              // hex, used for front/back/spine when no image uploaded. Default '#7a1b3a'.
   spineColor?: string;              // hex, default '#7a1b3a' (bordeaux)
   spineShowTitle?: boolean;         // default true if spine ≥ 6mm
   spineFontFamily?: BookFont;       // default same as book font
   spineTextColor?: string;          // hex, default '#fafafa' (near-white)
-  spineOrientation?: 'ttb' | 'btt'; // top-to-bottom (American) or bottom-to-top (European). Default 'ttb'.
+  spineOrientation?: 'ttb' | 'btt'; // top-to-bottom (American) or bottom-to-top (European). Default 'btt'.
 }
 
 /**
@@ -642,7 +643,7 @@ export interface CoverTextOverlay {
 }
 
 // ─── Print Edition ───
-export type TrimSizeId = 'poche' | 'a5' | '6x9' | 'royal' | 'digest';
+export type TrimSizeId = 'poche' | 'roman' | 'grand_format' | 'a5' | '6x9' | 'royal' | 'digest';
 export type PaperType = 'white_80' | 'cream_80' | 'white_90';
 
 export interface PrintMargins {

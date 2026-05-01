@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, BookText, GitBranch } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, GitBranch } from 'lucide-react';
+import { GlossaryBadge } from '@/components/encyclopedia/GlossaryBadge';
 import type { Character, Relationship } from '@/types';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
@@ -29,7 +30,7 @@ function getRelLabel(rel: Relationship): string {
 
 export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailProps) {
   const navigate = useNavigate();
-  const { characters, deleteCharacter, deleteRelationship } = useEncyclopediaStore();
+  const { characters, deleteCharacter, deleteRelationship, updateCharacter } = useEncyclopediaStore();
   const [showDelete, setShowDelete] = useState(false);
   const [showRelEditor, setShowRelEditor] = useState(false);
   const [editingRel, setEditingRel] = useState<Relationship | undefined>(undefined);
@@ -96,13 +97,14 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
             size={32}
           />
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 flex-wrap">
               <h2 className="font-display text-3xl font-bold text-ink-500">
                 {character.name} {character.surname}
               </h2>
-              {character.inGlossary && (
-                <BookText className="w-5 h-5 text-bordeaux-400 flex-shrink-0" />
-              )}
+              <GlossaryBadge
+                inGlossary={character.inGlossary ?? false}
+                onToggle={(next) => updateCharacter(character.id, { inGlossary: next })}
+              />
             </div>
             {character.nickname && (
               <p className="text-lg text-ink-300 italic mt-1">"{character.nickname}"</p>

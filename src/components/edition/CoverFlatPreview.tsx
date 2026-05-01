@@ -8,7 +8,7 @@
  */
 import type { BookLayout, CoverTextOverlay } from '@/types';
 import type { CoverDimensions } from '@/lib/print-edition';
-import { getCoverMode, getAdvancedCover, resolveSpineRender } from '@/lib/cover-composition';
+import { getCoverMode, getAdvancedCover, resolveSpineRender, resolveCoverColor } from '@/lib/cover-composition';
 
 interface Props {
   layout: BookLayout | undefined;
@@ -44,6 +44,7 @@ export function CoverFlatPreview({
   const m2p = (mm: number) => mm * scale;
 
   const spineRender = resolveSpineRender(layout, title, author, spineWidthMm);
+  const coverColor = resolveCoverColor(layout);
   const advanced = getAdvancedCover(layout);
   const flatImage = advanced.flatImage;
 
@@ -86,7 +87,7 @@ export function CoverFlatPreview({
             <rect
               x={m2p(backX)} y={m2p(trimTop)}
               width={m2p(backWidthMm)} height={m2p(trimBottom - trimTop)}
-              fill="#f0e6d2" stroke="#e0d4b8" strokeWidth={0.3}
+              fill={coverColor}
             />
           )}
 
@@ -124,20 +125,14 @@ export function CoverFlatPreview({
               <rect
                 x={m2p(frontX)} y={m2p(trimTop)}
                 width={m2p(frontWidthMm)} height={m2p(trimBottom - trimTop)}
-                fill="url(#frontPlaceholderGradient)"
+                fill={coverColor}
               />
-              <defs>
-                <linearGradient id="frontPlaceholderGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#8b2252" />
-                  <stop offset="100%" stopColor="#5a1636" />
-                </linearGradient>
-              </defs>
               <text
                 x={m2p(frontX + frontWidthMm / 2)}
                 y={m2p(totalHeightMm / 2)}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize={m2p(frontWidthMm) * 0.12}
+                fontSize={m2p(frontWidthMm) * 0.06}
                 fontFamily="'Playfair Display', serif"
                 fontWeight="bold"
                 fill="#ffffff"
@@ -146,9 +141,9 @@ export function CoverFlatPreview({
               </text>
               <text
                 x={m2p(frontX + frontWidthMm / 2)}
-                y={m2p(totalHeightMm / 2) + m2p(frontWidthMm) * 0.1}
+                y={m2p(totalHeightMm / 2) + m2p(frontWidthMm) * 0.05}
                 textAnchor="middle"
-                fontSize={m2p(frontWidthMm) * 0.055}
+                fontSize={m2p(frontWidthMm) * 0.03}
                 fontFamily="'Inter', sans-serif"
                 fill="#fff8"
               >

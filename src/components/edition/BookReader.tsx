@@ -12,7 +12,7 @@ import {
 } from '@/lib/print-edition';
 import type { PrintEdition } from '@/types';
 import { PageRuler } from './PageRuler';
-import { getCoverMode, getAdvancedCover } from '@/lib/cover-composition';
+import { getCoverMode, getAdvancedCover, resolveCoverColor } from '@/lib/cover-composition';
 import { CoverFlatPreview } from './CoverFlatPreview';
 import { totalScenesCount, isSpecialChapter } from '@/lib/utils';
 
@@ -49,6 +49,7 @@ export function BookReader({ open, onClose }: Props) {
   const coverMode = getCoverMode(layout);
   const advancedFlat = coverMode === 'advanced' ? getAdvancedCover(layout).flatImage : undefined;
   const isAdvanced = coverMode === 'advanced' && !!advancedFlat;
+  const coverColor = resolveCoverColor(layout);
   const resolvedCoverFront = isAdvanced ? advancedFlat : layout?.coverFront;
   const resolvedCoverBack = isAdvanced ? advancedFlat : layout?.coverBack;
 
@@ -73,6 +74,8 @@ export function BookReader({ open, onClose }: Props) {
   const [currentPage, setCurrentPage] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('flip');
   const [actualSizePageIndex, setActualSizePageIndex] = useState(0);
+  // Remembers the last non-grid mode so clicking a grid thumbnail returns there.
+  const [lastViewMode, setLastViewMode] = useState<Exclude<ViewMode, 'grid'>>('flip');
 
   // Build paginated content
   const pages: BookPageData[] = useMemo(() => {
@@ -171,6 +174,24 @@ export function BookReader({ open, onClose }: Props) {
           if (!pageFlipRef.current) return;
           setCurrentPage(e.data);
         });
+        // Restore page position when re-entering flip mode (e.g. from grid or actual-size).
+        // Defer with setTimeout so page-flip has time to lay out before navigating.
+        if (currentPage > 0) {
+          const targetPage = currentPage;
+          setTimeout(() => {
+            if (!pageFlipRef.current) return;
+            try {
+              const api = pf as unknown as {
+                turnToPage?: (n: number) => void;
+                flipToPage?: (n: number) => void;
+              };
+              // Prefer turnToPage (instant, jumps directly to the spread containing page n).
+              // flipToPage animates and may land off-by-one when called right after init.
+              if (api.turnToPage) api.turnToPage(targetPage);
+              else if (api.flipToPage) api.flipToPage(targetPage);
+            } catch { /* noop */ }
+          }, 100);
+        }
       }
     }, 0);
 
@@ -254,12 +275,12 @@ export function BookReader({ open, onClose }: Props) {
       return (
         <div style={{
           width: '100%', height: '100%',
-          background: 'linear-gradient(135deg, #8b2252, #5a1636)',
+          backgroundColor: coverColor,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           color: 'white', padding: '10%', boxSizing: 'border-box',
         }}>
-          <p style={{ fontFamily: '"Playfair Display", serif', fontWeight: 'bold', fontSize: '1.4em', textAlign: 'center' }}>{title}</p>
-          <p style={{ fontSize: '0.8em', marginTop: 8, opacity: 0.7 }}>{author}</p>
+          <p style={{ fontFamily: '"Playfair Display", serif', fontWeight: 'bold', fontSize: fontSize * 2.5 * scale, textAlign: 'center', lineHeight: 1.2 }}>{title}</p>
+          <p style={{ fontSize: fontSize * 1.2 * scale, marginTop: 8 * scale, opacity: 0.7 }}>{author}</p>
         </div>
       );
     }
@@ -281,7 +302,7 @@ export function BookReader({ open, onClose }: Props) {
       if (layout?.coverBack) {
         return <img src={layout.coverBack} alt="4ème" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
       }
-      return <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #5a1636, #3d0f24)' }} />;
+      return <div style={{ width: '100%', height: '100%', backgroundColor: coverColor }} />;
     }
 
     // Title page
@@ -384,7 +405,7 @@ export function BookReader({ open, onClose }: Props) {
       >
         <div style={{
           width: '100%', height: '100%',
-          backgroundColor: isCover ? '#333' : paper.color,
+          backgroundColor: isCover ? coverColor : paper.color,
           overflow: 'hidden',
         }}>
           {renderPageInner(page, flipScale)}
@@ -395,36 +416,68 @@ export function BookReader({ open, onClose }: Props) {
 
   return createPortal(
     <div
+      className="bg-parchment-50"
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        backgroundColor: 'rgba(15,15,15,1)',
         display: 'flex', flexDirection: 'column',
       }}
     >
+      {/* Keyboard hint */}
+      <p className="text-center pt-2 text-ink-200 text-xs">
+        {viewMode === 'flip' && <>← → pour naviguer · Échap pour fermer</>}
+        {viewMode === 'grid' && <>Cliquez sur une page pour la voir à taille réelle · Échap pour fermer</>}
+        {viewMode === 'actual-size' && <>← → pour changer de page · Échap pour fermer</>}
+      </p>
+
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-parchment-200">
         {/* Page indicator */}
-        <div className="text-white/60 text-sm min-w-[120px]">
-          {viewMode === 'flip' && `Page ${currentPage + 1} / ${displayPages.length}`}
+        <div className="text-ink-300 text-sm min-w-[120px]">
+          {viewMode === 'flip' && (() => {
+            const left = displayPages[currentPage];
+            const right = displayPages[currentPage + 1];
+            if (left?.isCover === 'front') return 'Couverture';
+            if (left?.isCover === 'back' || right?.isCover === 'back') return '4ème de couverture';
+            // Show whichever page in the visible spread has a pageNumber.
+            const num = left?.pageNumber || right?.pageNumber;
+            return num ? `Page ${num} / ${displayPages.length}` : `Page ${currentPage + 1} / ${displayPages.length}`;
+          })()}
           {viewMode === 'grid' && `${pages.length} page${pages.length > 1 ? 's' : ''}`}
-          {viewMode === 'actual-size' && `Page ${actualSizePageIndex + 1} / ${pages.length} · taille réelle`}
+          {viewMode === 'actual-size' && (() => {
+            const p = pages[actualSizePageIndex];
+            if (p?.isCover === 'front') return 'Couverture · taille réelle';
+            if (p?.isCover === 'back') return '4ème de couverture · taille réelle';
+            return `Page ${p?.pageNumber || actualSizePageIndex + 1} / ${pages.length} · taille réelle`;
+          })()}
         </div>
 
         {/* View mode toggle */}
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-white/10">
-          <ModeButton active={viewMode === 'flip'} onClick={() => setViewMode('flip')} icon={BookOpen} label="Feuilleter" />
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-parchment-200">
+          <ModeButton active={viewMode === 'flip'} onClick={() => {
+            // Sync from actual-size when switching to flip.
+            if (viewMode === 'actual-size') setCurrentPage(actualSizePageIndex);
+            setViewMode('flip');
+            setLastViewMode('flip');
+          }} icon={BookOpen} label="Feuilleter" />
           <ModeButton active={viewMode === 'grid'} onClick={() => setViewMode('grid')} icon={LayoutGrid} label="Grille" />
-          <ModeButton active={viewMode === 'actual-size'} onClick={() => setViewMode('actual-size')} icon={Ruler} label="Taille réelle" />
+          <ModeButton active={viewMode === 'actual-size'} onClick={() => {
+            // Sync from flip when switching to actual-size.
+            if (viewMode === 'flip') setActualSizePageIndex(currentPage);
+            setViewMode('actual-size');
+            setLastViewMode('actual-size');
+          }} icon={Ruler} label="Taille réelle" />
         </div>
 
         {/* Close button */}
-        <button
-          onClick={onClose}
-          className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors min-w-[120px] flex justify-end"
-          aria-label="Fermer"
-        >
-          <X className="w-6 h-6 text-white" />
-        </button>
+        <div className="min-w-[120px] flex justify-end">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full bg-parchment-200 hover:bg-parchment-300 transition-colors"
+            aria-label="Fermer"
+          >
+            <X className="w-6 h-6 text-ink-400" />
+          </button>
+        </div>
       </div>
 
       {/* Content area.
@@ -443,8 +496,12 @@ export function BookReader({ open, onClose }: Props) {
       >
         {viewMode === 'flip' && (
           <div className="flex items-center gap-4">
-            <button onClick={handlePrev} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
-              <ChevronLeft className="w-6 h-6 text-white" />
+            <button
+              onClick={handlePrev}
+              className={`p-2 rounded-full bg-parchment-200 hover:bg-parchment-300 transition-colors ${currentPage <= 0 ? 'invisible' : ''}`}
+              aria-hidden={currentPage <= 0}
+            >
+              <ChevronLeft className="w-6 h-6 text-ink-400" />
             </button>
 
             <div
@@ -459,13 +516,15 @@ export function BookReader({ open, onClose }: Props) {
               </div>
               {/* Per-page inner shadow at the spine is applied via CSS
                   (`.stf__item` selectors in index.css). The shadow is a
-                  property of each page and moves with it during flipping,
-                  so the turning page naturally carries its own gutter
-                  shading — no z-index juggling needed. */}
+                  property of each page and moves with it during flipping. */}
             </div>
 
-            <button onClick={handleNext} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
-              <ChevronRight className="w-6 h-6 text-white" />
+            <button
+              onClick={handleNext}
+              className={`p-2 rounded-full bg-parchment-200 hover:bg-parchment-300 transition-colors ${currentPage >= displayPages.length - 2 ? 'invisible' : ''}`}
+              aria-hidden={currentPage >= displayPages.length - 2}
+            >
+              <ChevronRight className="w-6 h-6 text-ink-400" />
             </button>
           </div>
         )}
@@ -482,8 +541,10 @@ export function BookReader({ open, onClose }: Props) {
                   <button
                     key={`grid-${i}`}
                     onClick={() => {
+                      // Sync both indices so future mode switches preserve the page.
+                      setCurrentPage(i);
                       setActualSizePageIndex(i);
-                      setViewMode('actual-size');
+                      setViewMode(lastViewMode);
                     }}
                     className="flex flex-col items-center gap-1.5 group"
                   >
@@ -491,17 +552,17 @@ export function BookReader({ open, onClose }: Props) {
                       style={{
                         width: thumbWidth,
                         height: thumbHeight,
-                        backgroundColor: isCover ? '#333' : paper.color,
+                        backgroundColor: isCover ? coverColor : paper.color,
                         overflow: 'hidden',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        border: '1px solid rgba(0,0,0,0.08)',
                       }}
                       className="transition-transform group-hover:scale-105"
                     >
                       {renderPageInner(page, thumbScale)}
                     </div>
-                    <span className="text-white/40 text-xs group-hover:text-white/80 transition-colors">
-                      {i + 1}
+                    <span className="text-ink-300 text-xs group-hover:text-ink-500 transition-colors">
+                      {page.isCover === 'front' ? 'Couv.' : page.isCover === 'back' ? '4e couv.' : page.pageNumber ? page.pageNumber : '·'}
                     </span>
                   </button>
                 );
@@ -512,7 +573,7 @@ export function BookReader({ open, onClose }: Props) {
 
         {viewMode === 'actual-size' && pages[actualSizePageIndex] && (
           <div className="flex flex-col items-center gap-4">
-            <div className="text-white/60 text-xs italic max-w-md text-center">
+            <div className="text-ink-300 text-xs italic max-w-md text-center">
               Cette page est affichée à sa taille physique réelle (environ {trim.widthMm} × {trim.heightMm} mm).
               Si le texte est difficile à lire ici, il le sera aussi à l'impression — pensez à augmenter
               la taille de police.
@@ -526,7 +587,7 @@ export function BookReader({ open, onClose }: Props) {
                 height: actualSizePageHeightPx,
                 backgroundColor: paper.color,
                 overflow: 'hidden',
-                boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
                 border: '1px solid rgba(255,255,255,0.1)',
               }}
             >
@@ -537,31 +598,30 @@ export function BookReader({ open, onClose }: Props) {
               <button
                 onClick={() => setActualSizePageIndex((i) => Math.max(0, i - 1))}
                 disabled={actualSizePageIndex === 0}
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 rounded-full bg-parchment-200 hover:bg-parchment-300 transition-colors disabled:invisible"
               >
-                <ChevronLeft className="w-5 h-5 text-white" />
+                <ChevronLeft className="w-5 h-5 text-ink-400" />
               </button>
-              <span className="text-white/60 text-sm">
-                Page {actualSizePageIndex + 1} / {pages.length}
+              <span className="text-ink-300 text-sm">
+                {(() => {
+                  const p = pages[actualSizePageIndex];
+                  if (p?.isCover === 'front') return 'Couverture';
+                  if (p?.isCover === 'back') return '4ème de couverture';
+                  return `Page ${p?.pageNumber || actualSizePageIndex + 1} / ${pages.length}`;
+                })()}
               </span>
               <button
                 onClick={() => setActualSizePageIndex((i) => Math.min(pages.length - 1, i + 1))}
                 disabled={actualSizePageIndex === pages.length - 1}
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 rounded-full bg-parchment-200 hover:bg-parchment-300 transition-colors disabled:invisible"
               >
-                <ChevronRight className="w-5 h-5 text-white" />
+                <ChevronRight className="w-5 h-5 text-ink-400" />
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Keyboard hint */}
-      <p className="text-center pb-3 text-white/30 text-xs">
-        {viewMode === 'flip' && <>← → pour naviguer · Échap pour fermer</>}
-        {viewMode === 'grid' && <>Cliquez sur une page pour la voir à taille réelle · Échap pour fermer</>}
-        {viewMode === 'actual-size' && <>← → pour changer de page · Échap pour fermer</>}
-      </p>
     </div>,
     document.body
   );
@@ -577,7 +637,7 @@ function ModeButton({ active, onClick, icon: Icon, label }: {
     <button
       onClick={onClick}
       className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-        active ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
+        active ? 'bg-white text-bordeaux-500 shadow-sm' : 'text-ink-300 hover:text-ink-500 hover:bg-white/50'
       }`}
     >
       <Icon className="w-3.5 h-3.5" />

@@ -69,7 +69,7 @@ export function EditionCoversPage() {
                 </p>
                 <button onClick={handleDownloadFinal} className="btn-primary text-sm inline-flex items-center gap-2">
                   <FileDown className="w-4 h-4" />
-                  Générer la couverture finale
+                  Générer
                 </button>
               </div>
             </div>
@@ -89,7 +89,7 @@ export function EditionCoversPage() {
                 </p>
                 <button onClick={handleDownloadTemplate} className="btn-secondary text-sm inline-flex items-center gap-2">
                   <Download className="w-4 h-4" />
-                  Télécharger le gabarit
+                  Télécharger
                 </button>
               </div>
             </div>

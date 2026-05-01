@@ -161,7 +161,6 @@ const ICON_CLIPBOARD = '<svg width="14" height="14" viewBox="0 0 24 24" fill="no
 const ICON_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
 const ICON_BACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>';
 const ICON_PEN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>';
-const ICON_REPLACE = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4c0-1.1.9-2 2-2"/><path d="M20 2c1.1 0 2 .9 2 2"/><path d="M22 8c0 1.1-.9 2-2 2"/><path d="M16 10c-1.1 0-2-.9-2-2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5c0-1.7 1.3-3 3-3h1"/><path d="m21 17-3-3-3 3"/><path d="M18 14v5c0 1.7-1.3 3-3 3h-1"/><path d="M2 14c0-1.1.9-2 2-2"/><path d="M8 12c1.1 0 2 .9 2 2"/><path d="M10 18c0 1.1-.9 2-2 2"/><path d="M4 20c-1.1 0-2-.9-2-2"/></svg>';
 const ICON_ALERT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>';
 const ICON_COPY_SM = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
 // Lucide: Languages (conjugaison)
@@ -508,7 +507,16 @@ function renderCnrtlResults(
     } else {
       for (const w of results.slice(0, 6)) {
         const row = document.createElement('div');
+        // Reuse existing styles but make the row itself clickable.
         row.className = 'ctx-result-row';
+        row.style.cursor = 'pointer';
+        row.title = 'Remplacer par ce mot';
+        row.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          callbacks.replace(wordFrom, wordTo, w);
+          hideMenuBox();
+        });
 
         const label = document.createElement('span');
         label.className = 'ctx-result-label';
@@ -523,6 +531,7 @@ function renderCnrtlResults(
         copyBtn.title = 'Copier';
         copyBtn.innerHTML = ICON_COPY_SM;
         copyBtn.addEventListener('mousedown', (e) => {
+          // Stop the row's mousedown so copy doesn't replace as well.
           e.preventDefault();
           e.stopPropagation();
           navigator.clipboard.writeText(w);
@@ -530,18 +539,6 @@ function renderCnrtlResults(
           setTimeout(() => { copyBtn.innerHTML = ICON_COPY_SM; }, 1200);
         });
         actions.appendChild(copyBtn);
-
-        const replaceBtn = document.createElement('button');
-        replaceBtn.className = 'ctx-result-btn';
-        replaceBtn.title = 'Remplacer';
-        replaceBtn.innerHTML = ICON_REPLACE;
-        replaceBtn.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          callbacks.replace(wordFrom, wordTo, w);
-          hideMenuBox();
-        });
-        actions.appendChild(replaceBtn);
 
         row.appendChild(actions);
         box.appendChild(row);
