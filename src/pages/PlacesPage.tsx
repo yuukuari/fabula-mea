@@ -70,7 +70,7 @@ function PlaceCard({ place, onClick }: { place: Place; onClick: () => void }) {
 }
 
 export function PlacesPage() {
-  const { places, maps: rawMaps, addPlace, updatePlace, deletePlace, reorderPlaces } = useEncyclopediaStore();
+  const { places, worldNotes, maps: rawMaps, addPlace, updatePlace, deletePlace, reorderPlaces } = useEncyclopediaStore();
   const maps = rawMaps ?? [];
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -175,6 +175,28 @@ export function PlacesPage() {
                       </button>
                     ) : null;
                   })}
+                </div>
+              </div>
+            ) : null;
+          })()}
+          {(() => {
+            const linkedNotes = worldNotes.filter((n) =>
+              (n.connectedPlaceIds ?? []).includes(selectedPlace.id),
+            );
+            return linkedNotes.length > 0 ? (
+              <div className="mt-4 pt-4 border-t border-parchment-200">
+                <h4 className="font-display font-semibold text-ink-400 mb-1">Éléments d'univers liés</h4>
+                <p className="text-xs text-ink-200 mb-2">Fiches de l'univers rattachées à ce lieu.</p>
+                <div className="flex flex-wrap gap-2">
+                  {linkedNotes.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => navigate(`/world?noteId=${n.id}`)}
+                      className="badge bg-parchment-200 text-ink-400 cursor-pointer hover:bg-parchment-300"
+                    >
+                      {n.title}
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : null;

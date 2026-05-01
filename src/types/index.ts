@@ -277,6 +277,7 @@ export interface WorldNote {
   inGlossary?: boolean; // include in book glossary
   imageUrl?: string;
   linkedNoteIds: EntityId[];
+  connectedPlaceIds?: EntityId[];
   tags: EntityId[];
   order?: number;
   createdAt: string;

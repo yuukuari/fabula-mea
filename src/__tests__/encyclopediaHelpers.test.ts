@@ -390,6 +390,12 @@ describe('createWorldNote', () => {
     expect(worldNotes[0].category).toBe('custom');
     expect(worldNotes[0].id).toBe(id);
     expect(worldNotes[0].inGlossary).toBe(false);
+    expect(worldNotes[0].connectedPlaceIds).toEqual([]);
+  });
+
+  it('preserves connectedPlaceIds when provided', () => {
+    const { worldNotes } = createWorldNote([], { title: 'Histoire', connectedPlaceIds: ['p1', 'p2'] });
+    expect(worldNotes[0].connectedPlaceIds).toEqual(['p1', 'p2']);
   });
 });
 

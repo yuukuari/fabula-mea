@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText, Search, GripVertical } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { Plus, Globe, Edit, Trash2, X, ArrowLeft, BookText, Search, GripVertical, MapPin } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { GlossaryBadge } from '@/components/encyclopedia/GlossaryBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -68,7 +68,8 @@ function WorldNoteCard({ note, onClick }: { note: WorldNote; onClick: () => void
 
 export function WorldPage() {
   const [searchParams] = useSearchParams();
-  const { worldNotes, addWorldNote, updateWorldNote, deleteWorldNote, reorderWorldNotes } = useEncyclopediaStore();
+  const navigate = useNavigate();
+  const { worldNotes, places, updateWorldNote, deleteWorldNote, reorderWorldNotes } = useEncyclopediaStore();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export function WorldPage() {
     if (id) setSelectedId(id);
   }, [searchParams]);
   const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterPlaceId, setFilterPlaceId] = useState<string>('');
   const [search, setSearch] = useState('');
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -93,9 +95,10 @@ export function WorldPage() {
 
   const filtered = sorted
     .filter((n) => !filterCategory || n.category === filterCategory)
+    .filter((n) => !filterPlaceId || (n.connectedPlaceIds ?? []).includes(filterPlaceId))
     .filter((n) => !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase()));
 
-  const isSearchingOrFiltering = search.length > 0 || filterCategory.length > 0;
+  const isSearchingOrFiltering = search.length > 0 || filterCategory.length > 0 || filterPlaceId.length > 0;
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -155,6 +158,27 @@ export function WorldPage() {
               </div>
             </div>
           )}
+
+          {(selectedNote.connectedPlaceIds ?? []).length > 0 && (
+            <div className="mt-6 pt-4 border-t border-parchment-200">
+              <h4 className="font-display font-semibold text-ink-400 mb-2">Lieux liés</h4>
+              <div className="flex flex-wrap gap-2">
+                {(selectedNote.connectedPlaceIds ?? []).map((id) => {
+                  const place = places.find((p) => p.id === id);
+                  return place ? (
+                    <button
+                      key={id}
+                      onClick={() => navigate(`/places?placeId=${place.id}`)}
+                      className="badge bg-parchment-200 text-ink-400 cursor-pointer hover:bg-parchment-300 flex items-center gap-1"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      {place.name}
+                    </button>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <ConfirmDialog
@@ -195,6 +219,28 @@ export function WorldPage() {
               {label}
             </button>
           ))}
+        </div>
+      )}
+
+      {worldNotes.length > 0 && places.length > 0 && (
+        <div className="mb-6">
+          <label className="label-field flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5" /> Filtrer par lieu
+          </label>
+          <select
+            value={filterPlaceId}
+            onChange={(e) => setFilterPlaceId(e.target.value)}
+            className="input-field"
+          >
+            <option value="">Tous les lieux</option>
+            {[...places]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
         </div>
       )}
 
@@ -242,7 +288,7 @@ export function WorldPage() {
 }
 
 function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: () => void }) {
-  const { worldNotes, addWorldNote, updateWorldNote } = useEncyclopediaStore();
+  const { worldNotes, places, addWorldNote, updateWorldNote } = useEncyclopediaStore();
   const existing = noteId ? worldNotes.find((n) => n.id === noteId) : null;
 
   const [title, setTitle] = useState(existing?.title ?? '');
@@ -251,13 +297,18 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
   const [inGlossary, setInGlossary] = useState(existing?.inGlossary ?? false);
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl);
   const [linkedNoteIds, setLinkedNoteIds] = useState<string[]>(existing?.linkedNoteIds ?? []);
+  const [connectedPlaceIds, setConnectedPlaceIds] = useState<string[]>(existing?.connectedPlaceIds ?? []);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const otherNotes = worldNotes.filter((n) => n.id !== noteId);
+  const sortedPlaces = useMemo(
+    () => [...places].sort((a, b) => a.name.localeCompare(b.name)),
+    [places],
+  );
 
   const isDirty = useCallback(() => {
     if (!existing) {
-      return !!(title || content || imageUrl || inGlossary || linkedNoteIds.length > 0 || category !== 'custom');
+      return !!(title || content || imageUrl || inGlossary || linkedNoteIds.length > 0 || connectedPlaceIds.length > 0 || category !== 'custom');
     }
     return (
       title !== (existing.title ?? '') ||
@@ -265,13 +316,14 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
       content !== (existing.content ?? '') ||
       inGlossary !== (existing.inGlossary ?? false) ||
       imageUrl !== existing.imageUrl ||
-      JSON.stringify(linkedNoteIds) !== JSON.stringify(existing.linkedNoteIds ?? [])
+      JSON.stringify(linkedNoteIds) !== JSON.stringify(existing.linkedNoteIds ?? []) ||
+      JSON.stringify(connectedPlaceIds) !== JSON.stringify(existing.connectedPlaceIds ?? [])
     );
-  }, [title, category, content, inGlossary, imageUrl, linkedNoteIds, existing]);
+  }, [title, category, content, inGlossary, imageUrl, linkedNoteIds, connectedPlaceIds, existing]);
 
   const handleSave = () => {
     if (!title.trim()) return;
-    const data = { title, category, content, inGlossary, imageUrl, linkedNoteIds };
+    const data = { title, category, content, inGlossary, imageUrl, linkedNoteIds, connectedPlaceIds };
     if (existing) {
       updateWorldNote(existing.id, data);
     } else {
@@ -349,6 +401,28 @@ function WorldNoteForm({ noteId, onClose }: { noteId: string | null; onClose: ()
                     />
                     <span className={cn('badge text-xs mr-1', WORLD_NOTE_CATEGORY_COLORS[n.category] ?? 'bg-parchment-200 text-ink-300')}>{WORLD_NOTE_CATEGORY_LABELS[n.category]}</span>
                     {n.title}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {sortedPlaces.length > 0 && (
+            <div>
+              <label className="label-field">Lieux liés</label>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {sortedPlaces.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-sm text-ink-300">
+                    <input
+                      type="checkbox"
+                      checked={connectedPlaceIds.includes(p.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) setConnectedPlaceIds([...connectedPlaceIds, p.id]);
+                        else setConnectedPlaceIds(connectedPlaceIds.filter((id) => id !== p.id));
+                      }}
+                      className="rounded border-parchment-300"
+                    />
+                    {p.name}
                   </label>
                 ))}
               </div>

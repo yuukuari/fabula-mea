@@ -214,6 +214,7 @@ export function createWorldNote(notes: WorldNote[], data: Partial<WorldNote>): {
     content: data.content ?? '',
     imageUrl: data.imageUrl ?? '',
     linkedNoteIds: data.linkedNoteIds ?? [],
+    connectedPlaceIds: data.connectedPlaceIds ?? [],
     tags: data.tags ?? [],
     order: notes.length,
     inGlossary: data.inGlossary ?? false,
