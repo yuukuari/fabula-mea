@@ -67,7 +67,7 @@ export interface WordToken {
 export function tokenize(text: string): WordToken[] {
   const tokens: WordToken[] = [];
   // Match sequences of word characters including hyphens and apostrophes
-  const re = /[a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ''\-]*/g;
+  const re = /[a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ'’\-]*/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     let word = m[0];

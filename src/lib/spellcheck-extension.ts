@@ -44,6 +44,45 @@ interface PluginState {
   paragraphHashes: Map<number, string>;
 }
 
+// ── Inversion verbe-pronom (« dit-elle », « fabrique-t-il », « va-t'en ») ──
+// nspell ne connaît pas ces formes (combinatoire trop large) : on isole le verbe et
+// on valide les pronoms postposés. Couvre aussi les clitiques élidés (t'en, m'en, s'en…).
+const INVERSION_PRONOUNS = new Set([
+  'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles',
+  'ce', 'le', 'la', 'les', 'lui', 'leur', 'moi', 'toi', 'me', 'te', 'se', 'y', 'en',
+]);
+
+function isInvertedVerbForm(
+  word: string,
+  checker: { correct: (w: string) => boolean }
+): boolean {
+  // Normalise l'apostrophe typographique et étend les clitiques élidés :
+  // -t'en → -te-en, -m'y → -me-y, -s'en → -se-en, -l'y → -le-y, etc.
+  let lower = word.toLowerCase().replace(/’/g, "'");
+  lower = lower.replace(/-([mtsl])'(en|y)(?![a-zà-ÿ])/g, (_, clitic, vowel) => `-${clitic}e-${vowel}`);
+  if (!lower.includes('-')) return false;
+  const parts = lower.split('-');
+  if (parts.length < 2) return false;
+
+  let verbParts: string[];
+  let pronounParts: string[];
+  // Cas du -t- euphonique : verbe-t-il/elle/on(-pronom)
+  if (parts.length >= 3 && parts[1] === 't' && ['il', 'elle', 'on'].includes(parts[2])) {
+    verbParts = [parts[0]];
+    pronounParts = parts.slice(2);
+  } else {
+    const firstPronounIdx = parts.findIndex((p, i) => i > 0 && INVERSION_PRONOUNS.has(p));
+    if (firstPronounIdx === -1) return false;
+    verbParts = parts.slice(0, firstPronounIdx);
+    pronounParts = parts.slice(firstPronounIdx);
+  }
+  if (!pronounParts.every((p) => INVERSION_PRONOUNS.has(p))) return false;
+
+  const verb = verbParts.join('-');
+  if (verb.length < 2) return false;
+  return checker.correct(verb) || checker.correct(verb.charAt(0).toUpperCase() + verb.slice(1));
+}
+
 // ── LanguageTool API (grammar only) ─────────────────────────────
 const LT_API_URL = 'https://api.languagetool.org/v2/check';
 
@@ -820,6 +859,7 @@ export const SpellCheckExtension = Extension.create<SpellCheckOptions>({
                 const lowerWord = word.toLowerCase();
                 if (ignoredWords.has(lowerWord)) continue;
                 if (checker.correct(word) || checker.correct(lowerWord) || checker.correct(word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())) continue;
+                if (isInvertedVerbForm(word, checker)) continue;
 
                 const fromIdx = tokenOffset;
                 const toIdx = tokenOffset + word.length - 1;
