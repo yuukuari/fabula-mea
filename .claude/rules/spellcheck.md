@@ -25,6 +25,10 @@ Architecture multi-niveaux avec navigation avant/arrière. Remplace le menu nati
 - **Outils d'écriture** : casse (MAJ/min), définition, conjugaison, étymologie, champ lexical (CNRTL), synonymes/antonymes (inline scrappé CNRTL — clic sur la ligne = remplace, icône copier seule à droite avec `stopPropagation`)
 - **Menu natif** : `⌘+clic droit` (Mac) / `Ctrl+clic droit` (PC)
 
+## Clic gauche sur une faute (raccourci correction)
+
+Un clic gauche dans `handleClick` détecte si la position est sur une faute. Si oui, ouvre directement le sous-menu de correction (`renderCorrectionSubmenu(params, standalone=true)`) avec un en-tête statique « Correction (Orthographe) » ou « Correction (Grammaire) » au lieu du bouton de retour. Cmd/Ctrl/Shift+clic conserve le placement de curseur natif. Le sous-menu réutilise la même structure (suggestions, Ignorer, Ignorer tout, Ajouter au dictionnaire) que celui ouvert via clic droit.
+
 ## Implémentation
 
 ProseMirror Plugin (`handleDOMEvents.contextmenu`), DOM vanilla (pas React), positionnement dynamique avec overflow protection, guard `menuOpenedAt` (300ms).

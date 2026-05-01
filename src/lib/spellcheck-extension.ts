@@ -338,23 +338,32 @@ function createLinkRow(icon: string, label: string, url: string): HTMLAnchorElem
 }
 
 /** Show the correction submenu (spelling/grammar) */
-function renderCorrectionSubmenu(params: MenuParams) {
+function renderCorrectionSubmenu(params: MenuParams, standalone = false) {
   const { box, rect, error, callbacks } = params;
   if (!error) return;
   box.innerHTML = '';
 
-  // Back button
-  const backBtn = document.createElement('button');
-  backBtn.className = 'ctx-row ctx-back-row';
   const label = error.type === 'spelling' ? 'Orthographe' : 'Grammaire';
-  backBtn.innerHTML = `<span class="ctx-row-left">${ICON_BACK}<span>${label}</span></span>`;
-  backBtn.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    menuOpenedAt = Date.now();
-    renderMainMenu(params.box, params.rect, params.word, params.wordFrom, params.wordTo, params.selFrom, params.selTo, params.error, params.callbacks, params.selectedText);
-  });
-  box.appendChild(backBtn);
+
+  if (standalone) {
+    // Non-clickable header (entry point — no back navigation)
+    const header = document.createElement('div');
+    header.className = 'ctx-row ctx-back-row ctx-row-static';
+    header.innerHTML = `<span class="ctx-row-left">${ICON_ALERT}<span>Correction (${label})</span></span>`;
+    box.appendChild(header);
+  } else {
+    // Back button
+    const backBtn = document.createElement('button');
+    backBtn.className = 'ctx-row ctx-back-row';
+    backBtn.innerHTML = `<span class="ctx-row-left">${ICON_BACK}<span>${label}</span></span>`;
+    backBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      menuOpenedAt = Date.now();
+      renderMainMenu(params.box, params.rect, params.word, params.wordFrom, params.wordTo, params.selFrom, params.selTo, params.error, params.callbacks, params.selectedText);
+    });
+    box.appendChild(backBtn);
+  }
 
   const sep = document.createElement('div');
   sep.className = 'ctx-separator';
@@ -690,8 +699,26 @@ export const SpellCheckExtension = Extension.create<SpellCheckOptions>({
             return spellcheckPluginKey.getState(state)?.decorationSet ?? DecorationSet.empty;
           },
 
-          handleClick() {
-            // Left-click hides context menu if open
+          handleClick(view: EditorView, pos: number, event: MouseEvent) {
+            // Only react to primary (left) clicks — right-click is handled by contextmenu
+            if (event.button !== 0) return false;
+            // Cmd/Ctrl/Shift+click → preserve native behaviour, just hide menu
+            if (event.metaKey || event.ctrlKey || event.shiftKey) {
+              hideMenuBox();
+              return false;
+            }
+            const pluginState = spellcheckPluginKey.getState(view.state) as PluginState | undefined;
+            if (!pluginState) {
+              hideMenuBox();
+              return false;
+            }
+            // If click lands on an error word, open the correction menu directly
+            const error = pluginState.errors.find((e) => pos >= e.from && pos < e.to);
+            if (error) {
+              openContextMenuAtPos(view, pos, pluginState, 'correction');
+              return false;
+            }
+            // Otherwise: left-click hides any open context menu
             hideMenuBox();
             return false;
           },
@@ -944,7 +971,7 @@ export const SpellCheckExtension = Extension.create<SpellCheckOptions>({
       }),
     ];
 
-    function openContextMenuAtPos(view: EditorView, pos: number, pluginState: PluginState) {
+    function openContextMenuAtPos(view: EditorView, pos: number, pluginState: PluginState, mode: 'main' | 'correction' = 'main') {
       const box = ensureMenuBox();
       const { from: selFrom, to: selTo } = view.state.selection;
       const selLength = selTo - selFrom;
@@ -964,6 +991,9 @@ export const SpellCheckExtension = Extension.create<SpellCheckOptions>({
           }
         }
       }
+
+      // Correction-only mode: only show menu if there's an error to correct
+      if (mode === 'correction' && !error) return false;
 
       // Compute rect for positioning
       const anchorPos = wordInfo && !isMultiWord ? wordInfo.from : selFrom;
@@ -1088,12 +1118,26 @@ export const SpellCheckExtension = Extension.create<SpellCheckOptions>({
         ? view.state.doc.textBetween(selFrom, selTo, ' ')
         : (wordInfo?.word ?? '');
 
+      if (mode === 'correction') {
+        const params: MenuParams = {
+          box, rect,
+          word: wordInfo?.word ?? '',
+          wordFrom: wFrom, wordTo: wTo,
+          selFrom, selTo,
+          error, callbacks, selectedText,
+        };
+        menuOpenedAt = Date.now();
+        renderCorrectionSubmenu(params, true);
+        return true;
+      }
+
       renderMainMenu(
         box, rect,
         isMultiWord ? null : (wordInfo?.word ?? null),
         wFrom, wTo, selFrom, selTo,
         error, callbacks, selectedText
       );
+      return true;
     }
   },
 });

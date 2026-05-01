@@ -278,6 +278,14 @@
   background-color: #f5efe3;
 }
 
+/* Static header (left-click correction menu — no back navigation) */
+.spellcheck-context-menu .ctx-row-static {
+  cursor: default;
+}
+.spellcheck-context-menu .ctx-row-static:hover {
+  background-color: transparent;
+}
+
 /* Accent row (e.g. "Ajouter au dictionnaire") */
 .spellcheck-context-menu .ctx-row-accent {
   color: #7a6b2e;
