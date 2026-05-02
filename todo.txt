@@ -1,28 +1,3 @@
-Feature 3
-Je voudrais ajouter une aide dans le site
-Ca peut être un système de tutoriel, où l'utilisateur est guidé pas à pas, ou alors 
-Rajoute un tutoriel quand on arrive la première fois sur le site. Ca propose de démarrer le tutoriel, qu'on peut relancer quand on veut depuis la page d'accueil avec la liste des livres.
-
-Ce tutoriel montre étape par étape les fonctionnalités du site, donc :
-
-Créer un livre
-Parler des modes (choisir le mode édition pour le tutoriel)
-Expliquer les différentes zones en quelques mots
-Qu'on peut changer de livre et revenir à la liste des livres
-Créer un personnage
-Puis un deuxième avec une relation
-Créer un lieu
-Créer un élément dans l'univers
-Créer une carte du monde
-Placer un point sur la carte relié au lieu
-Expliquer qu'on peut ajouter plusieurs cartes et les relier entre elles, par exemple pour zoomer sur une ville
-Créer un chapitre
-Créer une scène qui fait intervenir le premier personnage, avec une date de début et de fin (1j)
-Puis une autre avec l'autre personnage, dans le lieu qu'on a créé pareil au même moment
-Montrer la Chronologie
-Puis l'avancement
-
-
 Connecteur avec Wattpad ?
 + détail sur arc narratif et chemin initiatique
 Suivi des intrigues
@@ -34,5 +9,4 @@ Envoi de tips (café)
 Expliquer dès l'inscription qu'on est en mode béta
 Réglage des notifications par mail
 Améliorer les commentaires sur le mode écriture, qui est mieux sur le mode relecture
-Transformer une note en fiche univers/personnage/etc.
 

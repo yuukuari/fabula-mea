@@ -82,6 +82,7 @@ Les modules complexes ont leur documentation dans `.claude/rules/` (chargée aut
 - **Relecture** (sessions, commentaires, highlights) → `.claude/rules/reviews.md`
 - **Notifications** (in-app, push, polling) → `.claude/rules/notifications.md`
 - **Correcteur orthographique** (nspell, LanguageTool, menu contextuel) → `.claude/rules/spellcheck.md`
+- **Aide à l'écriture** (panneau Wand2 dans SceneEditor : répétitions, synonymes, antonymes, figures de style, rapport d'analyse avec scores ; surbrillance + navigation hit-par-hit via extension TipTap) → `.claude/rules/writing-aid.md`
 - **Spotify** (OAuth PKCE, Web Playback SDK) → `.claude/rules/spotify.md`
 - **Chronologie** (timeline events, filtrage doux, dates < 1000) → `.claude/rules/timeline.md`
 - **Sync & persistance** (cloudSaveWithRetry, guards, historique versions) → `.claude/rules/sync-persistence.md`

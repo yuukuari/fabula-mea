@@ -7,7 +7,7 @@ import {
   ImagePlus, Link as LinkIcon, Unlink, RemoveFormatting,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { WORLD_NOTE_CATEGORY_LABELS } from '@/lib/utils';
+import { WORLD_NOTE_CATEGORY_LABELS, tiptapHtmlToPlainText } from '@/lib/utils';
 import type { WorldNoteCategory } from '@/types';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -517,22 +517,6 @@ function ToolbarButton({
 
 function Sep() {
   return <div className="w-px bg-parchment-300 mx-1 h-5" />;
-}
-
-function tiptapHtmlToPlainText(html: string): string {
-  return html
-    .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<li[^>]*>/gi, '• ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 // ─── Convert to world note modal ───

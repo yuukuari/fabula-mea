@@ -10,6 +10,7 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { FontFamily } from '@tiptap/extension-font-family';
 import { SpellCheckExtension } from '@/lib/spellcheck-extension';
 import { FontSize } from '@/lib/font-size-extension';
+import { WritingAidHighlightExtension } from '@/lib/writing-aid/highlight-extension';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { FONT_STACKS, AVAILABLE_FONTS, AVAILABLE_FONT_SIZES, DEFAULT_LAYOUT } from '@/lib/fonts';
@@ -168,6 +169,7 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
         getCustomWords: () => customWordsRef.current,
         onAddToDictionary: addToCustomDictionary,
       }),
+      WritingAidHighlightExtension.configure({ sceneId: scene.id }),
     ],
     content: scene.content ?? '',
     onUpdate: ({ editor: e }) => handleUpdate(e.getHTML()),

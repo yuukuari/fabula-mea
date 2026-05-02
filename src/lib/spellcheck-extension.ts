@@ -12,6 +12,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { initSpellChecker, getSpellChecker, loadCustomWords, addWord, tokenize } from './nspell-instance';
+import { fetchCnrtl } from './cnrtl';
 
 // ── Types ────────────────────────────────────────────────────────
 type ErrorType = 'spelling' | 'grammar';
@@ -116,35 +117,6 @@ async function checkGrammar(text: string, language: string): Promise<LTResponse>
     if (first) grammarCache.delete(first);
   }
   return data;
-}
-
-// ── CNRTL synonyms/antonyms scraping ────────────────────────────
-const cnrtlCache = new Map<string, string[]>();
-
-async function fetchCnrtl(type: 'synonymie' | 'antonymie', word: string): Promise<string[]> {
-  const key = `${type}:${word}`;
-  const cached = cnrtlCache.get(key);
-  if (cached) return cached;
-
-  try {
-    const res = await fetch(`https://www.cnrtl.fr/${type}/${encodeURIComponent(word)}`);
-    if (!res.ok) return [];
-    const html = await res.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const allLinks = doc.querySelectorAll('td a');
-    const words = Array.from(allLinks)
-      .map((a) => (a as HTMLAnchorElement).textContent?.trim() ?? '')
-      .filter((w) => w && !w.includes(',') && w.length > 1 && w.length < 30);
-    cnrtlCache.set(key, words);
-    if (cnrtlCache.size > 200) {
-      const first = cnrtlCache.keys().next().value;
-      if (first) cnrtlCache.delete(first);
-    }
-    return words;
-  } catch {
-    return [];
-  }
 }
 
 // ── Context menu / suggestion box ───────────────────────────────

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Minus, X, User, MapPin, ChevronRight, BookOpen, PanelLeft, PanelRight, Menu, Calendar, MessageCircle, BookText } from 'lucide-react';
+import { X, User, MapPin, ChevronRight, BookOpen, PanelLeft, Menu, Calendar, MessageCircle, BookText, Wand2, ScanText } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { useEditorStore } from '@/store/useEditorStore';
+import { useWritingAidStore } from '@/store/useWritingAidStore';
 import { SceneInlineEditor } from './SceneInlineEditor';
 import { SelfCommentPanel } from './SelfCommentPanel';
+import { WritingAidPanel } from '@/components/writing-aid/WritingAidPanel';
 import { getSelectionOffsets } from '@/lib/review-highlights';
 import { cn, SCENE_STATUS_LABELS, SCENE_STATUS_COLORS, countFromHtml, countUnitLabel, isSpecialChapter, getChapterShortLabel, getChapterLabel, formatDuration } from '@/lib/utils';
 import { getTodayProgress, getDailyGoal, getSceneTarget } from '@/lib/calculations';
@@ -17,8 +19,12 @@ const STATUS_DOT: Record<string, string> = {
   complete: 'bg-green-500',
 };
 
+type RightPanel = 'none' | 'notes' | 'aid';
+
 export function SceneEditor() {
-  const { isOpen, entrySceneId, minimize, close } = useEditorStore();
+  const { isOpen, entrySceneId, minimize } = useEditorStore();
+  const requestAidAutoRun = useWritingAidStore((s) => s.requestAutoRun);
+  const setAidTab = useWritingAidStore((s) => s.setTab);
   const scenes = useBookStore((s) => s.scenes);
   const chapters = useBookStore((s) => s.chapters);
   const updateScene = useBookStore((s) => s.updateScene);
@@ -37,8 +43,10 @@ export function SceneEditor() {
   // Mobile : drawer ouvert ou non
   const [navOpen, setNavOpen] = useState(true);
 
-  // Notes panel
-  const [notesOpen, setNotesOpen] = useState(false);
+  // Right panel — exclusif : Notes OU Aide à l'écriture
+  const [rightPanel, setRightPanel] = useState<RightPanel>('none');
+  const notesOpen = rightPanel === 'notes';
+  const aidOpen = rightPanel === 'aid';
   const [pendingSelection, setPendingSelection] = useState<{
     selectedText: string;
     startOffset: number;
@@ -414,11 +422,11 @@ export function SceneEditor() {
           <span>Sauvegarde auto</span>
         </div>
 
-        {/* Toggle notes panel */}
+        {/* Toggle notes panel — exclusif avec aide à l'écriture */}
         <button
-          onClick={() => setNotesOpen((v) => !v)}
+          onClick={() => setRightPanel((v) => v === 'notes' ? 'none' : 'notes')}
           className={cn(
-            'btn-ghost p-1.5 shrink-0 transition-colors hidden sm:block',
+            'btn-ghost p-1.5 shrink-0 transition-colors hidden sm:block relative',
             notesOpen && 'text-bordeaux-500'
           )}
           title={notesOpen ? 'Masquer les notes' : 'Afficher les notes'}
@@ -429,8 +437,25 @@ export function SceneEditor() {
           )}
         </button>
 
-        <button onClick={minimize} className="btn-ghost p-1.5 shrink-0" title="Réduire (Échap)">
-          <Minus className="w-4 h-4" />
+        {/* Toggle aide à l'écriture */}
+        <button
+          onClick={() => setRightPanel((v) => v === 'aid' ? 'none' : 'aid')}
+          className={cn(
+            'btn-ghost p-1.5 shrink-0 transition-colors hidden sm:block',
+            aidOpen && 'text-bordeaux-500'
+          )}
+          title={aidOpen ? 'Masquer l\'aide à l\'écriture' : 'Aide à l\'écriture'}
+        >
+          <Wand2 className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={minimize}
+          className="p-2 rounded-full bg-parchment-200 hover:bg-parchment-300 transition-colors shrink-0"
+          aria-label="Fermer le mode écriture"
+          title="Fermer (Échap)"
+        >
+          <X className="w-4 h-4 text-ink-400" />
         </button>
       </div>
 
@@ -497,11 +522,22 @@ export function SceneEditor() {
                   {/* Don't show heading for front/back matter */}
                   {!isSpecial && (
                     <div className="mb-8">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 group">
                         <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: chapter.color }} />
                         <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-400">
                           {getChapterLabel(chapter)}
                         </h2>
+                        <button
+                          onClick={() => {
+                            setRightPanel('aid');
+                            setAidTab('report');
+                            requestAidAutoRun({ kind: 'chapter', chapterId: chapter.id });
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-ink-200 hover:text-bordeaux-500 hover:bg-parchment-200"
+                          title="Analyser ce chapitre"
+                        >
+                          <ScanText className="w-4 h-4" />
+                        </button>
                       </div>
                       {chapter.synopsis && (
                         <p className="text-sm text-ink-200 italic font-serif border-l-2 border-parchment-300 pl-3 mt-3 whitespace-pre-line">
@@ -563,6 +599,18 @@ export function SceneEditor() {
                             </div>
                           )}
                         </div>
+                        {/* Analyser cette scène */}
+                        <button
+                          onClick={() => {
+                            setRightPanel('aid');
+                            setAidTab('report');
+                            requestAidAutoRun({ kind: 'scene', sceneId: scene.id });
+                          }}
+                          className="p-1 rounded text-ink-200 hover:text-bordeaux-500 hover:bg-parchment-200 shrink-0 transition-colors"
+                          title="Analyser cette scène"
+                        >
+                          <ScanText className="w-4 h-4" />
+                        </button>
                         {/* Status selector */}
                         <select
                           value={scene.status}
@@ -646,16 +694,16 @@ export function SceneEditor() {
           </div>
         </div>
 
-        {/* ── Notes panel (right) ── */}
+        {/* ── Right panel : Notes OU Aide à l'écriture (exclusif) ── */}
         <div
           className={cn(
             'hidden sm:flex flex-col shrink-0 border-l border-parchment-200 bg-parchment-50',
             'overflow-hidden transition-all duration-200 ease-in-out',
-            notesOpen ? 'w-64' : 'w-0 border-l-0'
+            rightPanel !== 'none' ? 'w-72' : 'w-0 border-l-0'
           )}
         >
-          <div className="w-64 flex flex-col flex-1 min-h-0">
-            {visibleSceneId && (
+          <div className="w-72 flex flex-col flex-1 min-h-0">
+            {notesOpen && visibleSceneId && (
               <SelfCommentPanel
                 sceneId={visibleSceneId}
                 pendingSelection={pendingSelection}
@@ -663,6 +711,9 @@ export function SceneEditor() {
                 onHighlightComment={setActiveCommentId}
                 activeCommentId={activeCommentId}
               />
+            )}
+            {aidOpen && (
+              <WritingAidPanel currentSceneId={visibleSceneId} />
             )}
           </div>
         </div>

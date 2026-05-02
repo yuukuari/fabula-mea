@@ -486,3 +486,16 @@
 .review-content mark[data-comment-id].review-highlight-active {
   background-color: rgba(139, 34, 82, 0.35);
 }
+
+/* Writing-aid highlights — surbrillance des mots analysés */
+.wa-highlight {
+  background-color: rgba(212, 175, 55, 0.3);
+  border-radius: 2px;
+  padding: 1px 0;
+  transition: background-color 0.15s ease;
+}
+.wa-highlight-active {
+  background-color: rgba(212, 175, 55, 0.75);
+  outline: 2px solid rgba(139, 34, 82, 0.8);
+  outline-offset: 1px;
+}
