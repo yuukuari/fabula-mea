@@ -405,6 +405,7 @@ export type TicketModule =
   | 'chapters'
   | 'timeline'
   | 'writing'
+  | 'reading'
   | 'progress'
   | 'world'
   | 'maps'

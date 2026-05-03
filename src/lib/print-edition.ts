@@ -1,5 +1,5 @@
-import type { TrimSizeId, PaperType, PrintMargins, PrintEdition, BookLayout } from '@/types';
-import { DEFAULT_LAYOUT } from './fonts';
+import type { TrimSizeId, PaperType, PrintMargins, PrintEdition, BookLayout, BookFont } from '@/types';
+import { DEFAULT_LAYOUT, FONT_WIDTH_FACTOR } from './fonts';
 
 // ─── Trim Sizes ───
 
@@ -163,8 +163,6 @@ export function calculateCoverDimensions(
 export interface BookPageData {
   html: string;
   pageNumber: number;
-  chapterTitle?: string;
-  sceneTitle?: string;
   isCover?: 'front' | 'back';
   isTitlePage?: boolean;
 }
@@ -172,59 +170,215 @@ export interface BookPageData {
 /**
  * Estimate how many characters fit on one page for the given format.
  */
-function charsPerPage(
+interface PageMetrics {
+  /** Lines available per page once all margins are accounted for. */
+  linesPerPage: number;
+  /** Characters fitting on one line (justified average). */
+  charsPerLine: number;
+}
+
+function getPageMetrics(
   trimSizeId: TrimSizeId,
   fontSize: number,
   lineHeight: number,
   margins: PrintMargins,
-): number {
+  fontFamily: BookFont,
+): PageMetrics {
   const trim = getTrimSize(trimSizeId);
   const usableWidthMm = trim.widthMm - margins.innerMm - margins.outerMm;
   const usableHeightMm = trim.heightMm - margins.topMm - margins.bottomMm;
   const fontSizeMm = fontSize * 0.3528;
   const lineHeightMm = fontSizeMm * lineHeight;
   const linesPerPage = Math.floor(usableHeightMm / lineHeightMm);
-  const charsPerLine = Math.floor(usableWidthMm / (fontSizeMm * 0.5));
-  // The naive `lines × chars` product over-estimates actual capacity because
-  // it ignores paragraph spacing, orphan/widow breaks, variable glyph widths,
-  // and the fact that most paragraphs don't fill their last line. Apply a
-  // conservative safety factor so the preview doesn't clip the last line.
-  return Math.max(50, Math.floor(linesPerPage * charsPerLine * 0.88));
+  // Per-font width factor accounts for varying glyph density between serif
+  // families (Garamond is narrow, Merriweather wide). Falls back to 0.45 for
+  // unknown fonts.
+  const widthFactor = FONT_WIDTH_FACTOR[fontFamily] ?? 0.45;
+  const charsPerLine = Math.max(20, Math.floor(usableWidthMm / (fontSizeMm * widthFactor)));
+  return { linesPerPage, charsPerLine };
 }
 
 /** Strip HTML tags to get approximate text length */
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&[a-z]+;/gi, ' ');
+  return html
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&(?:amp|lt|gt|quot|apos);/g, 'X')
+    .replace(/&#\d+;/g, 'X')
+    .replace(/&[a-z]+;/gi, 'X');
 }
 
-/** Split HTML content into approximate pages by character count */
-function splitHtmlIntoPages(html: string, maxChars: number): string[] {
-  if (!html || !html.trim()) return [];
+/**
+ * Estimate the visual lines a single block (`<p>`, `<h2>`, …) consumes.
+ *
+ * Assumes the renderer applies the normalized CSS injected by `BookReader`
+ * (p margin-bottom 0.4em ≈ 0.27 lh, headings line-height 1.2 + small margins).
+ * Without that normalization, browser defaults add 1em margins around every
+ * block and the math here is wildly off.
+ *
+ * - Per-block trailing margin: ~0.27 lh (0.4em over 1.5em parent line-height)
+ * - Headings actually fit in slightly LESS than one parent line (their own
+ *   line-height is 1.2 < parent's 1.5), so no heading bonus.
+ * - Scene break (`* * *`) keeps its inline 1em margin top + bottom for
+ *   visual breathing room.
+ */
+function blockLineCost(html: string, charsPerLine: number): number {
+  const text = stripHtml(html).trim();
+  const isSceneBreak = /\* \* \*/.test(text) && /text-align:center/i.test(html);
+  const wrappedLines = Math.max(1, Math.ceil(text.length / charsPerLine));
+  let extra = 0.3;
+  if (isSceneBreak) extra += 0.8;
+  return wrappedLines + extra;
+}
 
-  // Split on paragraph boundaries
-  const paragraphs = html.split(/(?=<p[\s>])|(?=<h[1-6][\s>])|(?=<blockquote[\s>])/i).filter(Boolean);
-  const pages: string[] = [];
-  let currentPage = '';
-  let currentLen = 0;
+/** Split a `<p>...</p>` HTML string at the latest word boundary that keeps
+ *  the first part within `maxTextChars` characters. Returns `null` if the
+ *  block can't be split (e.g. a heading, a too-short paragraph, or unmatched
+ *  tags). Inline tags (`<em>`, `<strong>`, …) open in the first part are
+ *  closed and re-opened in the second part to keep both fragments valid. */
+function splitParagraphAtChars(html: string, maxTextChars: number): [string, string] | null {
+  const m = html.match(/^(\s*)(<(p|blockquote)(?:\s+[^>]*)?>)([\s\S]*)(<\/\3>)(\s*)$/i);
+  if (!m) return null;
+  const leading = m[1];
+  const openTag = m[2];
+  const inner = m[4];
+  const closeTag = m[5];
+  const trailing = m[6];
 
-  for (const para of paragraphs) {
-    const textLen = stripHtml(para).length;
-    if (currentLen + textLen > maxChars && currentPage) {
-      pages.push(currentPage);
-      currentPage = para;
-      currentLen = textLen;
-    } else {
-      currentPage += para;
-      currentLen += textLen;
+  let textCount = 0;
+  let i = 0;
+  const stack: string[] = [];
+  let bestBreakIdx = -1;
+  let bestBreakStack: string[] = [];
+
+  while (i < inner.length) {
+    const ch = inner[i];
+    if (ch === '<') {
+      const selfClose = inner.slice(i).match(/^<(\w+)(\s[^>]*)?\/>/);
+      if (selfClose) { i += selfClose[0].length; continue; }
+      const closeMatch = inner.slice(i).match(/^<\/(\w+)\s*>/);
+      if (closeMatch) {
+        const name = closeMatch[1].toLowerCase();
+        const top = stack[stack.length - 1];
+        if (top === name) stack.pop();
+        i += closeMatch[0].length;
+        continue;
+      }
+      const openMatch = inner.slice(i).match(/^<(\w+)(\s[^>]*)?>/);
+      if (openMatch) {
+        stack.push(openMatch[1].toLowerCase());
+        i += openMatch[0].length;
+        continue;
+      }
+      i++;
+      continue;
     }
-  }
-  if (currentPage.trim()) pages.push(currentPage);
 
+    // Entity (counts as one character).
+    if (ch === '&') {
+      const ent = inner.slice(i).match(/^&(?:#\d+|#x[\da-f]+|\w+);/i);
+      if (ent) { textCount++; i += ent[0].length; continue; }
+    }
+
+    if (/\s/.test(ch) && textCount > 0 && textCount <= maxTextChars) {
+      bestBreakIdx = i;
+      bestBreakStack = [...stack];
+    }
+
+    textCount++;
+
+    if (textCount > maxTextChars && bestBreakIdx >= 0) {
+      const cutAt = bestBreakIdx;
+      let firstInner = inner.slice(0, cutAt);
+      // Skip the whitespace at cutAt.
+      let secondInner = inner.slice(cutAt + 1);
+      // Close open tags in the first part.
+      for (let j = bestBreakStack.length - 1; j >= 0; j--) {
+        firstInner += `</${bestBreakStack[j]}>`;
+      }
+      // Reopen them in the second part.
+      let prefix = '';
+      for (const t of bestBreakStack) prefix += `<${t}>`;
+      secondInner = prefix + secondInner;
+      // Drop empty paragraphs.
+      if (!stripHtml(firstInner).trim()) return null;
+      if (!stripHtml(secondInner).trim()) return null;
+      return [
+        leading + openTag + firstInner + closeTag,
+        openTag + secondInner + closeTag + trailing,
+      ];
+    }
+    i++;
+  }
+  return null;
+}
+
+/** Top-level block boundaries in a chapter HTML stream. */
+function splitIntoBlocks(html: string): string[] {
+  return html.split(/(?=<(?:p|h[1-6]|blockquote|ul|ol|hr)[\s/>])/i).filter((b) => b.trim().length > 0);
+}
+
+/**
+ * Pack chapter HTML into pages line by line, splitting paragraphs at word
+ * boundaries when they don't fit. Real ebook readers and PDF generators do
+ * this — the bottom of every page lands close to the bottom margin, instead
+ * of leaving big gaps when paragraphs don't quite fit.
+ */
+function packHtmlIntoPages(html: string, metrics: PageMetrics): string[] {
+  if (!html || !html.trim()) return [];
+  const lineBudget = Math.max(4, metrics.linesPerPage);
+  const blocks = splitIntoBlocks(html);
+  const pages: string[] = [];
+  let currentHtml = '';
+  let usedLines = 0;
+
+  let i = 0;
+  while (i < blocks.length) {
+    const block = blocks[i];
+    const cost = blockLineCost(block, metrics.charsPerLine);
+    const remaining = lineBudget - usedLines;
+
+    if (cost <= remaining || (usedLines === 0 && cost <= lineBudget)) {
+      currentHtml += block;
+      usedLines += cost;
+      i++;
+      continue;
+    }
+
+    // Try to split a paragraph mid-way to fill the rest of the page.
+    if (remaining >= 2 && /^<p[\s>]/i.test(block.trim())) {
+      // Allow up to `remaining` lines on this page (with a small 0.95 safety
+      // factor on character count, since wrapping is approximate).
+      const maxChars = Math.floor(remaining * metrics.charsPerLine * 0.95);
+      const split = splitParagraphAtChars(block, maxChars);
+      if (split) {
+        currentHtml += split[0];
+        pages.push(currentHtml);
+        currentHtml = '';
+        usedLines = 0;
+        blocks[i] = split[1];
+        continue;
+      }
+    }
+
+    // Couldn't split — flush the current page and place this block fresh.
+    if (currentHtml) {
+      pages.push(currentHtml);
+      currentHtml = '';
+      usedLines = 0;
+    }
+    currentHtml += block;
+    usedLines += cost;
+    i++;
+  }
+
+  if (currentHtml.trim()) pages.push(currentHtml);
   return pages.length > 0 ? pages : [''];
 }
 
 export interface PaginateInput {
   chapters: Array<{
+    number: number;
     title: string;
     type?: string;
     scenes: Array<{ title?: string; content?: string }>;
@@ -246,7 +400,8 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
   const pe = input.printEdition ?? DEFAULT_PRINT_EDITION;
   const fontSize = input.layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
   const lineHeight = input.layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
-  const capacity = charsPerPage(pe.trimSize, fontSize, lineHeight, pe.margins);
+  const fontFamily = input.layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily;
+  const metrics = getPageMetrics(pe.trimSize, fontSize, lineHeight, pe.margins, fontFamily);
   const pages: BookPageData[] = [];
   let pageNum = 1;
 
@@ -265,20 +420,46 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
   // Blank verso after title
   pages.push({ html: '', pageNumber: pageNum++ });
 
-  // Chapters
+  // Chapters — concatenate chapter heading + scenes (with breaks between
+  // scenes that have content), then split the whole stream across pages.
   for (const chapter of input.chapters) {
-    for (const scene of chapter.scenes) {
-      const content = scene.content ?? '';
-      const htmlPages = splitHtmlIntoPages(content, capacity);
+    const isSpecial = chapter.type === 'front_matter' || chapter.type === 'back_matter';
+    let chapterHtml = '';
 
-      for (let i = 0; i < htmlPages.length; i++) {
-        pages.push({
-          html: htmlPages[i],
-          pageNumber: pageNum++,
-          chapterTitle: i === 0 ? chapter.title : undefined,
-          sceneTitle: i === 0 ? scene.title : undefined,
-        });
+    if (!isSpecial) {
+      const label = chapter.title
+        ? `Chapitre ${chapter.number} — ${chapter.title}`
+        : `Chapitre ${chapter.number}`;
+      chapterHtml += `<h2 style="text-align:center;font-size:1.4em;font-weight:bold;margin:0.5em 0 1em;color:#222;">${label}</h2>`;
+    }
+
+    let visibleSceneAdded = false;
+    for (const scene of chapter.scenes) {
+      const hasContent = !!(scene.content && scene.content.trim());
+      const hasTitle = !!(scene.title && scene.title.trim());
+      if (!hasContent && !hasTitle) continue;
+
+      // Scene break between successive visible scenes.
+      if (visibleSceneAdded) {
+        chapterHtml += `<p style="text-align:center;color:#888;margin:1em 0;letter-spacing:0.3em;">* * *</p>`;
       }
+
+      if (hasTitle) {
+        if (isSpecial) {
+          chapterHtml += `<h2 style="text-align:center;font-size:1.4em;font-weight:bold;margin:0.5em 0 1em;color:#222;">${scene.title}</h2>`;
+        } else {
+          chapterHtml += `<p style="text-align:center;font-style:italic;margin:0.5em 0 0.8em;color:#444;">${scene.title}</p>`;
+        }
+      }
+
+      if (hasContent) chapterHtml += scene.content!;
+      visibleSceneAdded = true;
+    }
+
+    if (!chapterHtml.trim()) continue;
+    const htmlPages = packHtmlIntoPages(chapterHtml, metrics);
+    for (const html of htmlPages) {
+      pages.push({ html, pageNumber: pageNum++ });
     }
   }
 
@@ -288,7 +469,7 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
     for (const entry of input.glossary) {
       glossaryHtml += `<p><strong>${entry.name}</strong> — ${entry.description}</p>`;
     }
-    const glossaryPages = splitHtmlIntoPages(glossaryHtml, capacity);
+    const glossaryPages = packHtmlIntoPages(glossaryHtml, metrics);
     for (const html of glossaryPages) {
       pages.push({ html, pageNumber: pageNum++ });
     }

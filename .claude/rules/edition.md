@@ -70,11 +70,35 @@ Mode avancé : CSS `backgroundImage/Size/Position` pour clipper le flat. **Formu
 - `grid` (thumbnails) — clic miniature → bascule en taille réelle
 - `actual-size` (96 DPI + `PageRuler`)
 
+La police est rendue à `fontSize × scale` dans les 3 modes (sans clamp minimum). Un clamp à 6pt avait été ajouté pour la lisibilité mais cassait la proportion : le texte des miniatures apparaissait 2-3× plus gros que la page réelle, donnant l'illusion qu'il y avait moins de contenu.
+
 ### Look & feel
 Palette parchment (cohérent avec SceneEditor) — fond `bg-parchment-50`, bordures `border-parchment-200`, ModeButton actif blanc + bordeaux. Sélecteur de mode reste en haut, astuce clavier en haut aussi (la pilule occupe le bas).
 
 ### Marges alternées dans le rendu
-`isVerso = pageNumber > 0 && pageNumber % 2 === 0`. Couvertures/pages blanches = recto. Pagination : `charsPerPage` × 0.88.
+`isVerso = pageNumber > 0 && pageNumber % 2 === 0`. Couvertures/pages blanches = recto.
+
+### Pagination (`paginateContent` dans `print-edition.ts`)
+
+Approche **ligne-par-ligne** (et non paragraphe-par-paragraphe), proche du PDF, pour éviter les grands blancs en bas de page :
+
+- `getPageMetrics()` calcule `linesPerPage` (hauteur utile / lineHeight) et `charsPerLine` (largeur utile / `widthFactor` × fontSize). Le `widthFactor` est par police via `FONT_WIDTH_FACTOR` dans `fonts.ts` (Times 0.42, Garamond 0.40, Merriweather 0.49…). **Le facteur monospace 0.5 sous-estimait de 25 % les caractères/ligne en serif** et causait un sous-remplissage chronique.
+- `packHtmlIntoPages()` itère sur les blocs (`<p>`, `<h2>`, `<blockquote>`…) et accumule un coût en lignes (`blockLineCost`). Quand le bloc suivant ne tient pas, on essaye de **couper le paragraphe au mot** via `splitParagraphAtChars()` qui :
+  - parse le HTML char-par-char en suivant la pile de balises ouvertes
+  - coupe au dernier espace avant `maxTextChars`
+  - clôt les balises inline ouvertes dans la 1re moitié et les rouvre dans la 2nde (ex: `<em>...</em>` reste valide des deux côtés)
+- `blockLineCost` charge `+0.3 lh` par bloc (marge 0.4em ≈ 0.27 lh sur lineHeight 1.5). Pas de bonus heading : avec line-height 1.2 < parent 1.5, un heading prend en réalité ~0.93 lh par ligne, soit *moins* qu'une ligne de paragraphe.
+- Les en-têtes `<h2>` ne sont jamais coupés ; ils basculent en page suivante si la place restante est insuffisante.
+
+**Pré-requis impératif** : le BookReader injecte un `<style>` global qui normalise les marges browser-default sur `<h*>`/`<p>` à l'intérieur de `.fm-reader-content` (sinon les marges 1em par défaut surchargeraient le budget et clipperaient les pages). Cf. `BookReader.tsx`. Si tu changes le CSS, retune `blockLineCost` en miroir.
+
+**Convention de rendu chapitre/scène** (alignée avec PDF/DOCX/EPUB) — embarquée directement comme HTML inline dans le flux du chapitre :
+- **Chapitre régulier** : en-tête `Chapitre N — Titre` (ou `Chapitre N` si pas de titre), une seule fois en début de chapitre.
+- **Scène d'un chapitre régulier** : titre affiché en italique centré uniquement si renseigné. Pas de mention « Scène N ».
+- **Front/back matter** : pas d'en-tête de chapitre. Le titre de scène (si renseigné) est affiché comme un titre de chapitre (gros, gras, centré).
+- **Séparateur `* * *`** entre scènes successives non-vides du même chapitre.
+
+Les anciens champs `chapterTitle` / `sceneTitle` de `BookPageData` ont été supprimés — tout passe par le HTML.
 
 ## Pipeline PDF (pdf-lib)
 

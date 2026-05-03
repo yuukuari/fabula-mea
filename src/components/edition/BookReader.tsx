@@ -82,6 +82,7 @@ export function BookReader({ open, onClose }: Props) {
     const sortedChapters = [...chapters]
       .sort((a, b) => a.number - b.number)
       .map((ch) => ({
+        number: ch.number,
         title: ch.title ?? '',
         type: ch.type,
         scenes: ch.sceneIds
@@ -321,7 +322,7 @@ export function BookReader({ open, onClose }: Props) {
     }
 
     // Blank page
-    if (!page.html && !page.chapterTitle) {
+    if (!page.html) {
       return <div style={{ width: '100%', height: '100%', backgroundColor: paper.color }} />;
     }
 
@@ -330,7 +331,10 @@ export function BookReader({ open, onClose }: Props) {
     // - Recto (odd pageNumber, right side of spread) → inner on LEFT
     // - Verso (even pageNumber, left side of spread) → inner on RIGHT
     // Pages with pageNumber 0 (covers, blank filler) default to recto-style.
-    const contentFontSize = scale === 1 ? fontSize : Math.max(fontSize * scale, 6);
+    // No minimum clamp: thumbs need to scale font down proportionally so the
+    // amount of content per thumb matches the actual page (otherwise text
+    // looks 2-3× too big and the thumb misrepresents the layout).
+    const contentFontSize = fontSize * scale;
     const isVerso = page.pageNumber > 0 && page.pageNumber % 2 === 0;
     const leftPct = isVerso ? outerPct : innerPct;
     const rightPct = isVerso ? innerPct : outerPct;
@@ -355,17 +359,7 @@ export function BookReader({ open, onClose }: Props) {
             overflow: 'hidden',
           }}
         >
-          {page.chapterTitle && (
-            <h2 style={{ fontSize: '1.4em', fontWeight: 'bold', marginBottom: '0.5em', textAlign: 'center', color: '#222' }}>
-              {page.chapterTitle}
-            </h2>
-          )}
-          {page.sceneTitle && (
-            <h3 style={{ fontSize: '1.1em', fontWeight: 600, marginBottom: '0.4em', color: '#444' }}>
-              {page.sceneTitle}
-            </h3>
-          )}
-          <div dangerouslySetInnerHTML={{ __html: page.html }} style={{ overflow: 'hidden' }} />
+          <div className="fm-reader-content" dangerouslySetInnerHTML={{ __html: page.html }} style={{ overflow: 'hidden' }} />
         </div>
 
         {page.pageNumber > 0 && (
@@ -422,6 +416,25 @@ export function BookReader({ open, onClose }: Props) {
         display: 'flex', flexDirection: 'column',
       }}
     >
+      {/* Normalize browser default margins inside scene HTML so the visual
+          layout matches the line-cost estimate used by the paginator.
+          Without this, browser h3/p margins (1em) overflow the budget and
+          pages clip. Single global <style> shared by all rendered pages. */}
+      <style>{`
+        .fm-reader-content > * { margin: 0; }
+        .fm-reader-content p,
+        .fm-reader-content blockquote,
+        .fm-reader-content ul,
+        .fm-reader-content ol { margin: 0 0 0.4em; }
+        .fm-reader-content h1,
+        .fm-reader-content h2,
+        .fm-reader-content h3,
+        .fm-reader-content h4,
+        .fm-reader-content h5,
+        .fm-reader-content h6 { margin: 0.3em 0 0.2em; line-height: 1.2; }
+        .fm-reader-content > *:first-child { margin-top: 0; }
+        .fm-reader-content > *:last-child { margin-bottom: 0; }
+      `}</style>
       {/* Keyboard hint */}
       <p className="text-center pt-2 text-ink-200 text-xs">
         {viewMode === 'flip' && <>← → pour naviguer · Échap pour fermer</>}

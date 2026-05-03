@@ -12,6 +12,23 @@ export const FONT_STACKS: Record<BookFont, string> = {
   'Garamond': 'Garamond, "EB Garamond", serif',
 };
 
+/**
+ * Average character width as a fraction of font-size, for justified body text
+ * in French. Used by the paginator to estimate how many characters fit per
+ * line. Values are calibrated against rendered DOM measurements; ±0.02 of
+ * accuracy is sufficient.
+ */
+export const FONT_WIDTH_FACTOR: Record<BookFont, number> = {
+  'Times New Roman': 0.42,
+  'Georgia': 0.46,
+  'Crimson Text': 0.43,
+  'Lora': 0.46,
+  'Merriweather': 0.49,
+  'EB Garamond': 0.40,
+  'Libre Baskerville': 0.46,
+  'Garamond': 0.40,
+};
+
 /** All available fonts for UI selectors */
 export const AVAILABLE_FONTS: BookFont[] = [
   'Times New Roman',
