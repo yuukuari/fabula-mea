@@ -109,6 +109,17 @@ function ScopeSelector({ currentSceneId }: { currentSceneId: string | null }) {
   const currentScene = currentSceneId ? scenes.find((s) => s.id === currentSceneId) : null;
   const currentChapter = currentScene ? chapters.find((c) => c.id === currentScene.chapterId) : null;
 
+  // Sémantique « Scène courante » / « Chapitre courant » : quand l'utilisateur
+  // change de scène depuis la sidebar, on suit automatiquement (sinon le scope
+  // pointe vers une scène/chapitre orphelin et l'analyse cible le mauvais texte).
+  useEffect(() => {
+    if (scope.kind === 'scene' && currentSceneId && scope.sceneId !== currentSceneId) {
+      setScope({ kind: 'scene', sceneId: currentSceneId });
+    } else if (scope.kind === 'chapter' && currentChapter && scope.chapterId !== currentChapter.id) {
+      setScope({ kind: 'chapter', chapterId: currentChapter.id });
+    }
+  }, [currentSceneId, currentChapter, scope, setScope]);
+
   return (
     <div className="flex gap-1 mb-3">
       <ScopeBtn

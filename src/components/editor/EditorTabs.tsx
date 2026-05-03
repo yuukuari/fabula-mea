@@ -14,15 +14,19 @@ export function EditorTabs() {
   const openReader = useReaderStore((s) => s.openReader);
   const closeReader = useReaderStore((s) => s.closeReader);
 
-  // Show the writing tab (without opening the editor) when in write mode and there are scenes
+  // Show the writing tab (without opening the editor) when in write mode and there are scenes.
+  // We also re-anchor to the first scene if the current entrySceneId is stale — e.g. after
+  // switching books or deleting the targeted scene — otherwise the pill can disappear or
+  // point to a non-existent scene until the page is refreshed.
+  const entrySceneExists = !!entrySceneId && scenes.some((s) => s.id === entrySceneId);
   useEffect(() => {
-    if (writingMode === 'write' && scenes.length > 0 && !entrySceneId) {
+    if (writingMode === 'write' && scenes.length > 0 && !entrySceneExists) {
       const firstScene = scenes[0];
       if (firstScene) setEntryScene(firstScene.id);
     }
-  }, [writingMode, scenes, entrySceneId, setEntryScene]);
+  }, [writingMode, scenes, entrySceneExists, setEntryScene]);
 
-  const showWriting = writingMode === 'write' && scenes.length > 0 && !!entrySceneId;
+  const showWriting = writingMode === 'write' && scenes.length > 0 && entrySceneExists;
   // Reader makes sense only when there is actual content to read — i.e. at
   // least one scene with non-empty content (count mode users can still have
   // text in their scenes, hence we don't gate this on writingMode).

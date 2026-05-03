@@ -60,7 +60,8 @@ src/lib/writing-aid/
 ├── manuscript-text.ts — resolveScope() + agrégation HTML→texte (via tiptapHtmlToPlainText)
 ├── stopwords.ts      — liste FR + lightStem() (lemmatisation grossière)
 ├── repetitions.ts    — detectRepetitions() groupé par stem → RepetitionAnalysis { items, maxBurst, windowSize }
-├── adverbs.ts        — detectAdverbs() (-ment, avec liste d'exclusions noms-en-ment)
+├── adverbs.ts        — detectAdverbs() (-ment, filtré par whitelist ADVERBS_FR)
+├── adverbs-whitelist.ts — Set ADVERBS_FR (~1270 adverbes, généré depuis Lexique 3.83)
 ├── dull-verbs.ts     — detectDullVerbs() — table forme→lemme (être, avoir, faire, dire, mettre, voir, prendre, aller)
 ├── sentences.ts      — analyzeSentences() — découpe d'abord par paragraphe (\n) puis par .!?… ; top-10 plus longues, ratio >30 mots
 ├── lexical.ts        — analyzeLexical() — ratio lemmes uniques / mots pleins
@@ -88,7 +89,7 @@ Vite bundle le worker en chunk séparé (`writing-aid-worker-*.js`, ~10 kB).
 1. **Module CNRTL** (`src/lib/cnrtl.ts`) extrait du `spellcheck-extension.ts` : si tu changes le scraping, vérifie les deux usages (panneau + menu contextuel).
 2. **Scroll vers une occurrence (mots)** : pas de positionnement curseur exact. La surbrillance + `scrollIntoView` sur l'élément `.wa-highlight-active` suffit.
 3. **Scroll vers une phrase** : recherche brute du texte dans le doc PM (extension), avec fallback sur la tête (40 premiers caractères) si l'inline-formatting coupe le match. Surligne la plage trouvée.
-4. **Faux positifs adverbes** : la liste `NOT_ADVERBS` dans `adverbs.ts` couvre les noms en -ment (moment, document, sentiment…). À enrichir au gré des retours.
+4. **Détection des adverbes** : approche **whitelist** via `ADVERBS_FR` (Set ~1270 entrées, généré depuis Lexique 3.83 — POS=ADV + suffixe -ment). Un mot en -ment absent de la whitelist est ignoré (donc plus de faux positifs sur les noms type *sifflement*, *moment*, *comment*…). Si un adverbe légitime manque, l'ajouter dans `adverbs-whitelist.ts`.
 5. **Lemmatisation light** : `lightStem` est volontairement grossier (suffixes verbaux + pluriels). Pas de vraie lemmatisation pour éviter une grosse dépendance. Conséquence : quelques regroupements imparfaits sur les irréguliers.
 6. **Score Répétitions** : basé sur le **maxBurst global** (`detectRepetitions` retourne `RepetitionAnalysis = { items, maxBurst, windowSize }`). `maxBurst` = nombre maximal d'occurrences répétées **toutes confondues** dans la fenêtre la plus dense. La densité est `maxBurst / windowSize`, ce qui pénalise correctement un paragraphe saturé même si le reste du texte est propre (un paragraphe dupliqué 4 fois cumule TOUTES ses répétitions dans la même fenêtre). Seuils : idéal 2 %, gênant 10 %.
 7. **Découpage des phrases** : `analyzeSentences` découpe **d'abord par paragraphe** (`/[^\n]+/g` sur le texte plain), puis par ponctuation `.!?…` à l'intérieur. Sans ce double découpage, un titre sans ponctuation finale (ex. « Contexte ») se collait au paragraphe suivant et la recherche brute du clic-pour-scroller échouait (le texte concaténé n'existait pas dans le doc PM).
