@@ -22,6 +22,44 @@ export const STAGE_LABELS: Record<ReportStage, string> = {
   'finalize': 'Calcul des scores',
 };
 
+/** Aide contextuelle affichée dans le rapport quand on déplie une dimension. */
+export interface DimensionHelp {
+  /** Une phrase sur ce que mesure cette dimension. */
+  what: string;
+  /** Les seuils utilisés pour le score (idéal / gênant). */
+  thresholds: string;
+  /** Pistes concrètes pour améliorer le score. */
+  howToImprove: string;
+}
+
+export const DIMENSION_HELP: Record<string, DimensionHelp> = {
+  'repetitions': {
+    what: "Mots pleins (≥ 5 lettres) qui reviennent souvent et de manière concentrée. Le score regarde la fenêtre de 500 mots la plus dense du texte et compte toutes les répétitions cumulées qu'elle contient — un paragraphe « saturé » est ainsi pénalisé même si le reste est propre.",
+    thresholds: 'Score 100 si la fenêtre la plus dense contient moins de ~2 % de répétitions cumulées. Score 0 dès ~10 % (50 répétitions cumulées dans 500 mots).',
+    howToImprove: "Cliquer sur un mot signalé pour voir où il se concentre. Reformuler localement, recourir aux synonymes (onglet Outils), ou supprimer une occurrence si elle n'apporte rien.",
+  },
+  'adverbs': {
+    what: 'Adverbes en -ment (rapidement, doucement, soudainement…). Trop nombreux, ils alourdissent la prose et signalent souvent un verbe trop faible.',
+    thresholds: 'Idéal autour de 1 % du texte. Gênant au-delà de 4 %.',
+    howToImprove: "Remplacer « marcha rapidement » par « se précipita ». Quand un verbe a besoin d'un adverbe, c'est souvent qu'il existe un verbe plus précis.",
+  },
+  'dull-verbs': {
+    what: 'Verbes passe-partout (être, avoir, faire, dire, mettre, voir, prendre, aller). Indispensables, mais à doser.',
+    thresholds: 'Idéal sous 5 % des mots. Gênant au-delà de 15 %.',
+    howToImprove: "Privilégier des verbes spécifiques : « il prit son sac » → « il empoigna son sac ». Pour les dialogues, varier les verbes de parole (murmura, lança, soupira) plutôt qu'enchaîner « dit ».",
+  },
+  'sentences': {
+    what: 'Proportion de phrases longues (plus de 30 mots). Une bonne prose alterne des longueurs variées ; trop de phrases longues fatiguent le lecteur.',
+    thresholds: 'Idéal : moins de 5 % des phrases au-dessus de 30 mots. Gênant : plus de 25 %.',
+    howToImprove: 'Cliquer sur une phrase pour la situer dans le manuscrit. La couper en deux, retirer une subordonnée, ou la rythmer avec une virgule, un point-virgule ou un tiret.',
+  },
+  'lexical': {
+    what: "Diversité du vocabulaire : ratio entre lemmes uniques (mots pleins regroupés par racine) et nombre total de mots pleins. Plus le ratio est élevé, plus le texte est varié.",
+    thresholds: 'Idéal ≥ 0.55. Gênant ≤ 0.25. Note : le ratio baisse mécaniquement sur les longs textes (mêmes mots qui reviennent), donc un score correct sur un livre entier reste plus difficile à atteindre que sur une scène.',
+    howToImprove: "Repérer les mots qui reviennent (section Répétitions au-dessus), introduire des synonymes, varier les structures. Sur un long texte, viser surtout à ne pas surcharger le même paragraphe ou la même page.",
+  },
+};
+
 /** Convertit un ratio observé en score 0-100, par interpolation vs deux seuils. */
 function rangeScore(value: number, ideal: number, bad: number): number {
   if (ideal === bad) return 100;
@@ -41,7 +79,8 @@ export function buildReport(
   const total = totalWordCount(resolved.pieces);
 
   onProgress?.('repetitions', 0.15);
-  const repetitions = detectRepetitions(resolved.pieces);
+  const repAnalysis = detectRepetitions(resolved.pieces);
+  const repetitions = repAnalysis.items;
   onProgress?.('adverbs', 0.35);
   const adverbs = detectAdverbs(resolved.pieces);
   onProgress?.('dull-verbs', 0.5);
@@ -54,7 +93,13 @@ export function buildReport(
 
   // Densités rapportées au total de mots
   const repHits = repetitions.reduce((s, r) => s + r.count, 0);
-  const repDensity = total > 0 ? repHits / total : 0;
+  // Pour le score Répétitions, on prend la **densité maximale** observée dans
+  // une fenêtre glissante de `windowSize` mots, en cumulant TOUS les mots
+  // répétés. Cela capture la sensation de "paragraphe saturé" : un texte
+  // dupliqué quatre fois cumule toutes les répétitions dans la même zone.
+  // Borné par `windowSize` quand le texte est plus court que la fenêtre.
+  const burstWindow = Math.min(repAnalysis.windowSize, Math.max(1, total));
+  const repDensity = burstWindow > 0 ? repAnalysis.maxBurst / burstWindow : 0;
   const advCount = adverbs.reduce((s, a) => s + a.count, 0);
   const advDensity = total > 0 ? advCount / total : 0;
   const dullCount = dullVerbs.reduce((s, v) => s + v.count, 0);
@@ -67,7 +112,9 @@ export function buildReport(
     key: 'repetitions',
     label: 'Répétitions',
     score: total > 0 ? rangeScore(repDensity, 0.02, 0.1) : 100,
-    detail: `${repetitions.length} mots répétés (${repHits} occurrences sur ${total} mots).`,
+    detail: repetitions.length === 0
+      ? `Aucune répétition concentrée détectée sur ${total.toLocaleString('fr-FR')} mots.`
+      : `${repetitions.length} mots concentrés, ${repHits} occurrences au total. Pic de densité : ${repAnalysis.maxBurst} répétitions cumulées dans ${repAnalysis.windowSize} mots consécutifs.`,
   });
 
   // Adverbes en -ment : idéal 1%, gênant ≥ 4%

@@ -7,21 +7,30 @@ export function analyzeSentences(pieces: ScenePiece[]): SentenceAnalysis {
 
   for (const piece of pieces) {
     if (!piece.text) continue;
-    // Coupe sur . ! ? … en gardant l'offset de chaque phrase.
-    const re = /[^.!?…]+[.!?…]+|[^.!?…]+$/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(piece.text)) !== null) {
-      const text = m[0].trim();
-      if (!text) continue;
-      const words = text.match(/\p{L}+/gu);
-      if (!words || words.length < 3) continue;
-      stats.push({
-        text,
-        wordCount: words.length,
-        sceneId: piece.sceneId,
-        chapterId: piece.chapterId,
-        offset: m.index,
-      });
+    // Découpe d'abord en blocs séparés par des sauts de ligne (paragraphes,
+    // titres…), puis chaque bloc en phrases sur . ! ? …
+    // Sans ce découpage en blocs, un titre sans ponctuation (ex. "Contexte")
+    // serait collé à la phrase suivante du paragraphe d'après.
+    const blockRe = /[^\n]+/g;
+    let bm: RegExpExecArray | null;
+    while ((bm = blockRe.exec(piece.text)) !== null) {
+      const block = bm[0];
+      const blockOffset = bm.index;
+      const sentRe = /[^.!?…]+[.!?…]+|[^.!?…]+$/g;
+      let sm: RegExpExecArray | null;
+      while ((sm = sentRe.exec(block)) !== null) {
+        const text = sm[0].trim();
+        if (!text) continue;
+        const words = text.match(/\p{L}+/gu);
+        if (!words || words.length < 3) continue;
+        stats.push({
+          text,
+          wordCount: words.length,
+          sceneId: piece.sceneId,
+          chapterId: piece.chapterId,
+          offset: blockOffset + sm.index,
+        });
+      }
     }
   }
 

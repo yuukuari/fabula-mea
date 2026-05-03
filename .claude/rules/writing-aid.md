@@ -13,7 +13,7 @@ Panneau latéral droit du `SceneEditor`, **mutuellement exclusif** avec le panne
 ## Deux onglets
 
 - **Outils** — accès libre, aucune analyse globale requise
-  - **Répétitions** : détection regroupée par lemme léger (`lightStem`), avec scope sélectionnable. Cliquer un mot → surligne toutes les occurrences dans les scènes du scope + barre de navigation `< Ch.X · Scène Y >` qui pilote `focusedHit` et fait défiler la scène jusqu'à l'occurrence ciblée.
+  - **Répétitions** : détection regroupée par lemme léger (`lightStem`), avec scope sélectionnable. Filtrage par **concentration locale** (fenêtre glissante de 500 mots, défaut `minWindowCount=3`) — les répétitions diluées sur tout un livre ne sont pas signalées. Chaque item affiche son `count` total et, si la concentration est inférieure au total, un indicateur `N/500`. Cliquer un mot → surligne toutes les occurrences dans les scènes du scope + barre de navigation `< Ch.X · Scène Y >` qui pilote `focusedHit` et fait défiler la scène jusqu'à l'occurrence ciblée.
   - **Synonymes** : pill dédiée — input libre, scrape CNRTL via `fetchCnrtl` (module partagé `src/lib/cnrtl.ts` — utilisé aussi par le menu contextuel du correcteur).
   - **Antonymes** : pill dédiée, même mécanique avec `kind: 'antonymie'`.
   - **Figures de style** : bibliothèque statique (`STYLE_FIGURES`, ~20 figures) avec définition courte/longue, **rôle (« À quoi ça sert »)**, **cas concrets**, **paires Avant/Après commentées**, et exemples littéraires. Recherche live.
@@ -50,7 +50,7 @@ Comportement : ouvre le panneau Aide (`setRightPanel('aid')`), force l'onglet `r
 
 CSS : classes `.wa-highlight` (gold ~30 %) et `.wa-highlight-active` (gold ~75 % + outline bordeaux) dans `src/index.css`.
 
-Le composant `HitNavigator` (dans `WritingAidPanel`) groupe les hits par scène pour calculer `occurrenceIndex` cohérent avec l'ordre du document, puis pilote `< / >` autour de la liste plate des hits. Le bouton `HitItem` togglé déclenche montage/démontage de `HitNavigator` qui pose et nettoie la surbrillance.
+Le composant `HitNavigator` (dans `WritingAidPanel`) re-scanne **en direct** le texte des scènes ciblées (via `useBookStore.scenes` + `tiptapHtmlToPlainText`) pour calculer la liste des occurrences à chaque édition, puis pilote `< / >` autour de cette liste plate. L'index utilisateur est clampé via `safeIdx = min(idx, length-1)`, ce qui suffit (les handlers prev/next ré-alignent naturellement via le modulo). Le bouton `HitItem` togglé déclenche montage/démontage de `HitNavigator` qui pose et nettoie la surbrillance.
 
 ## Architecture
 
@@ -59,10 +59,10 @@ src/lib/writing-aid/
 ├── types.ts          — AnalysisScope, ScenePiece, hits, ReportResult
 ├── manuscript-text.ts — resolveScope() + agrégation HTML→texte (via tiptapHtmlToPlainText)
 ├── stopwords.ts      — liste FR + lightStem() (lemmatisation grossière)
-├── repetitions.ts    — detectRepetitions() groupé par stem
+├── repetitions.ts    — detectRepetitions() groupé par stem → RepetitionAnalysis { items, maxBurst, windowSize }
 ├── adverbs.ts        — detectAdverbs() (-ment, avec liste d'exclusions noms-en-ment)
 ├── dull-verbs.ts     — detectDullVerbs() — table forme→lemme (être, avoir, faire, dire, mettre, voir, prendre, aller)
-├── sentences.ts      — analyzeSentences() — découpe sur .!?…, top-10 plus longues, ratio >30 mots
+├── sentences.ts      — analyzeSentences() — découpe d'abord par paragraphe (\n) puis par .!?… ; top-10 plus longues, ratio >30 mots
 ├── lexical.ts        — analyzeLexical() — ratio lemmes uniques / mots pleins
 ├── style-figures.ts  — STYLE_FIGURES (data statique)
 ├── report.ts         — buildReport() orchestrateur + rangeScore() + STAGE_LABELS
@@ -77,6 +77,8 @@ src/workers/
 
 `buildReport` et `detectRepetitions` sont exécutés dans un **Web Worker** (`src/workers/writing-aid-worker.ts`) pour ne pas bloquer le thread principal sur les longs livres. Le worker est créé en singleton lazy via `src/lib/writing-aid/worker-client.ts` (`runReport`, `runRepetitions`) qui expose une API Promise + un callback `onProgress(stage, ratio)`.
 
+**Corrélation par `requestId`** : chaque appel client incrémente un compteur et tag son message. Les listeners filtrent les réponses sur `msg.requestId === own`, sinon une analyse en cours pour la scène A pourrait résoudre la promesse de l'analyse B avec les données de A (ce qui était le bug « les stats du chapitre 2 sont identiques au chapitre 1 »).
+
 Le report émet 7 stages (`resolve` → `repetitions` → `adverbs` → `dull-verbs` → `sentences` → `lexical` → `finalize`) avec ratio et libellé FR mappé via `STAGE_LABELS`. Le composant `ProgressBar` affiche barre + libellé courant pendant l'analyse.
 
 Vite bundle le worker en chunk séparé (`writing-aid-worker-*.js`, ~10 kB).
@@ -88,4 +90,7 @@ Vite bundle le worker en chunk séparé (`writing-aid-worker-*.js`, ~10 kB).
 3. **Scroll vers une phrase** : recherche brute du texte dans le doc PM (extension), avec fallback sur la tête (40 premiers caractères) si l'inline-formatting coupe le match. Surligne la plage trouvée.
 4. **Faux positifs adverbes** : la liste `NOT_ADVERBS` dans `adverbs.ts` couvre les noms en -ment (moment, document, sentiment…). À enrichir au gré des retours.
 5. **Lemmatisation light** : `lightStem` est volontairement grossier (suffixes verbaux + pluriels). Pas de vraie lemmatisation pour éviter une grosse dépendance. Conséquence : quelques regroupements imparfaits sur les irréguliers.
-6. **Mutualité Notes / Aide** : si tu ajoutes un 3ᵉ panneau latéral, étends le type `RightPanel` plutôt que de multiplier les flags.
+6. **Score Répétitions** : basé sur le **maxBurst global** (`detectRepetitions` retourne `RepetitionAnalysis = { items, maxBurst, windowSize }`). `maxBurst` = nombre maximal d'occurrences répétées **toutes confondues** dans la fenêtre la plus dense. La densité est `maxBurst / windowSize`, ce qui pénalise correctement un paragraphe saturé même si le reste du texte est propre (un paragraphe dupliqué 4 fois cumule TOUTES ses répétitions dans la même fenêtre). Seuils : idéal 2 %, gênant 10 %.
+7. **Découpage des phrases** : `analyzeSentences` découpe **d'abord par paragraphe** (`/[^\n]+/g` sur le texte plain), puis par ponctuation `.!?…` à l'intérieur. Sans ce double découpage, un titre sans ponctuation finale (ex. « Contexte ») se collait au paragraphe suivant et la recherche brute du clic-pour-scroller échouait (le texte concaténé n'existait pas dans le doc PM).
+8. **Aide contextuelle** : `DIMENSION_HELP` dans `report.ts` centralise les textes (qu'est-ce que c'est, seuils, pistes d'amélioration) affichés en tête de chaque section dépliée du rapport via `DimensionHelpBlock`.
+9. **Mutualité Notes / Aide** : si tu ajoutes un 3ᵉ panneau latéral, étends le type `RightPanel` plutôt que de multiplier les flags.

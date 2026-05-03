@@ -23,7 +23,22 @@ export interface WordHit {
 export interface RepetitionItem {
   word: string;
   count: number;
+  /** Nombre maximal d'occurrences dans une fenêtre glissante (densité locale par mot). */
+  maxWindowCount: number;
+  /** Taille de la fenêtre utilisée pour calculer maxWindowCount (en mots). */
+  windowSize: number;
   hits: WordHit[];
+}
+
+/** Résultat global de l'analyse de répétitions, avec densité maximale globale. */
+export interface RepetitionAnalysis {
+  items: RepetitionItem[];
+  /** Densité maximale, en occurrences répétées (tous mots confondus) dans la
+   *  fenêtre la plus dense du manuscrit. Utilisé pour le score : c'est ce qui
+   *  capture la sensation de « paragraphe saturé de répétitions ». */
+  maxBurst: number;
+  /** Taille de la fenêtre, en mots. */
+  windowSize: number;
 }
 
 export interface AdverbItem {

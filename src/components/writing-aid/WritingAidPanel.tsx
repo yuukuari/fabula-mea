@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Wand2, ScanText, BookMarked, BookX, Sparkles, Search, Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useBookStore } from '@/store/useBookStore';
-import { useWritingAidStore, type WritingAidTab, type WritingAidTool } from '@/store/useWritingAidStore';
-import { cn, isSpecialChapter, getChapterShortLabel } from '@/lib/utils';
+import { useWritingAidStore, normalizeWord, type WritingAidTab, type WritingAidTool } from '@/store/useWritingAidStore';
+import { cn, isSpecialChapter, getChapterShortLabel, tiptapHtmlToPlainText } from '@/lib/utils';
 import { fetchCnrtl } from '@/lib/cnrtl';
-import { STAGE_LABELS, type ReportStage } from '@/lib/writing-aid/report';
+import { STAGE_LABELS, DIMENSION_HELP, type ReportStage } from '@/lib/writing-aid/report';
 import { runReport, runRepetitions } from '@/lib/writing-aid/worker-client';
 import { STYLE_FIGURES } from '@/lib/writing-aid/style-figures';
 import type { AnalysisScope, RepetitionItem, WordHit } from '@/lib/writing-aid/types';
@@ -160,7 +160,7 @@ function RepetitionsTool({ currentSceneId }: { currentSceneId: string | null }) 
       const result = await runRepetitions(scope, scenes, chapters, (_stage, ratio) => {
         setProgress(ratio);
       });
-      setItems(result);
+      setItems(result.items);
     } finally {
       setRunning(false);
       setProgress(1);
@@ -195,6 +195,8 @@ function RepetitionsTool({ currentSceneId }: { currentSceneId: string | null }) 
               key={it.word}
               label={it.word}
               count={it.count}
+              concentration={it.maxWindowCount}
+              windowSize={it.windowSize}
               hits={it.hits}
               selected={expanded === it.word}
               onToggle={() => setExpanded(expanded === it.word ? null : it.word)}
@@ -228,14 +230,19 @@ function ProgressBar({ ratio, label }: { ratio: number; label: string }) {
 
 // ── Item de liste avec navigation hit-par-hit + surbrillance ─────
 
-function HitItem({ label, count, hits, selected, onToggle, italicLabel }: {
+function HitItem({ label, count, concentration, windowSize, hits, selected, onToggle, italicLabel }: {
   label: string;
   count: number;
+  /** Si fourni, indique la concentration locale max (ex. 4 occurrences dans une même fenêtre). */
+  concentration?: number;
+  /** Taille de la fenêtre utilisée pour la concentration, pour le tooltip. */
+  windowSize?: number;
   hits: WordHit[];
   selected: boolean;
   onToggle: () => void;
   italicLabel?: boolean;
 }) {
+  const showConcentration = concentration !== undefined && concentration > 1 && concentration < count;
   return (
     <li className={cn('rounded border', selected ? 'border-bordeaux-300' : 'border-parchment-200')}>
       <button
@@ -249,6 +256,14 @@ function HitItem({ label, count, hits, selected, onToggle, italicLabel }: {
           {label}
         </span>
         <span className="flex items-center gap-1.5 shrink-0">
+          {showConcentration && (
+            <span
+              className="text-[10px] tabular-nums text-ink-300"
+              title={`${concentration} occurrences dans une même fenêtre de ${windowSize} mots`}
+            >
+              {concentration}/{windowSize}
+            </span>
+          )}
           <span className="text-[10px] tabular-nums text-bordeaux-500 font-semibold">×{count}</span>
           <ChevronRight className={cn('w-3 h-3 text-ink-200 transition-transform', selected && 'rotate-90')} />
         </span>
@@ -265,18 +280,41 @@ function HitNavigator({ hits }: { hits: WordHit[] }) {
   const setFocusedHit = useWritingAidStore((s) => s.setFocusedHit);
   const [idx, setIdx] = useState(0);
 
-  // Indexer chaque hit par son occurrence dans la scène (ordre du document)
-  const indexed = useMemo(() => {
-    const counters = new Map<string, number>();
-    return hits.map((h) => {
-      const i = counters.get(h.sceneId) ?? 0;
-      counters.set(h.sceneId, i + 1);
-      return { ...h, occurrenceIndex: i };
-    });
-  }, [hits]);
+  // Variantes normalisées du mot/lemme à chercher (cf. extension TipTap)
+  const variants = useMemo(
+    () => new Set(hits.map((h) => normalizeWord(h.word))),
+    [hits],
+  );
+  const sceneIds = useMemo(
+    () => Array.from(new Set(hits.map((h) => h.sceneId))),
+    [hits],
+  );
+  const words = useMemo(
+    () => Array.from(new Set(hits.map((h) => h.word.toLowerCase()))),
+    [hits],
+  );
 
-  const sceneIds = useMemo(() => Array.from(new Set(hits.map((h) => h.sceneId))), [hits]);
-  const words = useMemo(() => Array.from(new Set(hits.map((h) => h.word.toLowerCase()))), [hits]);
+  // Recompute en direct les occurrences dans les scènes du scope.
+  // S'abonne à `scenes` du store : si l'utilisateur édite une scène, la liste
+  // se met à jour automatiquement (compteur baisse, navigation reste cohérente).
+  const liveOccurrences = useMemo(() => {
+    const result: { sceneId: string; chapterId: string; occurrenceIndex: number }[] = [];
+    for (const sid of sceneIds) {
+      const scene = scenes.find((s) => s.id === sid);
+      if (!scene) continue;
+      const text = tiptapHtmlToPlainText(scene.content ?? '');
+      const re = /\p{L}+/gu;
+      let m: RegExpExecArray | null;
+      let occIdx = 0;
+      while ((m = re.exec(text)) !== null) {
+        if (variants.has(normalizeWord(m[0]))) {
+          result.push({ sceneId: sid, chapterId: scene.chapterId, occurrenceIndex: occIdx });
+          occIdx++;
+        }
+      }
+    }
+    return result;
+  }, [scenes, sceneIds, variants]);
 
   // Pose la surbrillance globale, nettoie au démontage
   useEffect(() => {
@@ -289,16 +327,27 @@ function HitNavigator({ hits }: { hits: WordHit[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hits]);
 
+  // Clamp implicite : si le texte a été édité et que la liste a rétréci, on
+  // utilise `safeIdx` à la fois pour l'affichage et pour piloter `focusedHit`.
+  // Les handlers prev/next ré-alignent ensuite naturellement via le modulo.
+  const safeIdx = liveOccurrences.length > 0 ? Math.min(idx, liveOccurrences.length - 1) : 0;
+
   // Met à jour l'occurrence ciblée
   useEffect(() => {
-    const h = indexed[idx];
+    const h = liveOccurrences[safeIdx];
     if (!h) return;
     setFocusedHit({ sceneId: h.sceneId, occurrenceIndex: h.occurrenceIndex, nonce: Date.now() });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, indexed]);
+  }, [safeIdx, liveOccurrences]);
 
-  if (indexed.length === 0) return null;
-  const cur = indexed[idx];
+  if (liveOccurrences.length === 0) {
+    return (
+      <div className="px-2 py-1.5 border-t border-parchment-200 bg-parchment-50/60 text-[10px] italic text-ink-200 text-center">
+        Plus d'occurrences dans le texte actuel.
+      </div>
+    );
+  }
+  const cur = liveOccurrences[safeIdx];
   const sc = scenes.find((s) => s.id === cur.sceneId);
   const ch = chapters.find((c) => c.id === cur.chapterId);
   const sceneIdxInChapter = ch ? (ch.sceneIds ?? []).indexOf(cur.sceneId) + 1 : 0;
@@ -308,22 +357,22 @@ function HitNavigator({ hits }: { hits: WordHit[] }) {
   return (
     <div className="flex items-center gap-1 px-1.5 py-1 border-t border-parchment-200 bg-parchment-50/60">
       <button
-        onClick={() => setIdx((i) => (i - 1 + indexed.length) % indexed.length)}
+        onClick={() => setIdx((i) => (i - 1 + liveOccurrences.length) % liveOccurrences.length)}
         className="p-1 rounded text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-200 transition-colors"
         title="Occurrence précédente"
       >
         <ChevronLeft className="w-3.5 h-3.5" />
       </button>
       <div className="flex-1 text-center text-[10px] truncate">
-        <span className="text-bordeaux-500 font-semibold tabular-nums">{idx + 1}</span>
-        <span className="text-ink-200">/{indexed.length}</span>
+        <span className="text-bordeaux-500 font-semibold tabular-nums">{safeIdx + 1}</span>
+        <span className="text-ink-200">/{liveOccurrences.length}</span>
         <span className="text-ink-200"> · </span>
         <span className="text-ink-400">{chapterLabel}</span>
         {chapterLabel && <span className="text-ink-200">, </span>}
         <span className="text-ink-400 truncate">{sceneLabel}</span>
       </div>
       <button
-        onClick={() => setIdx((i) => (i + 1) % indexed.length)}
+        onClick={() => setIdx((i) => (i + 1) % liveOccurrences.length)}
         className="p-1 rounded text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-200 transition-colors"
         title="Occurrence suivante"
       >
@@ -619,7 +668,7 @@ function ReportView({ report }: { report: import('@/lib/writing-aid/types').Repo
             >
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-xs font-medium text-ink-400">{s.label}</p>
-                <p className="text-[10px] text-ink-300 truncate">{s.detail}</p>
+                <p className="text-[10px] text-ink-300 leading-snug">{s.detail}</p>
               </div>
               <span className={cn('text-sm font-bold tabular-nums shrink-0', scoreColor(s.score))}>{s.score}</span>
               <ChevronRight className={cn('w-3 h-3 text-ink-200 transition-transform', openSection === s.key && 'rotate-90')} />
@@ -675,7 +724,7 @@ function SentenceList({ sentences }: { sentences: import('@/lib/writing-aid/type
 }
 
 function NavigableList({ items, italicLabel }: {
-  items: Array<{ key: string; label: string; count: number; hits: WordHit[] }>;
+  items: Array<{ key: string; label: string; count: number; concentration?: number; windowSize?: number; hits: WordHit[] }>;
   italicLabel?: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -686,6 +735,8 @@ function NavigableList({ items, italicLabel }: {
           key={it.key}
           label={it.label}
           count={it.count}
+          concentration={it.concentration}
+          windowSize={it.windowSize}
           hits={it.hits}
           italicLabel={italicLabel}
           selected={selected === it.key}
@@ -696,32 +747,48 @@ function NavigableList({ items, italicLabel }: {
   );
 }
 
+function DimensionHelpBlock({ sectionKey }: { sectionKey: string }) {
+  const help = DIMENSION_HELP[sectionKey];
+  if (!help) return null;
+  return (
+    <div className="border-x border-parchment-200 bg-parchment-50/40 px-3 py-2 text-[11px] text-ink-300 space-y-1.5">
+      <p>{help.what}</p>
+      <p><span className="font-semibold text-ink-400">Seuils : </span>{help.thresholds}</p>
+      <p><span className="font-semibold text-ink-400">Pour améliorer : </span>{help.howToImprove}</p>
+    </div>
+  );
+}
+
 function ReportSectionDetail({ sectionKey, report }: {
   sectionKey: string;
   report: import('@/lib/writing-aid/types').ReportResult;
 }) {
+  const help = <DimensionHelpBlock sectionKey={sectionKey} />;
   if (sectionKey === 'repetitions') {
-    if (report.repetitions.length === 0) return <p className="text-[11px] italic text-ink-200 px-2 py-2">Aucune répétition signalée.</p>;
-    return <NavigableList items={report.repetitions.slice(0, 20).map((r) => ({ key: r.word, label: r.word, count: r.count, hits: r.hits }))} />;
+    if (report.repetitions.length === 0) return <>{help}<p className="text-[11px] italic text-ink-200 px-2 py-2 border-x border-b border-parchment-200 rounded-b bg-parchment-50/60">Aucune répétition signalée.</p></>;
+    return <>{help}<NavigableList items={report.repetitions.slice(0, 20).map((r) => ({ key: r.word, label: r.word, count: r.count, concentration: r.maxWindowCount, windowSize: r.windowSize, hits: r.hits }))} /></>;
   }
   if (sectionKey === 'adverbs') {
-    if (report.adverbs.length === 0) return <p className="text-[11px] italic text-ink-200 px-2 py-2">Aucun adverbe en -ment détecté.</p>;
-    return <NavigableList items={report.adverbs.slice(0, 20).map((a) => ({ key: a.word, label: a.word, count: a.count, hits: a.hits }))} />;
+    if (report.adverbs.length === 0) return <>{help}<p className="text-[11px] italic text-ink-200 px-2 py-2 border-x border-b border-parchment-200 rounded-b bg-parchment-50/60">Aucun adverbe en -ment détecté.</p></>;
+    return <>{help}<NavigableList items={report.adverbs.slice(0, 20).map((a) => ({ key: a.word, label: a.word, count: a.count, hits: a.hits }))} /></>;
   }
   if (sectionKey === 'dull-verbs') {
-    if (report.dullVerbs.length === 0) return <p className="text-[11px] italic text-ink-200 px-2 py-2">Pas d'abus de verbes ternes.</p>;
-    return <NavigableList italicLabel items={report.dullVerbs.map((v) => ({ key: v.word, label: v.word, count: v.count, hits: v.hits }))} />;
+    if (report.dullVerbs.length === 0) return <>{help}<p className="text-[11px] italic text-ink-200 px-2 py-2 border-x border-b border-parchment-200 rounded-b bg-parchment-50/60">Pas d'abus de verbes ternes.</p></>;
+    return <>{help}<NavigableList italicLabel items={report.dullVerbs.map((v) => ({ key: v.word, label: v.word, count: v.count, hits: v.hits }))} /></>;
   }
   if (sectionKey === 'sentences') {
-    return <SentenceList sentences={report.sentences.longest} />;
+    return <>{help}<SentenceList sentences={report.sentences.longest} /></>;
   }
   if (sectionKey === 'lexical') {
     return (
-      <div className="border-x border-b border-parchment-200 rounded-b bg-parchment-50/60 px-3 py-2 text-[11px] text-ink-300 space-y-1">
-        <p>Mots pleins : <span className="font-semibold tabular-nums">{report.lexical.totalWords.toLocaleString('fr-FR')}</span></p>
-        <p>Lemmes uniques : <span className="font-semibold tabular-nums">{report.lexical.uniqueWords.toLocaleString('fr-FR')}</span></p>
-        <p>Ratio : <span className="font-semibold tabular-nums">{report.lexical.ratio.toFixed(3)}</span> <span className="text-ink-200">(idéal ≥ 0.55)</span></p>
-      </div>
+      <>
+        {help}
+        <div className="border-x border-b border-parchment-200 rounded-b bg-parchment-50/60 px-3 py-2 text-[11px] text-ink-300 space-y-1">
+          <p>Mots pleins : <span className="font-semibold tabular-nums">{report.lexical.totalWords.toLocaleString('fr-FR')}</span></p>
+          <p>Lemmes uniques : <span className="font-semibold tabular-nums">{report.lexical.uniqueWords.toLocaleString('fr-FR')}</span></p>
+          <p>Ratio : <span className="font-semibold tabular-nums">{report.lexical.ratio.toFixed(3)}</span> <span className="text-ink-200">(idéal ≥ 0.55)</span></p>
+        </div>
+      </>
     );
   }
   return null;
