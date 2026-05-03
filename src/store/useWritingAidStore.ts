@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { AnalysisScope, ReportResult } from '@/lib/writing-aid/types';
 
 export type WritingAidTab = 'tools' | 'report';
-export type WritingAidTool = 'repetitions' | 'synonyms' | 'antonyms' | 'figures';
+export type WritingAidTool = 'repetitions' | 'ngrams' | 'synonyms' | 'antonyms' | 'conjugation' | 'figures';
 
 export interface AidHighlight {
   /** Mots à surligner, en minuscules normalisées (sans accents). */
@@ -27,6 +27,22 @@ export interface AidFocusedSentence {
   nonce: number;
 }
 
+/** Surbrillance de phrases (n-grammes / tics de langage). Mutuellement
+ *  exclusive avec `highlight` (mots) et `focusedSentence` (phrase longue). */
+export interface AidPhraseHighlight {
+  /** Liste des n-grammes à chercher (forme telle qu'apparue dans le texte). */
+  phrases: string[];
+  sceneIds: string[];
+  nonce: number;
+}
+
+export interface AidFocusedPhrase {
+  sceneId: string;
+  /** Index de l'occurrence (toutes phrases confondues, ordre du document). */
+  occurrenceIndex: number;
+  nonce: number;
+}
+
 interface WritingAidStore {
   tab: WritingAidTab;
   tool: WritingAidTool;
@@ -42,6 +58,10 @@ interface WritingAidStore {
   focusedHit: AidFocusedHit | null;
   /** Phrase ciblée (mutuellement exclusive avec highlight/focusedHit). */
   focusedSentence: AidFocusedSentence | null;
+  /** Surbrillance n-grammes (tics de langage). */
+  phraseHighlight: AidPhraseHighlight | null;
+  /** Occurrence de n-gramme actuellement ciblée. */
+  focusedPhrase: AidFocusedPhrase | null;
 
   setTab: (tab: WritingAidTab) => void;
   setTool: (tool: WritingAidTool) => void;
@@ -54,6 +74,8 @@ interface WritingAidStore {
   setHighlight: (h: AidHighlight | null) => void;
   setFocusedHit: (h: AidFocusedHit | null) => void;
   setFocusedSentence: (s: AidFocusedSentence | null) => void;
+  setPhraseHighlight: (h: AidPhraseHighlight | null) => void;
+  setFocusedPhrase: (p: AidFocusedPhrase | null) => void;
   clearHighlight: () => void;
 }
 
@@ -67,6 +89,8 @@ export const useWritingAidStore = create<WritingAidStore>((set) => ({
   highlight: null,
   focusedHit: null,
   focusedSentence: null,
+  phraseHighlight: null,
+  focusedPhrase: null,
 
   setTab: (tab) => set({ tab }),
   setTool: (tool) => set({ tool }),
@@ -80,13 +104,20 @@ export const useWritingAidStore = create<WritingAidStore>((set) => ({
   }),
   consumeAutoRun: () => set({ pendingAutoRun: null }),
   setHighlight: (highlight) => set(highlight
-    ? { highlight, focusedSentence: null }
+    ? { highlight, focusedSentence: null, phraseHighlight: null, focusedPhrase: null }
     : { highlight: null }),
   setFocusedHit: (focusedHit) => set({ focusedHit }),
   setFocusedSentence: (focusedSentence) => set(focusedSentence
-    ? { focusedSentence, highlight: null, focusedHit: null }
+    ? { focusedSentence, highlight: null, focusedHit: null, phraseHighlight: null, focusedPhrase: null }
     : { focusedSentence: null }),
-  clearHighlight: () => set({ highlight: null, focusedHit: null, focusedSentence: null }),
+  setPhraseHighlight: (phraseHighlight) => set(phraseHighlight
+    ? { phraseHighlight, highlight: null, focusedHit: null, focusedSentence: null }
+    : { phraseHighlight: null }),
+  setFocusedPhrase: (focusedPhrase) => set({ focusedPhrase }),
+  clearHighlight: () => set({
+    highlight: null, focusedHit: null, focusedSentence: null,
+    phraseHighlight: null, focusedPhrase: null,
+  }),
 }));
 
 /** Normalise un mot pour la comparaison (minuscule + accents enlevés). */

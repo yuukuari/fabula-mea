@@ -7,7 +7,7 @@
  * plus récente (cas typique : deux clics rapprochés sur ScanText).
  */
 import type { Scene, Chapter } from '@/types';
-import type { AnalysisScope, RepetitionAnalysis, ReportResult } from './types';
+import type { AnalysisScope, RepetitionAnalysis, ReportResult, NgramAnalysis } from './types';
 import type { ReportStage } from './report';
 
 export type AnyStage = ReportStage | 'detect';
@@ -89,5 +89,38 @@ export function runRepetitions(
     w.addEventListener('message', onMessage);
     w.addEventListener('error', onError);
     w.postMessage({ task: 'repetitions', requestId, scope, scenes, chapters });
+  });
+}
+
+export function runNgrams(
+  scope: AnalysisScope,
+  scenes: Scene[],
+  chapters: Chapter[],
+  onProgress?: ProgressHandler,
+): Promise<NgramAnalysis> {
+  const requestId = nextRequestId++;
+  return new Promise((resolve, reject) => {
+    const w = getWorker();
+    const onMessage = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg.requestId !== requestId) return;
+      if (msg.type === 'progress') {
+        onProgress?.(msg.stage, msg.ratio);
+      } else if (msg.type === 'done-ngrams') {
+        cleanup();
+        resolve(msg.analysis);
+      }
+    };
+    const onError = (err: ErrorEvent) => {
+      cleanup();
+      reject(err.error ?? new Error('Worker error'));
+    };
+    const cleanup = () => {
+      w.removeEventListener('message', onMessage);
+      w.removeEventListener('error', onError);
+    };
+    w.addEventListener('message', onMessage);
+    w.addEventListener('error', onError);
+    w.postMessage({ task: 'ngrams', requestId, scope, scenes, chapters });
   });
 }

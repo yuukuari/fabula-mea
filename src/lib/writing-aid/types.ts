@@ -53,6 +53,49 @@ export interface DullVerbItem {
   hits: WordHit[];
 }
 
+/** Position d'un n-gramme (séquence de mots) dans le manuscrit. */
+export interface PhraseHit {
+  sceneId: string;
+  chapterId: string;
+  /** Texte exact du n-gramme tel qu'il apparaît (premier exemple rencontré). */
+  text: string;
+}
+
+export interface NgramItem {
+  /** Forme normalisée (lowercase + accents NFD strippés), utilisée comme clé. */
+  key: string;
+  /** Texte affichable (forme du premier hit). */
+  text: string;
+  /** Taille du n-gramme (2 ou 3). */
+  size: number;
+  count: number;
+  /** Densité locale max (occurrences dans la fenêtre la plus dense). */
+  maxWindowCount: number;
+  windowSize: number;
+  hits: PhraseHit[];
+}
+
+export interface NgramAnalysis {
+  items: NgramItem[];
+  /** Total des occurrences toutes confondues, hors 1ère apparition de chaque n-gramme. */
+  totalRepeats: number;
+  windowSize: number;
+}
+
+/** Stats de ponctuation, exposées dans le rapport (section désactivable par livre). */
+export interface PunctuationStats {
+  /** Nombre de "…" ou "...". */
+  ellipses: number;
+  /** Nombre de "!" simples. */
+  exclamations: number;
+  /** Nombre de "!!" ou plus (souvent l'abus le plus marquant). */
+  multiExclamations: number;
+  /** Mots en italique (depuis le HTML : <em>/<i>). */
+  italicWords: number;
+  /** Mots totaux du manuscrit (pour le calcul des densités). */
+  totalWords: number;
+}
+
 export interface SentenceStat {
   text: string;
   wordCount: number;
@@ -89,10 +132,16 @@ export interface ReportResult {
   globalScore: number;
   scores: ScoreItem[];
   repetitions: RepetitionItem[];
+  /** Concentration maximale globale de répétitions (toutes confondues), pour
+   *  recalculer le score Répétitions côté UI quand des items sont désactivés. */
+  repetitionMaxBurst: number;
+  repetitionWindowSize: number;
   adverbs: AdverbItem[];
   dullVerbs: DullVerbItem[];
+  ngrams: NgramItem[];
   sentences: SentenceAnalysis;
   lexical: LexicalAnalysis;
+  punctuation: PunctuationStats;
 }
 
 export interface ResolvedScope {

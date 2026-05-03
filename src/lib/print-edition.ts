@@ -393,15 +393,26 @@ export interface PaginateInput {
 }
 
 /**
- * Paginate book content into pages for the preview reader.
- * This is an approximation — not pixel-perfect.
+ * A function that splits a chapter or glossary HTML into per-page HTML strings.
+ * BookReader passes a DOM-measured paginator (see `src/lib/paginate-dom.ts`);
+ * other callers fall back to the char-count heuristic below.
  */
-export function paginateContent(input: PaginateInput): BookPageData[] {
+export type ContentPaginator = (html: string) => string[];
+
+/**
+ * Paginate book content into pages for the preview reader.
+ *
+ * If `paginator` is omitted, falls back to a char-count heuristic
+ * (`packHtmlIntoPages`) which is approximate but synchronous and dependency-
+ * free. Pass a DOM paginator for pixel-accurate page breaks.
+ */
+export function paginateContent(input: PaginateInput, paginator?: ContentPaginator): BookPageData[] {
   const pe = input.printEdition ?? DEFAULT_PRINT_EDITION;
   const fontSize = input.layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
   const lineHeight = input.layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
   const fontFamily = input.layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily;
   const metrics = getPageMetrics(pe.trimSize, fontSize, lineHeight, pe.margins, fontFamily);
+  const splitPages: ContentPaginator = paginator ?? ((html) => packHtmlIntoPages(html, metrics));
   const pages: BookPageData[] = [];
   let pageNum = 1;
 
@@ -420,18 +431,40 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
   // Blank verso after title
   pages.push({ html: '', pageNumber: pageNum++ });
 
-  // Chapters — concatenate chapter heading + scenes (with breaks between
-  // scenes that have content), then split the whole stream across pages.
+  // Chapters.
+  // - Regular chapter: chapter heading + all scenes concatenated with `* * *`
+  //   separators, paginated as a single stream.
+  // - Front/back matter: each scene starts on its own page (no `* * *`
+  //   separator), like a mini-chapter — title pages, dedications, copyrights,
+  //   etc. each get their own page.
   for (const chapter of input.chapters) {
     const isSpecial = chapter.type === 'front_matter' || chapter.type === 'back_matter';
-    let chapterHtml = '';
 
-    if (!isSpecial) {
-      const label = chapter.title
-        ? `Chapitre ${chapter.number} — ${chapter.title}`
-        : `Chapitre ${chapter.number}`;
-      chapterHtml += `<h2 style="text-align:center;font-size:1.4em;font-weight:bold;margin:0.5em 0 1em;color:#222;">${label}</h2>`;
+    if (isSpecial) {
+      for (const scene of chapter.scenes) {
+        const hasContent = !!(scene.content && scene.content.trim());
+        const hasTitle = !!(scene.title && scene.title.trim());
+        if (!hasContent && !hasTitle) continue;
+
+        let sceneHtml = '';
+        if (hasTitle) {
+          sceneHtml += `<h2 style="text-align:center;font-size:1.4em;font-weight:bold;margin:0.5em 0 1em;color:#222;">${scene.title}</h2>`;
+        }
+        if (hasContent) sceneHtml += scene.content!;
+        if (!sceneHtml.trim()) continue;
+
+        const htmlPages = splitPages(sceneHtml);
+        for (const html of htmlPages) {
+          pages.push({ html, pageNumber: pageNum++ });
+        }
+      }
+      continue;
     }
+
+    const label = chapter.title
+      ? `Chapitre ${chapter.number} — ${chapter.title}`
+      : `Chapitre ${chapter.number}`;
+    let chapterHtml = `<h2 style="text-align:center;font-size:1.4em;font-weight:bold;margin:0.5em 0 1em;color:#222;">${label}</h2>`;
 
     let visibleSceneAdded = false;
     for (const scene of chapter.scenes) {
@@ -439,25 +472,18 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
       const hasTitle = !!(scene.title && scene.title.trim());
       if (!hasContent && !hasTitle) continue;
 
-      // Scene break between successive visible scenes.
       if (visibleSceneAdded) {
         chapterHtml += `<p style="text-align:center;color:#888;margin:1em 0;letter-spacing:0.3em;">* * *</p>`;
       }
-
       if (hasTitle) {
-        if (isSpecial) {
-          chapterHtml += `<h2 style="text-align:center;font-size:1.4em;font-weight:bold;margin:0.5em 0 1em;color:#222;">${scene.title}</h2>`;
-        } else {
-          chapterHtml += `<p style="text-align:center;font-style:italic;margin:0.5em 0 0.8em;color:#444;">${scene.title}</p>`;
-        }
+        chapterHtml += `<p style="text-align:center;font-style:italic;margin:0.5em 0 0.8em;color:#444;">${scene.title}</p>`;
       }
-
       if (hasContent) chapterHtml += scene.content!;
       visibleSceneAdded = true;
     }
 
     if (!chapterHtml.trim()) continue;
-    const htmlPages = packHtmlIntoPages(chapterHtml, metrics);
+    const htmlPages = splitPages(chapterHtml);
     for (const html of htmlPages) {
       pages.push({ html, pageNumber: pageNum++ });
     }
@@ -469,7 +495,7 @@ export function paginateContent(input: PaginateInput): BookPageData[] {
     for (const entry of input.glossary) {
       glossaryHtml += `<p><strong>${entry.name}</strong> — ${entry.description}</p>`;
     }
-    const glossaryPages = packHtmlIntoPages(glossaryHtml, metrics);
+    const glossaryPages = splitPages(glossaryHtml);
     for (const html of glossaryPages) {
       pages.push({ html, pageNumber: pageNum++ });
     }

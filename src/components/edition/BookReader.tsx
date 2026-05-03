@@ -8,8 +8,9 @@ import { DEFAULT_LAYOUT, FONT_STACKS } from '@/lib/fonts';
 import {
   paginateContent, getTrimSize, getPaperType, DEFAULT_PRINT_EDITION,
   calculateCoverDimensions, estimatePageCount,
-  type BookPageData, type CoverDimensions,
+  type BookPageData, type CoverDimensions, type PaginateInput,
 } from '@/lib/print-edition';
+import { createDomPaginator } from '@/lib/paginate-dom';
 import type { PrintEdition } from '@/types';
 import { PageRuler } from './PageRuler';
 import { getCoverMode, getAdvancedCover, resolveCoverColor } from '@/lib/cover-composition';
@@ -77,8 +78,10 @@ export function BookReader({ open, onClose }: Props) {
   // Remembers the last non-grid mode so clicking a grid thumbnail returns there.
   const [lastViewMode, setLastViewMode] = useState<Exclude<ViewMode, 'grid'>>('flip');
 
-  // Build paginated content
-  const pages: BookPageData[] = useMemo(() => {
+  // Build the input for paginateContent. Pure data; pagination itself runs
+  // in the effect below using DOM measurement (so it has accurate font
+  // metrics).
+  const paginationInput: PaginateInput = useMemo(() => {
     const sortedChapters = [...chapters]
       .sort((a, b) => a.number - b.number)
       .map((ch) => ({
@@ -100,7 +103,7 @@ export function BookReader({ open, onClose }: Props) {
         ].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
       : undefined;
 
-    return paginateContent({
+    return {
       chapters: sortedChapters,
       glossary,
       layout,
@@ -109,8 +112,55 @@ export function BookReader({ open, onClose }: Props) {
       author,
       coverFront: resolvedCoverFront,
       coverBack: resolvedCoverBack,
-    });
+    };
   }, [chapters, scenes, glossaryEnabled, characters, places, worldNotes, layout, printEdition, title, author, resolvedCoverFront, resolvedCoverBack]);
+
+  // Pages are computed asynchronously: we wait for fonts to load, then mount
+  // a hidden offscreen element and measure where each block actually breaks.
+  // Falls back to the heuristic if for any reason the DOM paginator throws.
+  const [pages, setPages] = useState<BookPageData[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const pe = paginationInput.printEdition ?? DEFAULT_PRINT_EDITION;
+    const t = getTrimSize(pe.trimSize);
+    const mar = pe.margins;
+    // The rendered page wrapper inherits Tailwind's `box-sizing: border-box`
+    // and carries a 1px border in actual-size mode, so the content-box is 2px
+    // smaller than `trim.widthMm/MM_PER_CSS_PX` per axis. Apply that delta
+    // before deriving the margin percentages, otherwise pagination overfills
+    // the rendered page by ~1 line on each side.
+    const pageWidthPx = t.widthMm / MM_PER_CSS_PX - 2;
+    const pageHeightPx = t.heightMm / MM_PER_CSS_PX - 2;
+    const widthPx = pageWidthPx * (1 - (mar.innerMm + mar.outerMm) / t.widthMm);
+    const heightPx = pageHeightPx * (1 - (mar.topMm + mar.bottomMm) / t.heightMm);
+    const ff = paginationInput.layout?.fontFamily ?? DEFAULT_LAYOUT.fontFamily;
+    const fs = paginationInput.layout?.fontSize ?? DEFAULT_LAYOUT.fontSize;
+    const lh = paginationInput.layout?.lineHeight ?? DEFAULT_LAYOUT.lineHeight;
+    const stack = FONT_STACKS[ff];
+
+    const run = () => {
+      if (cancelled) return;
+      const dp = createDomPaginator({
+        widthPx, heightPx, fontFamily: stack, fontSizePt: fs, lineHeight: lh,
+      });
+      try {
+        const result = paginateContent(paginationInput, dp.paginate);
+        if (!cancelled) setPages(result);
+      } finally {
+        dp.destroy();
+      }
+    };
+
+    const ready = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready;
+    if (ready && typeof (ready as Promise<unknown>).then === 'function') {
+      (ready as Promise<unknown>).then(run);
+    } else {
+      run();
+    }
+
+    return () => { cancelled = true; };
+  }, [open, paginationInput]);
 
   // Ensure even number of pages for page-flip
   const displayPages = useMemo(() => {

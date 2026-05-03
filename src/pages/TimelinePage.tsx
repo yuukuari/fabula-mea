@@ -218,7 +218,7 @@ export function TimelinePage() {
       result = result.filter((e) => e.placeId === filterPlaceId);
     }
     if (viewMode === 'place' && filterCharacterId) {
-      result = result.filter((e) => e.characterIds.includes(filterCharacterId!));
+      result = result.filter((e) => (e.characterIds ?? []).includes(filterCharacterId!));
     }
     return new Set(result.map((e) => e.id));
   }, [sortedEvents, filterPlaceId, filterCharacterId, viewMode]);
@@ -629,12 +629,12 @@ export function TimelinePage() {
                 {viewMode === 'character' ? (
                   <>
                     {timelineCharacters.map((char) => {
-                      const charEvents = sortedEvents.filter((e) => e.characterIds.includes(char.id));
+                      const charEvents = sortedEvents.filter((e) => (e.characterIds ?? []).includes(char.id));
                       return <TimelineRow key={char.id} label={char.name} events={charEvents} matchingEventIds={matchingEventIds} renderEventBlock={renderEventBlock} />;
                     })}
                     {/* Events without characters */}
                     {(() => {
-                      const noCharEvents = sortedEvents.filter((e) => e.characterIds.length === 0);
+                      const noCharEvents = sortedEvents.filter((e) => (e.characterIds ?? []).length === 0);
                       if (noCharEvents.length === 0) return null;
                       return <TimelineRow label="Sans personnage" italic events={noCharEvents} matchingEventIds={matchingEventIds} renderEventBlock={renderEventBlock} />;
                     })()}

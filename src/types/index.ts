@@ -685,6 +685,21 @@ export interface DigitalEdition {
   publisher?: string;        // Digital publisher (may differ from print publisher)
 }
 
+// ─── Writing Aid Settings ───
+export type WritingAidPunctuationKey = 'ellipses' | 'exclamations' | 'multiExclamations' | 'italicWords';
+
+export interface WritingAidSettings {
+  /** Sous-éléments de la section Ponctuation à exclure du score (l'item reste
+   *  visible mais grisé, et n'est pas comptabilisé). */
+  disabledPunctuation?: WritingAidPunctuationKey[];
+  /** Tics de langage explicitement marqués comme voulus (clé `NgramItem.key`).
+   *  Ex. catchphrase d'un personnage. */
+  disabledNgrams?: string[];
+  /** Répétitions explicitement marquées comme voulues (`RepetitionItem.word`).
+   *  Ex. effet de style assumé. */
+  disabledRepetitions?: string[];
+}
+
 // ─── Root Store ───
 export interface BookProject {
   id: EntityId;
@@ -712,6 +727,7 @@ export interface BookProject {
   noteIdeas?: NoteIdea[];
   selfComments?: SelfComment[];
   customDictionary?: string[];
+  writingAidSettings?: WritingAidSettings;
   graphNodePositions?: Record<string, { x: number; y: number }>;
   createdAt: string;
   updatedAt: string;

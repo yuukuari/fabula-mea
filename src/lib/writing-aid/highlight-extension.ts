@@ -7,6 +7,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { useWritingAidStore, normalizeWord } from '@/store/useWritingAidStore';
+import { findRangeForText, findAllRangesForText } from './find-ranges';
 
 export interface WritingAidHighlightOptions {
   sceneId: string;
@@ -18,38 +19,6 @@ interface PluginState {
   decorations: DecorationSet;
   /** Position [from, to] de l'occurrence active dans la doc. */
   activePos: { from: number; to: number } | null;
-}
-
-function findRangeForText(
-  doc: import('@tiptap/pm/model').Node,
-  target: string,
-): { from: number; to: number } | null {
-  if (!target) return null;
-  // Recherche dans un seul nœud texte (couvre les phrases sans inline-formatting au milieu)
-  let found: { from: number; to: number } | null = null;
-  doc.descendants((node, pos) => {
-    if (found) return false;
-    if (!node.isText || !node.text) return;
-    const idx = node.text.indexOf(target);
-    if (idx !== -1) {
-      found = { from: pos + idx, to: pos + idx + target.length };
-      return false;
-    }
-  });
-  if (found) return found;
-  // Fallback : tentative sur la tête de la phrase (au cas où l'inline-formatting coupe le texte)
-  const head = target.slice(0, Math.min(40, target.length));
-  if (head.length < 8) return null;
-  doc.descendants((node, pos) => {
-    if (found) return false;
-    if (!node.isText || !node.text) return;
-    const idx = node.text.indexOf(head);
-    if (idx !== -1) {
-      found = { from: pos + idx, to: pos + idx + head.length };
-      return false;
-    }
-  });
-  return found;
 }
 
 function buildDecorations(
@@ -69,6 +38,40 @@ function buildDecorations(
         class: 'wa-highlight wa-highlight-active',
       }));
       activePos = range;
+    }
+    return { decorations: DecorationSet.create(doc, decorations), activePos };
+  }
+
+  // N-grammes (tics de langage) — recherche brute des phrases dans le doc.
+  const phr = state.phraseHighlight;
+  if (phr && phr.phrases.length > 0 && phr.sceneIds.includes(sceneId)) {
+    const focusedPhrase = state.focusedPhrase;
+    const focusedIdx =
+      focusedPhrase && focusedPhrase.sceneId === sceneId ? focusedPhrase.occurrenceIndex : -1;
+    // Collecte toutes les ranges, puis tri par from pour un index stable.
+    const allRanges: Array<{ from: number; to: number }> = [];
+    for (const phrase of phr.phrases) {
+      // Recherche insensible à la casse : tente la forme exacte puis lowercase
+      // (les n-grammes sont stockés tels qu'apparus, mais peuvent revenir avec
+      // une casse différente en début de phrase).
+      const ranges = findAllRangesForText(doc, phrase, { fallbackHead: false });
+      for (const r of ranges) allRanges.push(r);
+    }
+    allRanges.sort((a, b) => a.from - b.from);
+    // Dédoublonnage : deux phrases peuvent partager une plage si l'une est
+    // préfixe de l'autre.
+    const seen = new Set<string>();
+    let occurrence = 0;
+    for (const r of allRanges) {
+      const key = `${r.from}:${r.to}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const isActive = occurrence === focusedIdx;
+      decorations.push(Decoration.inline(r.from, r.to, {
+        class: isActive ? 'wa-highlight wa-highlight-active' : 'wa-highlight',
+      }));
+      if (isActive) activePos = r;
+      occurrence++;
     }
     return { decorations: DecorationSet.create(doc, decorations), activePos };
   }
@@ -149,7 +152,9 @@ export const WritingAidHighlightExtension = Extension.create<WritingAidHighlight
             const hlChanged = state.highlight !== prev.highlight;
             const focusChanged = state.focusedHit !== prev.focusedHit;
             const sentenceChanged = state.focusedSentence !== prev.focusedSentence;
-            if (!hlChanged && !focusChanged && !sentenceChanged) return;
+            const phraseChanged = state.phraseHighlight !== prev.phraseHighlight;
+            const focusedPhraseChanged = state.focusedPhrase !== prev.focusedPhrase;
+            if (!hlChanged && !focusChanged && !sentenceChanged && !phraseChanged && !focusedPhraseChanged) return;
 
             const tr = editorView.state.tr.setMeta(pluginKey, Date.now());
             editorView.dispatch(tr);
@@ -157,9 +162,11 @@ export const WritingAidHighlightExtension = Extension.create<WritingAidHighlight
             // Scroll si l'occurrence active OU la phrase ciblée est dans cette scène
             const focus = state.focusedHit;
             const sentence = state.focusedSentence;
+            const focusedPhrase = state.focusedPhrase;
             const shouldScroll =
               (focusChanged && focus && focus.sceneId === sceneId) ||
-              (sentenceChanged && sentence && sentence.sceneId === sceneId);
+              (sentenceChanged && sentence && sentence.sceneId === sceneId) ||
+              (focusedPhraseChanged && focusedPhrase && focusedPhrase.sceneId === sceneId);
             if (shouldScroll) {
               requestAnimationFrame(() => {
                 const root = editorView.dom as HTMLElement;

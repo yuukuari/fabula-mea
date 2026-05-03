@@ -62,7 +62,7 @@ Un **BookProject** contient : Characters (avec genealogy, relations, avatar imag
 5. **CORS** : appeler `handleCors(req, res)` en premier dans chaque endpoint
 6. **Auth** : `requireAuth(req, res)` retourne `{ userId }` ou `null`
 7. **`useBookStore`** (~1450 lignes) : le plus complexe. Auto-save local + cloud. Interagit avec `useSagaStore`
-8. **TipTap** : éditeur de scènes, tickets, notes & idées. Extensions `text-style`, `font-family`, `font-size-extension.ts` (custom). h1/h2/h3 retirés de la toolbar. Collage nettoyé via `transformPastedHTML`
+8. **TipTap** : éditeur de scènes, tickets, notes & idées. Extensions `text-style`, `font-family`, `font-size-extension.ts` (custom). h1/h2/h3 retirés de la toolbar. Collage nettoyé via `transformPastedHTML`. **Typographie française** dans le SceneEditor uniquement (`french-typography-extension.ts`) : NBSP inséré à la saisie avant `: ; ! ? » %` et après `«` ; `--` → `–` (semi-cadratin), `---` → `—` (cadratin). Les NBSP sont stockés en U+00A0 dans le HTML et préservés par les compteurs et exports.
 9. **Page relecteur** (`/review/:token`) : publique, sans auth
 10. **Images CDN** : Vercel Blob en prod, base64 en dev. Migration lazy dans `saveBook()`. `src/lib/upload.ts`
 11. **Mettre à jour la documentation** après toute modification structurelle (nouvelle fonctionnalité, refactor, nouveau type, nouvel endpoint, changement d'architecture). Selon ce qui a été touché :

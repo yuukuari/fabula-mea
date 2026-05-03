@@ -499,3 +499,52 @@
   outline: 2px solid rgba(139, 34, 82, 0.8);
   outline-offset: 1px;
 }
+
+/* Tables de conjugaison (Wiktionnaire) — styling minimal pour le panneau Aide */
+.wa-conjugation {
+  font-size: 11px;
+  color: #2a2118;
+}
+.wa-conjugation h2,
+.wa-conjugation h3 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8b2252;
+  margin: 12px 0 4px;
+}
+.wa-conjugation h4,
+.wa-conjugation h5 {
+  font-size: 10px;
+  font-weight: 600;
+  color: #5a4a3a;
+  margin: 8px 0 2px;
+}
+.wa-conjugation table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 8px;
+  background: rgba(247, 240, 226, 0.4);
+  border: 1px solid #e6dcc4;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.wa-conjugation td,
+.wa-conjugation th {
+  padding: 2px 6px;
+  border-top: 1px solid #ece3cc;
+  vertical-align: top;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.wa-conjugation th {
+  background: rgba(212, 175, 55, 0.15);
+  font-weight: 600;
+  text-align: left;
+}
+.wa-conjugation p { margin: 4px 0; }
+.wa-conjugation b,
+.wa-conjugation strong { color: #8b2252; }
+.wa-conjugation ul,
+.wa-conjugation ol { padding-left: 16px; }

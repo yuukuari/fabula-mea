@@ -15,7 +15,7 @@ export function TimelineTooltip({ event, x, y }: TimelineTooltipProps) {
   const scenes = useBookStore((s) => s.scenes);
   const { characters, places } = useEncyclopediaStore();
 
-  const eventChars = event.characterIds.map((cid) => characters.find((c) => c.id === cid)).filter(Boolean);
+  const eventChars = (event.characterIds ?? []).map((cid) => characters.find((c) => c.id === cid)).filter(Boolean);
   const place = event.placeId ? places.find((p) => p.id === event.placeId) : null;
   const linkedScene = event.sceneId ? scenes.find((s) => s.id === event.sceneId) : null;
   const chapter = event.chapterId ? chapters.find((c) => c.id === event.chapterId) : null;

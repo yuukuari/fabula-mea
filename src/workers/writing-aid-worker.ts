@@ -14,7 +14,8 @@
 import { buildReport, type ReportStage } from '@/lib/writing-aid/report';
 import { resolveScope } from '@/lib/writing-aid/manuscript-text';
 import { detectRepetitions } from '@/lib/writing-aid/repetitions';
-import type { AnalysisScope, ReportResult, RepetitionAnalysis } from '@/lib/writing-aid/types';
+import { detectNgrams } from '@/lib/writing-aid/ngrams';
+import type { AnalysisScope, ReportResult, RepetitionAnalysis, NgramAnalysis } from '@/lib/writing-aid/types';
 import type { Scene, Chapter } from '@/types';
 
 interface ReportRequest {
@@ -31,12 +32,20 @@ interface RepetitionsRequest {
   scenes: Scene[];
   chapters: Chapter[];
 }
-type Request = ReportRequest | RepetitionsRequest;
+interface NgramsRequest {
+  task: 'ngrams';
+  requestId: number;
+  scope: AnalysisScope;
+  scenes: Scene[];
+  chapters: Chapter[];
+}
+type Request = ReportRequest | RepetitionsRequest | NgramsRequest;
 
 export type WorkerMessage =
   | { type: 'progress'; requestId: number; stage: ReportStage | 'detect'; ratio: number }
   | { type: 'done-report'; requestId: number; report: ReportResult }
-  | { type: 'done-repetitions'; requestId: number; analysis: RepetitionAnalysis };
+  | { type: 'done-repetitions'; requestId: number; analysis: RepetitionAnalysis }
+  | { type: 'done-ngrams'; requestId: number; analysis: NgramAnalysis };
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -54,5 +63,11 @@ ctx.addEventListener('message', (e: MessageEvent<Request>) => {
     ctx.postMessage({ type: 'progress', requestId, stage: 'detect', ratio: 0.5 } satisfies WorkerMessage);
     const analysis = detectRepetitions(resolved.pieces);
     ctx.postMessage({ type: 'done-repetitions', requestId, analysis } satisfies WorkerMessage);
+  } else if (req.task === 'ngrams') {
+    ctx.postMessage({ type: 'progress', requestId, stage: 'detect', ratio: 0.1 } satisfies WorkerMessage);
+    const resolved = resolveScope(req.scope, req.scenes, req.chapters);
+    ctx.postMessage({ type: 'progress', requestId, stage: 'detect', ratio: 0.5 } satisfies WorkerMessage);
+    const analysis = detectNgrams(resolved.pieces);
+    ctx.postMessage({ type: 'done-ngrams', requestId, analysis } satisfies WorkerMessage);
   }
 });

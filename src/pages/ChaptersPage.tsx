@@ -77,7 +77,7 @@ function SortableSceneItem({
 
   const progress = getSceneProgress(scene, scenes, goals);
   const sceneTarget = getSceneTarget(scene, scenes, goals);
-  const sceneChars = scene.characterIds
+  const sceneChars = (scene.characterIds ?? [])
     .map((cid) => characters.find((c) => c.id === cid))
     .filter(Boolean);
   const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;

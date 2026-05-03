@@ -10,6 +10,7 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { FontFamily } from '@tiptap/extension-font-family';
 import { SpellCheckExtension } from '@/lib/spellcheck-extension';
 import { FontSize } from '@/lib/font-size-extension';
+import { FrenchTypography } from '@/lib/french-typography-extension';
 import { WritingAidHighlightExtension } from '@/lib/writing-aid/highlight-extension';
 import { useBookStore } from '@/store/useBookStore';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
@@ -145,9 +146,10 @@ export const SceneInlineEditor = memo(function SceneInlineEditor({ scene, onFocu
         closeDoubleQuote: '\u00A0»',
         openSingleQuote: '\u2018',
         closeSingleQuote: '\u2019',
-        emDash: '—',
+        emDash: false,
         ellipsis: '…',
       }),
+      FrenchTypography,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
         defaultAlignment: 'justify',

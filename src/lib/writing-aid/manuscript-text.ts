@@ -2,6 +2,32 @@ import { tiptapHtmlToPlainText } from '@/lib/utils';
 import type { Scene, Chapter } from '@/types';
 import type { AnalysisScope, ResolvedScope, ScenePiece } from './types';
 
+/** Récupère le HTML brut concaténé du scope (pour analyses qui ont besoin
+ *  de connaître le formatage, ex. italiques pour la ponctuation). */
+export function resolvedScopeHtml(scope: AnalysisScope, scenes: Scene[], chapters: Chapter[]): string {
+  if (scope.kind === 'scene') {
+    const sc = scenes.find((s) => s.id === scope.sceneId);
+    return sc?.content ?? '';
+  }
+  if (scope.kind === 'chapter') {
+    const ch = chapters.find((c) => c.id === scope.chapterId);
+    if (!ch) return '';
+    return (ch.sceneIds ?? [])
+      .map((id) => scenes.find((s) => s.id === id)?.content ?? '')
+      .join('\n');
+  }
+  // book
+  const sortedChapters = [...chapters].sort((a, b) => a.number - b.number);
+  const out: string[] = [];
+  for (const c of sortedChapters) {
+    for (const id of c.sceneIds ?? []) {
+      const s = scenes.find((sc) => sc.id === id);
+      if (s) out.push(s.content ?? '');
+    }
+  }
+  return out.join('\n');
+}
+
 export function resolveScope(
   scope: AnalysisScope,
   scenes: Scene[],

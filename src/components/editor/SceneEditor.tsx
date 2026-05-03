@@ -548,7 +548,7 @@ export function SceneEditor() {
                   )}
 
                   {chScenes.map((scene, idx) => {
-                    const sceneChars = scene.characterIds
+                    const sceneChars = (scene.characterIds ?? [])
                       .map((id) => characters.find((c) => c.id === id)?.name)
                       .filter(Boolean);
                     const scenePlace = scene.placeId ? places.find((p) => p.id === scene.placeId) : null;

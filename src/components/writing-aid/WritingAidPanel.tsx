@@ -1,13 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Wand2, ScanText, BookMarked, BookX, Sparkles, Search, Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Wand2, ScanText, BookMarked, BookX, Sparkles, Search, Loader2, ChevronLeft, ChevronRight, X, Quote, Eye, EyeOff, Languages, ExternalLink } from 'lucide-react';
+import { fetchConjugation, type ConjugationResult } from '@/lib/conjugation';
 import { useBookStore } from '@/store/useBookStore';
 import { useWritingAidStore, normalizeWord, type WritingAidTab, type WritingAidTool } from '@/store/useWritingAidStore';
 import { cn, isSpecialChapter, getChapterShortLabel, tiptapHtmlToPlainText } from '@/lib/utils';
 import { fetchCnrtl } from '@/lib/cnrtl';
-import { STAGE_LABELS, DIMENSION_HELP, type ReportStage } from '@/lib/writing-aid/report';
-import { runReport, runRepetitions } from '@/lib/writing-aid/worker-client';
+import {
+  STAGE_LABELS, DIMENSION_HELP,
+  repetitionScoreFromItems, ngramScoreFromItems, punctuationScoreFromStats,
+  type ReportStage,
+} from '@/lib/writing-aid/report';
+import { runReport, runRepetitions, runNgrams } from '@/lib/writing-aid/worker-client';
 import { STYLE_FIGURES } from '@/lib/writing-aid/style-figures';
-import type { AnalysisScope, RepetitionItem, WordHit } from '@/lib/writing-aid/types';
+import type { AnalysisScope, RepetitionItem, NgramItem, WordHit } from '@/lib/writing-aid/types';
+import type { WritingAidPunctuationKey, WritingAidSettings } from '@/types';
+
+// Helpers : ajouter / retirer une valeur dans une liste en réglages livre
+function toggleInList<T extends string>(list: T[] | undefined, value: T): T[] {
+  const set = new Set(list ?? []);
+  if (set.has(value)) set.delete(value);
+  else set.add(value);
+  return Array.from(set);
+}
 
 interface Props {
   /** Scène actuellement visible dans l'éditeur — utilisée comme défaut « Scène ». */
@@ -69,14 +83,18 @@ function ToolsTab({ currentSceneId }: { currentSceneId: string | null }) {
     <div className="flex flex-col">
       <div className="px-3 pt-2 pb-2 flex flex-wrap gap-1 border-b border-parchment-200">
         <ToolPill icon={ScanText} active={tool === 'repetitions'} onClick={() => setTool('repetitions')}>Répétitions</ToolPill>
+        <ToolPill icon={Quote} active={tool === 'ngrams'} onClick={() => setTool('ngrams')}>Tics de langage</ToolPill>
         <ToolPill icon={BookMarked} active={tool === 'synonyms'} onClick={() => setTool('synonyms')}>Synonymes</ToolPill>
         <ToolPill icon={BookX} active={tool === 'antonyms'} onClick={() => setTool('antonyms')}>Antonymes</ToolPill>
+        <ToolPill icon={Languages} active={tool === 'conjugation'} onClick={() => setTool('conjugation')}>Conjugaison</ToolPill>
         <ToolPill icon={Sparkles} active={tool === 'figures'} onClick={() => setTool('figures')}>Figures de style</ToolPill>
       </div>
       <div className="p-3">
         {tool === 'repetitions' && <RepetitionsTool currentSceneId={currentSceneId} />}
+        {tool === 'ngrams' && <NgramsTool currentSceneId={currentSceneId} />}
         {tool === 'synonyms' && <ThesaurusTool kind="synonymie" />}
         {tool === 'antonyms' && <ThesaurusTool kind="antonymie" />}
+        {tool === 'conjugation' && <ConjugationTool />}
         {tool === 'figures' && <FiguresTool />}
       </div>
     </div>
@@ -219,6 +237,240 @@ function RepetitionsTool({ currentSceneId }: { currentSceneId: string | null }) 
   );
 }
 
+// ── Tics de langage (n-grammes 2-3 mots) ─────────────────────────
+
+function NgramsTool({ currentSceneId }: { currentSceneId: string | null }) {
+  const scope = useWritingAidStore((s) => s.scope);
+  const scenes = useBookStore((s) => s.scenes);
+  const chapters = useBookStore((s) => s.chapters);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [items, setItems] = useState<NgramItem[] | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const run = async () => {
+    setRunning(true);
+    setProgress(0);
+    try {
+      const result = await runNgrams(scope, scenes, chapters, (_stage, ratio) => setProgress(ratio));
+      setItems(result.items);
+    } finally {
+      setRunning(false);
+      setProgress(1);
+    }
+  };
+
+  useEffect(() => { setItems(null); setExpanded(null); }, [scope]);
+
+  return (
+    <div>
+      <ScopeSelector currentSceneId={currentSceneId} />
+      <button
+        onClick={run}
+        disabled={running}
+        className="w-full text-xs font-medium bg-bordeaux-500 hover:bg-bordeaux-600 disabled:opacity-50 text-white py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5"
+      >
+        {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Quote className="w-3.5 h-3.5" />}
+        {running ? 'Analyse en cours…' : 'Détecter les tics'}
+      </button>
+
+      {running && <ProgressBar ratio={progress} label="Lecture du manuscrit…" />}
+
+      {items && items.length === 0 && (
+        <p className="text-xs text-ink-200 italic text-center mt-4">Aucun tic de langage détecté.</p>
+      )}
+
+      {items && items.length > 0 && (
+        <ul className="mt-3 space-y-1">
+          {items.map((it) => (
+            <PhraseHitItem
+              key={it.key}
+              item={it}
+              selected={expanded === it.key}
+              onToggle={() => setExpanded(expanded === it.key ? null : it.key)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PhraseHitItem({ item, selected, onToggle, disabled, onToggleDisabled }: {
+  item: NgramItem;
+  selected: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+  onToggleDisabled?: () => void;
+}) {
+  const showConcentration = item.maxWindowCount > 1 && item.maxWindowCount < item.count;
+  return (
+    <li className={cn(
+      'rounded border',
+      selected ? 'border-bordeaux-300' : 'border-parchment-200',
+      disabled && 'opacity-60',
+    )}>
+      <div className="flex items-stretch">
+        <button
+          onClick={onToggle}
+          className={cn(
+            'flex-1 flex items-center justify-between px-2 py-1.5 transition-colors text-left min-w-0',
+            selected ? 'bg-bordeaux-50' : 'hover:bg-parchment-100',
+          )}
+        >
+          <span className={cn(
+            'text-xs italic font-serif truncate',
+            disabled && 'line-through',
+            selected ? 'text-bordeaux-600' : 'text-ink-400',
+          )}>
+            « {item.text} »
+          </span>
+          <span className="flex items-center gap-1.5 shrink-0">
+            {showConcentration && (
+              <span
+                className="text-[10px] tabular-nums text-ink-300"
+                title={`${item.maxWindowCount} occurrences dans une même fenêtre de ${item.windowSize} mots`}
+              >
+                {item.maxWindowCount}/{item.windowSize}
+              </span>
+            )}
+            <span className="text-[10px] tabular-nums text-bordeaux-500 font-semibold">×{item.count}</span>
+            <ChevronRight className={cn('w-3 h-3 text-ink-200 transition-transform', selected && 'rotate-90')} />
+          </span>
+        </button>
+        {onToggleDisabled && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleDisabled(); }}
+            className="px-1.5 border-l border-parchment-200 text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-100 transition-colors shrink-0"
+            title={disabled ? 'Réactiver (compter dans le score)' : 'Voulu — ne pas compter dans le score'}
+          >
+            {disabled ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+          </button>
+        )}
+      </div>
+      {selected && !disabled && <PhraseNavigator item={item} />}
+    </li>
+  );
+}
+
+function PhraseNavigator({ item }: { item: NgramItem }) {
+  const scenes = useBookStore((s) => s.scenes);
+  const chapters = useBookStore((s) => s.chapters);
+  const setPhraseHighlight = useWritingAidStore((s) => s.setPhraseHighlight);
+  const setFocusedPhrase = useWritingAidStore((s) => s.setFocusedPhrase);
+  const [idx, setIdx] = useState(0);
+
+  const sceneIds = useMemo(
+    () => Array.from(new Set(item.hits.map((h) => h.sceneId))),
+    [item],
+  );
+  // On cherche la forme du n-gramme telle qu'apparue + ses variantes de casse
+  // (titre de phrase). Pour l'instant on stocke la forme brute du premier hit ;
+  // l'extension matche via indexOf — pas de normalisation casse côté extension.
+  // Pour couvrir les variantes (« il y avait » vs « Il y avait »), on génère
+  // explicitement les variantes lower / capitalize.
+  const phrases = useMemo(() => {
+    const set = new Set<string>();
+    set.add(item.text);
+    set.add(item.text.toLowerCase());
+    if (item.text.length > 0) {
+      set.add(item.text[0].toUpperCase() + item.text.slice(1).toLowerCase());
+    }
+    return Array.from(set);
+  }, [item.text]);
+
+  // Recompte les occurrences en direct dans le texte des scènes ciblées.
+  const liveOccurrences = useMemo(() => {
+    const result: { sceneId: string; chapterId: string; occurrenceIndex: number; from: number }[] = [];
+    for (const sid of sceneIds) {
+      const scene = scenes.find((s) => s.id === sid);
+      if (!scene) continue;
+      const text = tiptapHtmlToPlainText(scene.content ?? '');
+      const ranges: number[] = [];
+      for (const phrase of phrases) {
+        let pos = 0;
+        while (pos < text.length) {
+          const at = text.indexOf(phrase, pos);
+          if (at === -1) break;
+          ranges.push(at);
+          pos = at + phrase.length;
+        }
+      }
+      ranges.sort((a, b) => a - b);
+      // Dedup positions
+      const seen = new Set<number>();
+      let occIdx = 0;
+      for (const at of ranges) {
+        if (seen.has(at)) continue;
+        seen.add(at);
+        result.push({ sceneId: sid, chapterId: scene.chapterId, occurrenceIndex: occIdx, from: at });
+        occIdx++;
+      }
+    }
+    return result;
+  }, [scenes, sceneIds, phrases]);
+
+  useEffect(() => {
+    setPhraseHighlight({ phrases, sceneIds, nonce: Date.now() });
+    setIdx(0);
+    return () => {
+      setPhraseHighlight(null);
+      setFocusedPhrase(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.key]);
+
+  const safeIdx = liveOccurrences.length > 0 ? Math.min(idx, liveOccurrences.length - 1) : 0;
+
+  useEffect(() => {
+    const h = liveOccurrences[safeIdx];
+    if (!h) return;
+    setFocusedPhrase({ sceneId: h.sceneId, occurrenceIndex: h.occurrenceIndex, nonce: Date.now() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeIdx, liveOccurrences]);
+
+  if (liveOccurrences.length === 0) {
+    return (
+      <div className="px-2 py-1.5 border-t border-parchment-200 bg-parchment-50/60 text-[10px] italic text-ink-200 text-center">
+        Plus d'occurrences dans le texte actuel.
+      </div>
+    );
+  }
+  const cur = liveOccurrences[safeIdx];
+  const sc = scenes.find((s) => s.id === cur.sceneId);
+  const ch = chapters.find((c) => c.id === cur.chapterId);
+  const sceneIdxInChapter = ch ? (ch.sceneIds ?? []).indexOf(cur.sceneId) + 1 : 0;
+  const chapterLabel = ch ? (isSpecialChapter(ch) ? getChapterShortLabel(ch) : `Ch. ${ch.number}`) : '';
+  const sceneLabel = sc?.title || (sceneIdxInChapter > 0 ? `Scène ${sceneIdxInChapter}` : 'Scène');
+
+  return (
+    <div className="flex items-center gap-1 px-1.5 py-1 border-t border-parchment-200 bg-parchment-50/60">
+      <button
+        onClick={() => setIdx((i) => (i - 1 + liveOccurrences.length) % liveOccurrences.length)}
+        className="p-1 rounded text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-200 transition-colors"
+        title="Occurrence précédente"
+      >
+        <ChevronLeft className="w-3.5 h-3.5" />
+      </button>
+      <div className="flex-1 text-center text-[10px] truncate">
+        <span className="text-bordeaux-500 font-semibold tabular-nums">{safeIdx + 1}</span>
+        <span className="text-ink-200">/{liveOccurrences.length}</span>
+        <span className="text-ink-200"> · </span>
+        <span className="text-ink-400">{chapterLabel}</span>
+        {chapterLabel && <span className="text-ink-200">, </span>}
+        <span className="text-ink-400 truncate">{sceneLabel}</span>
+      </div>
+      <button
+        onClick={() => setIdx((i) => (i + 1) % liveOccurrences.length)}
+        className="p-1 rounded text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-200 transition-colors"
+        title="Occurrence suivante"
+      >
+        <ChevronRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 // ── Barre de progression de l'analyse ────────────────────────────
 
 function ProgressBar({ ratio, label }: { ratio: number; label: string }) {
@@ -241,7 +493,7 @@ function ProgressBar({ ratio, label }: { ratio: number; label: string }) {
 
 // ── Item de liste avec navigation hit-par-hit + surbrillance ─────
 
-function HitItem({ label, count, concentration, windowSize, hits, selected, onToggle, italicLabel }: {
+function HitItem({ label, count, concentration, windowSize, hits, selected, onToggle, italicLabel, disabled, onToggleDisabled }: {
   label: string;
   count: number;
   /** Si fourni, indique la concentration locale max (ex. 4 occurrences dans une même fenêtre). */
@@ -252,34 +504,57 @@ function HitItem({ label, count, concentration, windowSize, hits, selected, onTo
   selected: boolean;
   onToggle: () => void;
   italicLabel?: boolean;
+  /** Marque cet item comme « voulu » → exclu du score. */
+  disabled?: boolean;
+  onToggleDisabled?: () => void;
 }) {
   const showConcentration = concentration !== undefined && concentration > 1 && concentration < count;
   return (
-    <li className={cn('rounded border', selected ? 'border-bordeaux-300' : 'border-parchment-200')}>
-      <button
-        onClick={onToggle}
-        className={cn(
-          'w-full flex items-center justify-between px-2 py-1.5 transition-colors',
-          selected ? 'bg-bordeaux-50' : 'hover:bg-parchment-100',
-        )}
-      >
-        <span className={cn('text-xs font-medium truncate', italicLabel && 'italic', selected ? 'text-bordeaux-600' : 'text-ink-400')}>
-          {label}
-        </span>
-        <span className="flex items-center gap-1.5 shrink-0">
-          {showConcentration && (
-            <span
-              className="text-[10px] tabular-nums text-ink-300"
-              title={`${concentration} occurrences dans une même fenêtre de ${windowSize} mots`}
-            >
-              {concentration}/{windowSize}
-            </span>
+    <li className={cn(
+      'rounded border',
+      selected ? 'border-bordeaux-300' : 'border-parchment-200',
+      disabled && 'opacity-60',
+    )}>
+      <div className="flex items-stretch">
+        <button
+          onClick={onToggle}
+          className={cn(
+            'flex-1 flex items-center justify-between px-2 py-1.5 transition-colors min-w-0',
+            selected ? 'bg-bordeaux-50' : 'hover:bg-parchment-100',
           )}
-          <span className="text-[10px] tabular-nums text-bordeaux-500 font-semibold">×{count}</span>
-          <ChevronRight className={cn('w-3 h-3 text-ink-200 transition-transform', selected && 'rotate-90')} />
-        </span>
-      </button>
-      {selected && <HitNavigator hits={hits} />}
+        >
+          <span className={cn(
+            'text-xs font-medium truncate',
+            italicLabel && 'italic',
+            disabled && 'line-through',
+            selected ? 'text-bordeaux-600' : 'text-ink-400',
+          )}>
+            {label}
+          </span>
+          <span className="flex items-center gap-1.5 shrink-0">
+            {showConcentration && (
+              <span
+                className="text-[10px] tabular-nums text-ink-300"
+                title={`${concentration} occurrences dans une même fenêtre de ${windowSize} mots`}
+              >
+                {concentration}/{windowSize}
+              </span>
+            )}
+            <span className="text-[10px] tabular-nums text-bordeaux-500 font-semibold">×{count}</span>
+            <ChevronRight className={cn('w-3 h-3 text-ink-200 transition-transform', selected && 'rotate-90')} />
+          </span>
+        </button>
+        {onToggleDisabled && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleDisabled(); }}
+            className="px-1.5 border-l border-parchment-200 text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-100 transition-colors shrink-0"
+            title={disabled ? 'Réactiver (compter dans le score)' : 'Voulu — ne pas compter dans le score'}
+          >
+            {disabled ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+          </button>
+        )}
+      </div>
+      {selected && !disabled && <HitNavigator hits={hits} />}
     </li>
   );
 }
@@ -478,6 +753,102 @@ function ThesaurusList({ title, words }: { title: string; words: string[] }) {
   );
 }
 
+// ── Conjugaison ──────────────────────────────────────────────────
+
+function ConjugationTool() {
+  const [word, setWord] = useState('');
+  const [submitted, setSubmitted] = useState('');
+  const [result, setResult] = useState<ConjugationResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  // Seq counter pour éliminer la race si l'utilisateur soumet rapidement deux
+  // requêtes différentes (Enter, Enter) : seul le dernier appel met à jour l'état.
+  const seqRef = useRef(0);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const w = word.trim();
+    if (!w) return;
+    const mySeq = ++seqRef.current;
+    setSubmitted(w);
+    setLoading(true);
+    setResult(null);
+    setNotFound(false);
+    fetchConjugation(w).then((r) => {
+      if (mySeq !== seqRef.current) return;
+      setResult(r);
+      setNotFound(!r);
+      setLoading(false);
+    });
+  };
+
+  return (
+    <div>
+      <form onSubmit={submit} className="flex gap-1 mb-3">
+        <input
+          type="text"
+          value={word}
+          onChange={(e) => setWord(e.target.value)}
+          placeholder="Verbe ou forme conjuguée…"
+          className="flex-1 text-xs px-2 py-1.5 rounded-md border border-parchment-300 bg-white focus:outline-none focus:ring-1 focus:ring-bordeaux-300"
+        />
+        <button
+          type="submit"
+          disabled={loading || !word.trim()}
+          className="text-xs px-2 py-1.5 rounded-md bg-bordeaux-500 hover:bg-bordeaux-600 disabled:opacity-50 text-white transition-colors flex items-center gap-1"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+        </button>
+      </form>
+
+      {!submitted && !loading && (
+        <p className="text-[11px] text-ink-200 italic">
+          Tapez un verbe à l'infinitif ou une forme conjuguée (ex. « allions »).
+        </p>
+      )}
+
+      {loading && (
+        <p className="text-[11px] text-ink-200 italic flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Recherche en cours…
+        </p>
+      )}
+
+      {submitted && !loading && notFound && (
+        <p className="text-[11px] text-ink-200 italic">
+          Aucune conjugaison trouvée pour « {submitted} ».
+        </p>
+      )}
+
+      {submitted && !loading && result && (
+        <div>
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <p className="text-[10px] uppercase tracking-wider text-ink-200 font-semibold">
+              Verbe : <span className="text-bordeaux-500 normal-case font-bold">{result.infinitive}</span>
+              {result.query.toLowerCase() !== result.infinitive.toLowerCase() && (
+                <span className="text-ink-300 normal-case font-normal italic"> · forme « {result.query} »</span>
+              )}
+            </p>
+            <a
+              href={result.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] text-ink-300 hover:text-bordeaux-500 flex items-center gap-0.5 shrink-0"
+              title="Voir sur le Wiktionnaire"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <div
+            className="wa-conjugation"
+            dangerouslySetInnerHTML={{ __html: result.html }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Figures de style ─────────────────────────────────────────────
 
 function FiguresTool() {
@@ -657,21 +1028,60 @@ function ReportTab({ currentSceneId }: { currentSceneId: string | null }) {
 
 function ReportView({ report }: { report: import('@/lib/writing-aid/types').ReportResult }) {
   const [openSection, setOpenSection] = useState<string | null>(null);
+  // Réglages par-livre des items désactivés (« voulus », exclus du score).
+  const settings = useBookStore((s) => s.writingAidSettings);
+
   const scoreColor = (n: number) =>
     n >= 80 ? 'text-green-600' : n >= 60 ? 'text-gold-500' : 'text-bordeaux-500';
+
+  // Recalcule les scores des dimensions filtrables à partir des items conservés.
+  const adjustedScores = useMemo(() => {
+    const disabledReps = new Set(settings?.disabledRepetitions ?? []);
+    const disabledNg = new Set(settings?.disabledNgrams ?? []);
+    const disabledPunct = new Set(settings?.disabledPunctuation ?? []);
+
+    const keptReps = report.repetitions.filter((r) => !disabledReps.has(r.word));
+    const keptNg = report.ngrams.filter((n) => !disabledNg.has(n.key));
+
+    const repScore = repetitionScoreFromItems(
+      keptReps,
+      report.repetitions,
+      report.repetitionMaxBurst,
+      report.repetitionWindowSize,
+      report.totalWords,
+    );
+    const ngScore = ngramScoreFromItems(keptNg, report.totalWords);
+    const punctScore = punctuationScoreFromStats(report.punctuation, report.totalWords, {
+      ellipses: !disabledPunct.has('ellipses'),
+      exclamations: !disabledPunct.has('exclamations'),
+      multiExclamations: !disabledPunct.has('multiExclamations'),
+      italicWords: !disabledPunct.has('italicWords'),
+    });
+
+    return report.scores.map((s) => {
+      if (s.key === 'repetitions') return { ...s, score: repScore };
+      if (s.key === 'ngrams') return { ...s, score: ngScore };
+      if (s.key === 'punctuation') return { ...s, score: punctScore };
+      return s;
+    });
+  }, [report, settings]);
+
+  const displayedGlobal = adjustedScores.length > 0
+    ? Math.round(adjustedScores.reduce((s, sc) => s + sc.score, 0) / adjustedScores.length)
+    : 100;
 
   return (
     <div className="mt-4">
       <div className="text-center bg-parchment-100 rounded-lg p-3 mb-3">
         <p className="text-[10px] uppercase tracking-wider text-ink-200 font-semibold">Score global</p>
-        <p className={cn('text-3xl font-display font-bold tabular-nums', scoreColor(report.globalScore))}>
-          {report.globalScore}<span className="text-sm text-ink-300">/100</span>
+        <p className={cn('text-3xl font-display font-bold tabular-nums', scoreColor(displayedGlobal))}>
+          {displayedGlobal}<span className="text-sm text-ink-300">/100</span>
         </p>
         <p className="text-[10px] text-ink-300 mt-1">{report.totalWords.toLocaleString('fr-FR')} mots analysés</p>
       </div>
 
       <ul className="space-y-1.5">
-        {report.scores.map((s) => (
+        {adjustedScores.map((s) => (
           <li key={s.key}>
             <button
               onClick={() => setOpenSection(openSection === s.key ? null : s.key)}
@@ -685,7 +1095,7 @@ function ReportView({ report }: { report: import('@/lib/writing-aid/types').Repo
               <ChevronRight className={cn('w-3 h-3 text-ink-200 transition-transform', openSection === s.key && 'rotate-90')} />
             </button>
             {openSection === s.key && (
-              <ReportSectionDetail sectionKey={s.key} report={report} />
+              <ReportSectionDetail sectionKey={s.key} report={report} settings={settings} />
             )}
           </li>
         ))}
@@ -734,27 +1144,91 @@ function SentenceList({ sentences }: { sentences: import('@/lib/writing-aid/type
   );
 }
 
-function NavigableList({ items, italicLabel }: {
+/** Barre d'actions « Tout ignorer / Tout réactiver » au-dessus des listes
+ *  filtrables. Affichée uniquement quand le toggle par item est branché. */
+function BulkDisableBar({ disabledCount, totalCount, onDisableAll, onEnableAll }: {
+  disabledCount: number;
+  totalCount: number;
+  onDisableAll: () => void;
+  onEnableAll: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 border-x border-parchment-200 bg-parchment-50/80 px-2 py-1 text-[10px] text-ink-300">
+      <span className="flex-1 truncate">{disabledCount}/{totalCount} ignoré{disabledCount > 1 ? 's' : ''}</span>
+      <button
+        onClick={onDisableAll}
+        disabled={disabledCount === totalCount}
+        className="px-1.5 py-0.5 rounded text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        Tout ignorer
+      </button>
+      <button
+        onClick={onEnableAll}
+        disabled={disabledCount === 0}
+        className="px-1.5 py-0.5 rounded text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        Tout réactiver
+      </button>
+    </div>
+  );
+}
+
+function NavigableList({ items, italicLabel, disabledKey }: {
   items: Array<{ key: string; label: string; count: number; concentration?: number; windowSize?: number; hits: WordHit[] }>;
   italicLabel?: boolean;
+  /** Si fourni, active le toggle « voulu » sur chaque item, branché sur ce
+   *  champ de WritingAidSettings. La clé désactivée est `item.key`. */
+  disabledKey?: 'disabledRepetitions';
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const disabledList = useBookStore((s) => disabledKey ? s.writingAidSettings?.[disabledKey] : undefined);
+  const setWritingAidSetting = useBookStore((s) => s.setWritingAidSetting);
+
+  const disabledCount = disabledKey
+    ? items.filter((it) => disabledList?.includes(it.key)).length
+    : 0;
+
   return (
-    <ul className="border-x border-b border-parchment-200 rounded-b bg-parchment-50/60 max-h-72 overflow-y-auto p-1 space-y-1">
-      {items.map((it) => (
-        <HitItem
-          key={it.key}
-          label={it.label}
-          count={it.count}
-          concentration={it.concentration}
-          windowSize={it.windowSize}
-          hits={it.hits}
-          italicLabel={italicLabel}
-          selected={selected === it.key}
-          onToggle={() => setSelected(selected === it.key ? null : it.key)}
+    <>
+      {disabledKey && items.length > 0 && (
+        <BulkDisableBar
+          disabledCount={disabledCount}
+          totalCount={items.length}
+          onDisableAll={() => {
+            const merged = new Set([...(disabledList ?? []), ...items.map((it) => it.key)]);
+            setWritingAidSetting(disabledKey, Array.from(merged));
+          }}
+          onEnableAll={() => {
+            const keys = new Set(items.map((it) => it.key));
+            const remaining = (disabledList ?? []).filter((k) => !keys.has(k));
+            setWritingAidSetting(disabledKey, remaining);
+          }}
         />
-      ))}
-    </ul>
+      )}
+      <ul className="border-x border-b border-parchment-200 rounded-b bg-parchment-50/60 max-h-72 overflow-y-auto p-1 space-y-1">
+        {items.map((it) => {
+          const disabled = disabledKey ? (disabledList?.includes(it.key) ?? false) : undefined;
+          return (
+            <HitItem
+              key={it.key}
+              label={it.label}
+              count={it.count}
+              concentration={it.concentration}
+              windowSize={it.windowSize}
+              hits={it.hits}
+              italicLabel={italicLabel}
+              selected={selected === it.key}
+              onToggle={() => setSelected(selected === it.key ? null : it.key)}
+              disabled={disabled}
+              onToggleDisabled={disabledKey ? (() => setWritingAidSetting(
+                disabledKey,
+                toggleInList(disabledList, it.key),
+              )) : undefined}
+            />
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
@@ -770,18 +1244,19 @@ function DimensionHelpBlock({ sectionKey }: { sectionKey: string }) {
   );
 }
 
-function ReportSectionDetail({ sectionKey, report }: {
+function ReportSectionDetail({ sectionKey, report, settings }: {
   sectionKey: string;
   report: import('@/lib/writing-aid/types').ReportResult;
+  settings: WritingAidSettings | undefined;
 }) {
   const help = <DimensionHelpBlock sectionKey={sectionKey} />;
   if (sectionKey === 'repetitions') {
     if (report.repetitions.length === 0) return <>{help}<p className="text-[11px] italic text-ink-200 px-2 py-2 border-x border-b border-parchment-200 rounded-b bg-parchment-50/60">Aucune répétition signalée.</p></>;
-    return <>{help}<NavigableList items={report.repetitions.slice(0, 20).map((r) => ({ key: r.word, label: r.word, count: r.count, concentration: r.maxWindowCount, windowSize: r.windowSize, hits: r.hits }))} /></>;
+    return <>{help}<NavigableList disabledKey="disabledRepetitions" items={report.repetitions.map((r) => ({ key: r.word, label: r.word, count: r.count, concentration: r.maxWindowCount, windowSize: r.windowSize, hits: r.hits }))} /></>;
   }
   if (sectionKey === 'adverbs') {
     if (report.adverbs.length === 0) return <>{help}<p className="text-[11px] italic text-ink-200 px-2 py-2 border-x border-b border-parchment-200 rounded-b bg-parchment-50/60">Aucun adverbe en -ment détecté.</p></>;
-    return <>{help}<NavigableList items={report.adverbs.slice(0, 20).map((a) => ({ key: a.word, label: a.word, count: a.count, hits: a.hits }))} /></>;
+    return <>{help}<NavigableList items={report.adverbs.map((a) => ({ key: a.word, label: a.word, count: a.count, hits: a.hits }))} /></>;
   }
   if (sectionKey === 'dull-verbs') {
     if (report.dullVerbs.length === 0) return <>{help}<p className="text-[11px] italic text-ink-200 px-2 py-2 border-x border-b border-parchment-200 rounded-b bg-parchment-50/60">Pas d'abus de verbes ternes.</p></>;
@@ -802,5 +1277,105 @@ function ReportSectionDetail({ sectionKey, report }: {
       </>
     );
   }
+  if (sectionKey === 'ngrams') {
+    if (report.ngrams.length === 0) return <>{help}<p className="text-[11px] italic text-ink-200 px-2 py-2 border-x border-b border-parchment-200 rounded-b bg-parchment-50/60">Aucun tic de langage signalé.</p></>;
+    return <>{help}<NgramList items={report.ngrams} /></>;
+  }
+  if (sectionKey === 'punctuation') {
+    return <>{help}<PunctuationList stats={report.punctuation} disabled={settings?.disabledPunctuation ?? []} /></>;
+  }
   return null;
+}
+
+function PunctuationList({ stats, disabled }: {
+  stats: import('@/lib/writing-aid/types').PunctuationStats;
+  disabled: WritingAidPunctuationKey[];
+}) {
+  const setWritingAidSetting = useBookStore((s) => s.setWritingAidSetting);
+  const rows: Array<{ key: WritingAidPunctuationKey; label: string; value: number; suffix?: string }> = [
+    { key: 'ellipses', label: 'Points de suspension', value: stats.ellipses },
+    { key: 'exclamations', label: 'Exclamations simples', value: stats.exclamations },
+    { key: 'multiExclamations', label: 'Exclamations multiples (« !! »)', value: stats.multiExclamations },
+    {
+      key: 'italicWords',
+      label: 'Mots en italique',
+      value: stats.italicWords,
+      suffix: stats.totalWords > 0 ? `(${((stats.italicWords / stats.totalWords) * 100).toFixed(1)} %)` : undefined,
+    },
+  ];
+
+  return (
+    <ul className="border-x border-b border-parchment-200 rounded-b bg-parchment-50/60 p-1 space-y-1">
+      {rows.map((r) => {
+        const isOff = disabled.includes(r.key);
+        return (
+          <li key={r.key} className={cn('flex items-stretch rounded border', isOff ? 'border-parchment-200 opacity-60' : 'border-parchment-200')}>
+            <div className="flex-1 flex items-center justify-between px-2 py-1.5 text-[11px] min-w-0">
+              <span className={cn('text-ink-400 truncate', isOff && 'line-through')}>{r.label}</span>
+              <span className="flex items-center gap-1 shrink-0">
+                <span className="font-semibold tabular-nums text-bordeaux-500">{r.value}</span>
+                {r.suffix && <span className="text-ink-200">{r.suffix}</span>}
+              </span>
+            </div>
+            <button
+              onClick={() => setWritingAidSetting(
+                'disabledPunctuation',
+                toggleInList(disabled, r.key),
+              )}
+              className="px-1.5 border-l border-parchment-200 text-ink-300 hover:text-bordeaux-500 hover:bg-parchment-100 transition-colors shrink-0"
+              title={isOff ? 'Réactiver (compter dans le score)' : 'Voulu — ne pas compter dans le score'}
+            >
+              {isOff ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function NgramList({ items }: { items: NgramItem[] }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const disabledNgrams = useBookStore((s) => s.writingAidSettings?.disabledNgrams);
+  const setWritingAidSetting = useBookStore((s) => s.setWritingAidSetting);
+
+  const disabledCount = items.filter((it) => disabledNgrams?.includes(it.key)).length;
+
+  return (
+    <>
+      {items.length > 0 && (
+        <BulkDisableBar
+          disabledCount={disabledCount}
+          totalCount={items.length}
+          onDisableAll={() => {
+            const merged = new Set([...(disabledNgrams ?? []), ...items.map((it) => it.key)]);
+            setWritingAidSetting('disabledNgrams', Array.from(merged));
+          }}
+          onEnableAll={() => {
+            const keys = new Set(items.map((it) => it.key));
+            const remaining = (disabledNgrams ?? []).filter((k) => !keys.has(k));
+            setWritingAidSetting('disabledNgrams', remaining);
+          }}
+        />
+      )}
+      <ul className="border-x border-b border-parchment-200 rounded-b bg-parchment-50/60 max-h-72 overflow-y-auto p-1 space-y-1">
+        {items.map((it) => {
+          const disabled = disabledNgrams?.includes(it.key) ?? false;
+          return (
+            <PhraseHitItem
+              key={it.key}
+              item={it}
+              selected={selected === it.key}
+              onToggle={() => setSelected(selected === it.key ? null : it.key)}
+              disabled={disabled}
+              onToggleDisabled={() => setWritingAidSetting(
+                'disabledNgrams',
+                toggleInList(disabledNgrams, it.key),
+              )}
+            />
+          );
+        })}
+      </ul>
+    </>
+  );
 }

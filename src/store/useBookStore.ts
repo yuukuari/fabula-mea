@@ -72,6 +72,7 @@ interface BookStore extends BookProject {
   updateWritingMode: (mode: import('@/types').WritingMode, deleteContent: boolean) => void;
   updateCountUnit: (unit: import('@/types').CountUnit) => void;
   setGlossaryEnabled: (enabled: boolean) => void;
+  setWritingAidSetting: <K extends keyof import('@/types').WritingAidSettings>(key: K, value: import('@/types').WritingAidSettings[K]) => void;
   setTableOfContents: (enabled: boolean) => void;
   updateLayout: (data: Partial<BookLayout>) => void;
   updatePrintEdition: (data: Partial<PrintEdition>) => void;
@@ -201,6 +202,7 @@ function emptyState(): Omit<BookProject, 'id' | 'createdAt' | 'updatedAt'> {
     noteIdeas: [],
     selfComments: [],
     customDictionary: [],
+    writingAidSettings: undefined,
     graphNodePositions: {},
     glossaryEnabled: false,
     tableOfContents: undefined,
@@ -235,6 +237,7 @@ function extractProjectData(state: BookStore): BookProject {
     noteIdeas: state.noteIdeas,
     selfComments: state.selfComments,
     customDictionary: state.customDictionary,
+    writingAidSettings: state.writingAidSettings,
     graphNodePositions: state.graphNodePositions,
     glossaryEnabled: state.glossaryEnabled,
     tableOfContents: state.tableOfContents,
@@ -620,6 +623,12 @@ export const useBookStore = create<BookStore>()(
       setGlossaryEnabled: (enabled) =>
         set((s) => ({
           glossaryEnabled: enabled,
+          ...touchSave(),
+        })),
+
+      setWritingAidSetting: (key, value) =>
+        set((s) => ({
+          writingAidSettings: { ...(s.writingAidSettings ?? {}), [key]: value },
           ...touchSave(),
         })),
 

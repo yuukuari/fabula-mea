@@ -80,23 +80,24 @@ Palette parchment (cohérent avec SceneEditor) — fond `bg-parchment-50`, bordu
 
 ### Pagination (`paginateContent` dans `print-edition.ts`)
 
-Approche **ligne-par-ligne** (et non paragraphe-par-paragraphe), proche du PDF, pour éviter les grands blancs en bas de page :
+`paginateContent` accepte un paramètre optionnel `paginator: (html) => string[]`. Le BookReader passe une fonction qui mesure la mise en page **dans le DOM réel** via `createDomPaginator` (`src/lib/paginate-dom.ts`) — pas d'approximation par caractères. Si aucun paginator n'est passé, fallback sur l'ancien heuristique (`packHtmlIntoPages` + `blockLineCost`), conservé pour d'autres consommateurs éventuels.
 
-- `getPageMetrics()` calcule `linesPerPage` (hauteur utile / lineHeight) et `charsPerLine` (largeur utile / `widthFactor` × fontSize). Le `widthFactor` est par police via `FONT_WIDTH_FACTOR` dans `fonts.ts` (Times 0.42, Garamond 0.40, Merriweather 0.49…). **Le facteur monospace 0.5 sous-estimait de 25 % les caractères/ligne en serif** et causait un sous-remplissage chronique.
-- `packHtmlIntoPages()` itère sur les blocs (`<p>`, `<h2>`, `<blockquote>`…) et accumule un coût en lignes (`blockLineCost`). Quand le bloc suivant ne tient pas, on essaye de **couper le paragraphe au mot** via `splitParagraphAtChars()` qui :
-  - parse le HTML char-par-char en suivant la pile de balises ouvertes
-  - coupe au dernier espace avant `maxTextChars`
-  - clôt les balises inline ouvertes dans la 1re moitié et les rouvre dans la 2nde (ex: `<em>...</em>` reste valide des deux côtés)
-- `blockLineCost` charge `+0.3 lh` par bloc (marge 0.4em ≈ 0.27 lh sur lineHeight 1.5). Pas de bonus heading : avec line-height 1.2 < parent 1.5, un heading prend en réalité ~0.93 lh par ligne, soit *moins* qu'une ligne de paragraphe.
-- Les en-têtes `<h2>` ne sont jamais coupés ; ils basculent en page suivante si la place restante est insuffisante.
+**Mesure DOM (`paginate-dom.ts`)** :
+- Monte un conteneur off-screen (`.fm-paginate-host`) avec exactement la même largeur en CSS px, la même police, le même `font-size` en pt, le même `line-height` et la même normalisation `.fm-reader-content` que le BookReader.
+- Empile les blocs un par un. Après chaque ajout, vérifie `content.scrollHeight ≤ heightPx + 0.5`. En cas de débordement, tente de couper le bloc (`p`/`blockquote`/`li`) à la frontière de mot exacte via une recherche binaire sur l'offset texte global utilisant `Range.getBoundingClientRect`. Les balises inline (`<em>`, `<strong>`…) sont préservées des deux côtés grâce à `Range.extractContents` (qui clone les ancêtres partiels).
+- Les `<h*>` ne sont pas coupés ; ils basculent à la page suivante si rien ne tient.
+- Pré-requis : `document.fonts.ready` doit être résolu avant de paginer, sinon les caractères wrappent à la mauvaise largeur. Le BookReader attend cette promise dans son effet de pagination.
 
-**Pré-requis impératif** : le BookReader injecte un `<style>` global qui normalise les marges browser-default sur `<h*>`/`<p>` à l'intérieur de `.fm-reader-content` (sinon les marges 1em par défaut surchargeraient le budget et clipperaient les pages). Cf. `BookReader.tsx`. Si tu changes le CSS, retune `blockLineCost` en miroir.
+**Glyph-bottom vs line-box-bottom** : `Range.getBoundingClientRect().bottom` retourne le bas de l'extent des glyphes, qui se trouve ~3-4 px **au-dessus** du bas réel de la line-box (à cause du line-leading inhérent à `line-height > 1`). Quand la binary search répond "tout le texte tient" (`best === totalLen`) mais que `scrollHeight > heightPx`, c'est précisément ce cas : la line-box de la dernière ligne déborde et serait clippée. `splitBlockToFit` détecte alors la position où commence cette dernière ligne et la pousse à la page suivante (renvoie `split` au lieu de `fits`). Sans ce correctif, la dernière ligne se faisait visiblement clipper en haut/bas en mode feuilletage.
+
+**Calcul du budget** : le wrapper de page hérite de `box-sizing: border-box` (Tailwind preflight) avec une bordure 1 px → le content-box est 2 px plus petit que `trim.widthMm/MM_PER_CSS_PX` sur chaque axe. BookReader retire ces 2 px AVANT d'appliquer les pourcentages de marges, sinon le paginator sur-remplit la page d'environ 1 ligne.
+
+**Synchronisation CSS** : le `<style>` injecté par BookReader (normalisation des marges `<h*>`/`<p>` dans `.fm-reader-content`) doit rester aligné avec la copie locale dans `paginate-dom.ts` (`ensureStyle`). Si tu modifies l'un, modifie l'autre — un drift fausse la pagination.
 
 **Convention de rendu chapitre/scène** (alignée avec PDF/DOCX/EPUB) — embarquée directement comme HTML inline dans le flux du chapitre :
-- **Chapitre régulier** : en-tête `Chapitre N — Titre` (ou `Chapitre N` si pas de titre), une seule fois en début de chapitre.
+- **Chapitre régulier** : en-tête `Chapitre N — Titre` (ou `Chapitre N` si pas de titre), une seule fois en début de chapitre. Toutes les scènes du chapitre sont concaténées dans un même flux HTML, séparées par `* * *`.
 - **Scène d'un chapitre régulier** : titre affiché en italique centré uniquement si renseigné. Pas de mention « Scène N ».
-- **Front/back matter** : pas d'en-tête de chapitre. Le titre de scène (si renseigné) est affiché comme un titre de chapitre (gros, gras, centré).
-- **Séparateur `* * *`** entre scènes successives non-vides du même chapitre.
+- **Front/back matter** : pas d'en-tête de chapitre, et **chaque scène est paginée indépendamment** (saut de page entre scènes au lieu d'un `* * *`) — convention naturelle pour titre/dédicace/copyright/épilogue. Le titre de scène (si renseigné) est affiché comme un titre de chapitre (gros, gras, centré).
 
 Les anciens champs `chapterTitle` / `sceneTitle` de `BookPageData` ont été supprimés — tout passe par le HTML.
 
