@@ -58,7 +58,7 @@ Un **BookProject** contient : Characters (avec genealogy, relations, avatar imag
 1. **Toujours modifier les deux côtés** : `dev-db.ts` ET le endpoint `api/` correspondant
 2. **Façade `api.ts`** : ternaire `IS_DEV` pour chaque nouvelle méthode
 3. **Clés Redis** en prod : préfixe `emlb:` (PAS `emlb-dev:`)
-4. **Serverless functions** : CommonJS, catch-all routes `[[...path]].ts` (limite 12 fonctions Vercel Hobby, 11 actuellement)
+4. **Serverless functions** : CommonJS, catch-all routes `[[...path]].ts` (limite 12 fonctions Vercel Hobby, 12 actuellement — limite atteinte, regrouper en catch-all avant d'en ajouter)
 5. **CORS** : appeler `handleCors(req, res)` en premier dans chaque endpoint
 6. **Auth** : `requireAuth(req, res)` retourne `{ userId }` ou `null`
 7. **`useBookStore`** (~1450 lignes) : le plus complexe. Auto-save local + cloud. Interagit avec `useSagaStore`
@@ -83,6 +83,7 @@ Les modules complexes ont leur documentation dans `.claude/rules/` (chargée aut
 - **Notifications** (in-app, push, polling) → `.claude/rules/notifications.md`
 - **Correcteur orthographique** (nspell, LanguageTool, menu contextuel) → `.claude/rules/spellcheck.md`
 - **Aide à l'écriture** (panneau Wand2 dans SceneEditor : répétitions, synonymes, antonymes, figures de style, rapport d'analyse avec scores ; surbrillance + navigation hit-par-hit via extension TipTap) → `.claude/rules/writing-aid.md`
+- **IA** (façade `src/lib/ai`, providers serveur, mesure d'usage Redis fenêtre glissante 7j, limites par feature/utilisateur, génération d'image personnage via fal.ai) → `.claude/rules/ai.md`
 - **Spotify** (OAuth PKCE, Web Playback SDK) → `.claude/rules/spotify.md`
 - **Chronologie** (timeline events, filtrage doux, dates < 1000) → `.claude/rules/timeline.md`
 - **Sync & persistance** (cloudSaveWithRetry, guards, historique versions) → `.claude/rules/sync-persistence.md`

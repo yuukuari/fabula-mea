@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, GitBranch } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, User, Heart, Swords, Users as UsersIcon, X, Pencil, GitBranch, Sparkles } from 'lucide-react';
 import { GlossaryBadge } from '@/components/encyclopedia/GlossaryBadge';
+import { GenerateCharacterImageModal } from '@/components/ai/GenerateCharacterImageModal';
 import type { Character, Relationship } from '@/types';
 import { useEncyclopediaStore } from '@/store/useEncyclopediaStore';
 import { RELATIONSHIP_TYPE_LABELS, FAMILY_ROLE_LABELS } from '@/lib/utils';
@@ -35,6 +36,7 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
   const [showRelEditor, setShowRelEditor] = useState(false);
   const [editingRel, setEditingRel] = useState<Relationship | undefined>(undefined);
   const [deleteRelTarget, setDeleteRelTarget] = useState<{ relId: string; targetName: string } | null>(null);
+  const [showGenerateImage, setShowGenerateImage] = useState(false);
 
   const handleDelete = () => {
     deleteCharacter(character.id);
@@ -76,6 +78,9 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1" />
+        <button onClick={() => setShowGenerateImage(true)} className="btn-secondary flex items-center gap-2" title="Générer une image avec l'IA">
+          <Sparkles className="w-4 h-4" /> Image IA
+        </button>
         <button onClick={() => navigate(`/characters/${character.id}/genealogy`)} className="btn-secondary flex items-center gap-2">
           <GitBranch className="w-4 h-4" /> Généalogie
         </button>
@@ -343,6 +348,13 @@ export function CharacterDetail({ character, onBack, onEdit }: CharacterDetailPr
           onClose={() => { setShowRelEditor(false); setEditingRel(undefined); }}
         />
       )}
+
+      <GenerateCharacterImageModal
+        open={showGenerateImage}
+        character={character}
+        onClose={() => setShowGenerateImage(false)}
+        onAccept={(url) => updateCharacter(character.id, { imageUrl: url, imageOffsetY: 50 })}
+      />
     </div>
   );
 }

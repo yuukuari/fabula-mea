@@ -33,6 +33,7 @@ import { SagaPage } from '@/pages/SagaPage';
 import { SpotifyCallbackPage } from '@/pages/SpotifyCallbackPage';
 import { GenealogyPage } from '@/components/genealogy/GenealogyPage';
 import { AdminMembersPage } from '@/pages/admin/AdminMembersPage';
+import { AdminUserDetailPage } from '@/pages/admin/AdminUserDetailPage';
 import { AdminReleasesPage } from '@/pages/admin/AdminReleasesPage';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { NewReleaseModal } from '@/components/releases/NewReleaseModal';
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
           { path: 'tickets', element: <TicketsPage /> },
           { path: 'releases', element: <ReleaseNotesPage /> },
           { path: 'admin/members', element: <AdminMembersPage /> },
+          { path: 'admin/users/:id', element: <AdminUserDetailPage /> },
           { path: 'admin/releases', element: <AdminReleasesPage /> },
           { path: 'profile', element: <ProfilePage /> },
           { path: 'saga/:sagaId', element: <SagaPage /> },

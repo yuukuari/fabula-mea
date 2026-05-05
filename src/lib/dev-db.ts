@@ -723,6 +723,15 @@ export const devDb = {
       });
       return { members };
     },
+    async getUserDetail(userId: string) {
+      const { aiDevMock } = await import('@/lib/ai/dev-mock');
+      return aiDevMock.adminGetUserDetail(userId);
+    },
+    async setAiLimits(userId: string, limits: import('@/types').AiLimits | null): Promise<{ ok: boolean }> {
+      const { aiDevMock } = await import('@/lib/ai/dev-mock');
+      await aiDevMock.adminSetUserLimits(userId, limits);
+      return { ok: true };
+    },
   },
 
   // ─── Notifications ──────────────────────────────────────────────────────

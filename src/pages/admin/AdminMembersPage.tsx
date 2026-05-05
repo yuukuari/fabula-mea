@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Users, ShieldCheck, Mail, Calendar, BookOpen, Music } from 'lucide-react';
+import { Users, ShieldCheck, Mail, Calendar, BookOpen, Music, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 
@@ -14,6 +15,7 @@ interface Member {
 }
 
 export function AdminMembersPage() {
+  const navigate = useNavigate();
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -33,7 +35,8 @@ export function AdminMembersPage() {
     }
   };
 
-  const toggleSpotify = async (memberId: string, current: boolean) => {
+  const toggleSpotify = async (e: React.MouseEvent, memberId: string, current: boolean) => {
+    e.stopPropagation();
     try {
       await api.admin.setSpotifyEnabled(memberId, !current);
       setMembers((prev) =>
@@ -61,7 +64,11 @@ export function AdminMembersPage() {
       ) : (
         <div className="grid gap-3">
           {members.map((member) => (
-            <div key={member.id} className="card-fantasy p-4 flex items-center gap-4">
+            <div
+              key={member.id}
+              className="card-fantasy p-4 flex items-center gap-4 cursor-pointer hover:bg-parchment-100 transition-colors"
+              onClick={() => navigate(`/admin/users/${member.id}`)}
+            >
               <div
                 className={cn(
                   'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm',
@@ -97,7 +104,7 @@ export function AdminMembersPage() {
                 </div>
               </div>
               <button
-                onClick={() => toggleSpotify(member.id, !!member.spotifyEnabled)}
+                onClick={(e) => toggleSpotify(e, member.id, !!member.spotifyEnabled)}
                 className={cn(
                   'px-2.5 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1 shrink-0',
                   member.spotifyEnabled
@@ -109,6 +116,7 @@ export function AdminMembersPage() {
                 <Music className="w-3 h-3" />
                 Spotify
               </button>
+              <ChevronRight className="w-4 h-4 text-ink-200 shrink-0" />
             </div>
           ))}
         </div>

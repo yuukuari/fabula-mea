@@ -46,8 +46,16 @@ export interface Character {
   order?: number;
   genealogy?: CharacterGenealogy;
   hideFromRelationshipGraph?: boolean;
+  /** Historique des images générées par IA pour ce personnage (max 10, plus ancienne supprimée). */
+  generatedImages?: GeneratedCharacterImage[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GeneratedCharacterImage {
+  id: EntityId;
+  url: string;
+  createdAt: string;
 }
 
 export interface KeyEvent {
@@ -753,4 +761,37 @@ export interface VersionMeta {
   stats: VersionStats;
   /** True if this version was saved automatically before a restore */
   isRestore?: boolean;
+}
+
+// ─── AI ───
+export type AiFeatureId = 'character_image';
+
+export type AiImageStyle = 'realistic' | 'cinematic' | 'painterly' | 'anime' | 'cartoon' | 'sketch';
+
+export interface AiUsageEntry {
+  feature: AiFeatureId;
+  ts: string;
+}
+
+export interface AiLimits {
+  /** Max usages per 7-day sliding window, per feature. */
+  perWeek: Partial<Record<AiFeatureId, number>>;
+}
+
+export interface AiFeatureUsage {
+  feature: AiFeatureId;
+  used: number;
+  limit: number;
+  /** ISO date when the next credit is available (oldest entry + 7d), or null if room is left. */
+  nextAvailableAt: string | null;
+}
+
+export interface AiUsageSummary {
+  features: AiFeatureUsage[];
+  /** Effective limits applied to this user (defaults merged with override). */
+  limits: AiLimits;
+  /** Whether this user has a personal override. */
+  hasOverride: boolean;
+  /** Reference time (server now) so the client can display deltas consistently. */
+  now: string;
 }

@@ -45,7 +45,7 @@ async function handleLogin(req: VercelRequest, res: VercelResponse) {
   }
 
   const token = signToken({ userId: user.id, email: normalized });
-  return res.json({ token, user: { id: user.id, email: normalized, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false } });
+  return res.json({ token, user: { id: user.id, email: normalized, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false, createdAt: user.createdAt } });
 }
 
 async function verifyCaptcha(token: string): Promise<boolean> {
@@ -120,7 +120,7 @@ async function handleSignup(req: VercelRequest, res: VercelResponse) {
   ]);
 
   const token = signToken({ userId: id, email: normalized });
-  return res.json({ token, user: { id, email: normalized, name: user.name, isAdmin: false, spotifyEnabled: false } });
+  return res.json({ token, user: { id, email: normalized, name: user.name, isAdmin: false, spotifyEnabled: false, createdAt: user.createdAt } });
 }
 
 async function handleMe(req: VercelRequest, res: VercelResponse) {
@@ -133,7 +133,7 @@ async function handleMe(req: VercelRequest, res: VercelResponse) {
   if (!userJson) return res.status(404).json({ error: 'Utilisateur introuvable' });
 
   const user = JSON.parse(userJson) as User;
-  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY });
+  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, createdAt: user.createdAt });
 }
 
 async function handleForgotPassword(req: VercelRequest, res: VercelResponse) {
@@ -211,7 +211,7 @@ async function handleProfile(req: VercelRequest, res: VercelResponse) {
   }
 
   await redis.set(`emlb:user:${user.id}`, JSON.stringify(user));
-  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY });
+  return res.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, createdAt: user.createdAt });
 }
 
 async function handleChangePassword(req: VercelRequest, res: VercelResponse) {

@@ -9,7 +9,7 @@
 
 import { devAuth } from '@/lib/dev-auth';
 import { devDb } from '@/lib/dev-db';
-import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta, AppNotification } from '@/types';
+import type { Ticket, TicketComment, TicketStatusChange, Release, ReviewSession, ReviewComment, VersionMeta, AppNotification, AiLimits, AiUsageSummary } from '@/types';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -21,6 +21,13 @@ export interface AuthUser {
   avatarUrl?: string;
   avatarOffsetY?: number;
   spotifyEnabled?: boolean;
+  createdAt?: string;
+}
+
+export interface AdminUserDetail {
+  user: { id: string; email: string; name: string; isAdmin: boolean; createdAt: string };
+  booksCount: number;
+  usage: AiUsageSummary;
 }
 
 function getToken(): string | null {
@@ -267,6 +274,17 @@ export const api = {
         : apiFetch<{ ok: boolean }>('/admin/members', {
             method: 'PATCH',
             body: JSON.stringify({ userId, spotifyEnabled: enabled }),
+          }),
+    getUserDetail: (userId: string): Promise<AdminUserDetail> =>
+      IS_DEV
+        ? devDb.admin.getUserDetail(userId)
+        : apiFetch<AdminUserDetail>(`/admin/users/${userId}`),
+    setAiLimits: (userId: string, limits: AiLimits | null) =>
+      IS_DEV
+        ? devDb.admin.setAiLimits(userId, limits)
+        : apiFetch<{ ok: boolean }>(`/admin/users/${userId}/ai-limits`, {
+            method: 'PUT',
+            body: JSON.stringify({ limits }),
           }),
   },
 

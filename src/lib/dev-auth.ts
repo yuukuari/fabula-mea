@@ -114,7 +114,7 @@ export const devAuth = {
     saveEmails(emails);
 
     const token = encodeToken({ userId: id, email: normalized });
-    return { token, user: { id, email: normalized, name: user.name, isAdmin: user.isAdmin, spotifyEnabled: false } };
+    return { token, user: { id, email: normalized, name: user.name, isAdmin: user.isAdmin, spotifyEnabled: false, createdAt: user.createdAt } };
   },
 
   async login(data: {
@@ -139,7 +139,7 @@ export const devAuth = {
     if (!valid) throw new Error('Email ou mot de passe incorrect');
 
     const token = encodeToken({ userId: user.id, email: normalized });
-    return { token, user: { id: user.id, email: normalized, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false } };
+    return { token, user: { id: user.id, email: normalized, name: user.name, isAdmin: user.isAdmin ?? false, spotifyEnabled: user.spotifyEnabled ?? false, createdAt: user.createdAt } };
   },
 
   async me(): Promise<AuthUser> {
@@ -153,7 +153,7 @@ export const devAuth = {
     const user = users[payload.userId];
     if (!user) throw new Error('Utilisateur introuvable');
 
-    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, spotifyEnabled: user.spotifyEnabled ?? false };
+    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, spotifyEnabled: user.spotifyEnabled ?? false, createdAt: user.createdAt };
   },
 
   // ─── Bonus: list all local dev accounts ──────────────────────────────────
@@ -257,7 +257,7 @@ export const devAuth = {
     }
 
     saveUsers(users);
-    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, spotifyEnabled: user.spotifyEnabled ?? false };
+    return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin ?? false, avatarUrl: user.avatarUrl, avatarOffsetY: user.avatarOffsetY, spotifyEnabled: user.spotifyEnabled ?? false, createdAt: user.createdAt };
   },
 
   async changePassword(data: { currentPassword: string; newPassword: string }): Promise<{ ok: boolean }> {
