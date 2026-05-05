@@ -136,6 +136,28 @@ export async function checkAndIncrementUsage(userId: string, feature: AiFeatureI
   return getUsageSummary(userId);
 }
 
+/**
+ * Annule le dernier crédit consommé pour cette feature (utilisé en cas
+ * d'échec downstream après incrément, ex. NSFW filter, blob upload critique).
+ */
+export async function refundLastUsage(userId: string, feature: AiFeatureId): Promise<AiUsageSummary> {
+  const entries = await readEntries(userId);
+  // Trouve l'entrée la plus récente de cette feature et la supprime.
+  let lastIdx = -1;
+  let lastTs = -Infinity;
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i].feature === feature) {
+      const ts = new Date(entries[i].ts).getTime();
+      if (ts > lastTs) { lastTs = ts; lastIdx = i; }
+    }
+  }
+  if (lastIdx >= 0) {
+    entries.splice(lastIdx, 1);
+    await redis.set(usageKey(userId), JSON.stringify(entries));
+  }
+  return getUsageSummary(userId);
+}
+
 export async function setUserLimits(userId: string, limits: AiLimits | null): Promise<void> {
   if (limits === null) {
     await redis.del(userLimitsKey(userId));

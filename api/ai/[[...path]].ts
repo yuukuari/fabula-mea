@@ -3,7 +3,7 @@ import { put } from '@vercel/blob';
 import { cors } from '../_lib/cors';
 import { requireAuth } from '../_lib/auth';
 import { getPathSegments } from '../_lib/utils';
-import { getUsageSummary, checkAndIncrementUsage } from '../_lib/ai-usage';
+import { getUsageSummary, checkAndIncrementUsage, refundLastUsage } from '../_lib/ai-usage';
 import { falGenerateImage } from '../_lib/ai-provider';
 
 const ALLOWED_STYLES = ['realistic', 'cinematic', 'painterly', 'anime', 'cartoon', 'sketch'];
@@ -49,7 +49,7 @@ async function handleCharacterImage(req: VercelRequest, res: VercelResponse) {
   }
 
   // 1. Vérification du quota + réservation
-  let usage;
+  let usage: Awaited<ReturnType<typeof checkAndIncrementUsage>>;
   try {
     usage = await checkAndIncrementUsage(auth.userId, 'character_image');
   } catch (err) {
@@ -71,10 +71,20 @@ async function handleCharacterImage(req: VercelRequest, res: VercelResponse) {
       style: (style ?? null) as 'realistic' | 'cinematic' | 'painterly' | 'anime' | 'cartoon' | 'sketch' | null,
     });
   } catch (err) {
-    // En cas d'échec provider, on a déjà décompté. Acceptable : éviter de
-    // re-implémenter un rollback distribué pour une faible probabilité d'erreur.
+    // Échec provider après incrément : on rembourse pour ne pas pénaliser l'utilisateur.
     console.error('[ai] character-image generation failed:', err);
-    return res.status(502).json({ error: 'Génération échouée. Réessayez.' });
+    usage = await refundLastUsage(auth.userId, 'character_image').catch(() => usage);
+    return res.status(502).json({ error: 'Génération échouée. Réessayez.', usage });
+  }
+
+  // 2.b Image filtrée par le safety checker fal — refund + erreur explicite.
+  if (generated.nsfw) {
+    usage = await refundLastUsage(auth.userId, 'character_image').catch(() => usage);
+    return res.status(422).json({
+      error: "L'image a été filtrée par le safety checker. Cela arrive souvent en mode photoréaliste pour les enfants ou sujets sensibles. Essayez un style illustré (Peinture, Anime, Cartoon, Croquis) ou modifiez la description.",
+      code: 'NSFW_FILTERED',
+      usage,
+    });
   }
 
   // 3. Re-upload vers Vercel Blob (les URLs fal sont éphémères)

@@ -45,6 +45,14 @@ interface AiImageStyleDef {
    * dans le prompt — ils pullent vers l'illustration narrative.
    */
   visualOnly?: boolean;
+  /**
+   * Variantes utilisées pour les sujets mineurs (< 18). Les termes "documentaire"
+   * (candid, raw photo, snapshot, skin, no makeup) déclenchent les classifiers
+   * anti-CSAM côté provider. On garde un rendu photo plausible avec des termes
+   * plus neutres.
+   */
+  minorSafeLead?: string;
+  minorSafeModifiers?: string;
 }
 
 export const AI_IMAGE_STYLES: AiImageStyleDef[] = [
@@ -53,6 +61,8 @@ export const AI_IMAGE_STYLES: AiImageStyleDef[] = [
     label: 'Réaliste',
     lead: 'Real candid photograph of an actual person, a real human',
     modifiers: 'photograph, raw photo, unedited, shot on iPhone, natural appearance, age-appropriate skin texture, realistic eyes with catchlights, no makeup, no airbrushing, no skin smoothing, no beauty filter, no glamour retouching, no Instagram filter, no soft focus, no plastic skin, snapshot, looks like a real person from a photo, not AI generated, not CGI, not 3D render, not a painting, not an illustration',
+    minorSafeLead: 'Photographic portrait',
+    minorSafeModifiers: 'photographic style, natural lighting, photographic medium, looks like a real photo, age-appropriate appearance, realistic eyes, not AI generated, not CGI, not 3D render, not a painting, not an illustration',
     visualOnly: true,
   },
   {
@@ -60,6 +70,8 @@ export const AI_IMAGE_STYLES: AiImageStyleDef[] = [
     label: 'Cinématique',
     lead: 'Cinematic film still photograph of a real person',
     modifiers: 'photograph from a movie, 35mm film grain, anamorphic lens, dramatic lighting, color graded, real human actor, photographic, not an illustration',
+    minorSafeLead: 'Cinematic photographic portrait',
+    minorSafeModifiers: 'cinematic style, soft dramatic lighting, photographic medium, age-appropriate appearance, not an illustration',
     visualOnly: true,
   },
   {

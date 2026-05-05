@@ -185,9 +185,13 @@ export const aiDevMock = {
         const text = await res.text().catch(() => '');
         throw new Error(`fal.ai HTTP ${res.status}: ${text.slice(0, 200)}`);
       }
-      const data = (await res.json()) as { images?: Array<{ url: string }> };
+      const data = (await res.json()) as { images?: Array<{ url: string }>; has_nsfw_concepts?: boolean[] };
       const first = data.images?.[0]?.url;
       if (!first) throw new Error('fal.ai: réponse sans image');
+      const nsfw = Array.isArray(data.has_nsfw_concepts) && data.has_nsfw_concepts[0] === true;
+      if (nsfw) {
+        throw new Error("L'image a été filtrée par le safety checker. Cela arrive souvent en mode photoréaliste pour les enfants ou sujets sensibles. Essayez un style illustré (Peinture, Anime, Cartoon, Croquis) ou modifiez la description.");
+      }
       url = first;
     } else {
       await new Promise((r) => setTimeout(r, 600));

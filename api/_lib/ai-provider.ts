@@ -54,6 +54,8 @@ export interface FalImageOutput {
   contentType: string;
   width?: number;
   height?: number;
+  /** true si fal a déclenché son safety checker (image renvoyée mais noircie). */
+  nsfw?: boolean;
 }
 
 /**
@@ -138,14 +140,17 @@ export async function falGenerateImage(input: FalImageInput): Promise<FalImageOu
 
   const data = (await res.json()) as {
     images?: Array<{ url: string; content_type: string; width?: number; height?: number }>;
+    has_nsfw_concepts?: boolean[];
   };
   const first = data.images?.[0];
   if (!first?.url) throw new Error('fal.ai: réponse sans image');
+  const nsfw = Array.isArray(data.has_nsfw_concepts) ? !!data.has_nsfw_concepts[0] : false;
 
   return {
     url: first.url,
     contentType: first.content_type ?? 'image/jpeg',
     width: first.width,
     height: first.height,
+    nsfw,
   };
 }
